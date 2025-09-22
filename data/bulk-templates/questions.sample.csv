@@ -1,0 +1,3 @@
+lessonId,questionText,questionImage,questionType,optionA,optionB,optionC,optionD,optionAImage,optionBImage,optionCImage,optionDImage,correctOption,explanation,explanationImage,orderIndex,difficultyLevel,timeLimit
+,¿Cuál es el resultado de (x+2)(x+3)?,,multiple_choice,x^2+5x+6,x^2+6x+5,x^2+3x+2,x^2+5x+3,,,,,A,Aplicar distributiva,,1,medio,60
+lesson_abc123,Un texto argumentativo busca..., ,multiple_choice,Informar,Describir,Convencer,Entretenar,,,,,C,Definición de argumentativo,,2,facil,45

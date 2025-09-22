@@ -1,8 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -26,26 +28,67 @@ import {
 } from "lucide-react"
 
 export default function LMSPlatform() {
+  const router = useRouter()
   const [currentView, setCurrentView] = useState<"landing" | "cursos" | "acerca" | "contacto" | "precios">("landing")
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  // Homepage settings
+  const [showInstitutionsCarousel, setShowInstitutionsCarousel] = useState<boolean>(true)
+  const [institutions, setInstitutions] = useState<Array<{ name: string; logo: string; city?: string; logoUrl?: string }>>([])
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const res = await fetch('/api/settings/homepage')
+        if (!res.ok) return
+        const data = await res.json()
+        if (!mounted) return
+        setShowInstitutionsCarousel(!!data.showInstitutionsCarousel)
+        // Map admin institutions (with logoUrl) to this page's simple structure
+        if (Array.isArray(data.institutions)) {
+          setInstitutions(data.institutions.map((i: any) => ({ name: i.name, logo: '🏫', city: '', logoUrl: i.logoUrl })))
+        }
+      } catch {}
+    })()
+    return () => { mounted = false }
+  }, [])
+  
+  // Estado para el formulario de login
+  const [loginData, setLoginData] = useState({
+    email: "",
+    password: ""
+  })
+  const [isLoading, setIsLoading] = useState(false)
+  const [loginError, setLoginError] = useState("")
+
+  // Función para manejar el login
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setLoginError("")
+
+    try {
+      const result = await signIn("credentials", {
+        email: loginData.email,
+        password: loginData.password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        setLoginError("Credenciales inválidas. Por favor, verifica tu email y contraseña.")
+      } else {
+        // Login exitoso, redirigir a una página intermedia que manejará la redirección según el rol
+        router.push("/dashboard")
+      }
+    } catch (error) {
+      setLoginError("Error al iniciar sesión. Por favor, intenta de nuevo.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Companies Banner Component - Version 2 (Moving)
-  const CompaniesBannerMoving = () => {
-    const companies = [
-      { name: "Universidad Nacional", logo: "🏛️", city: "Bogotá" },
-      { name: "SENA", logo: "🎓", city: "Nacional" },
-      { name: "Universidad de los Andes", logo: "🏫", city: "Bogotá" },
-      { name: "Pontificia Universidad Javeriana", logo: "⛪", city: "Bogotá" },
-      { name: "Universidad del Rosario", logo: "🌹", city: "Bogotá" },
-      { name: "ICFES", logo: "📊", city: "Nacional" },
-      { name: "Ministerio de Educación", logo: "🏛️", city: "Bogotá" },
-      { name: "Universidad EAFIT", logo: "🏢", city: "Medellín" },
-      { name: "Universidad de Antioquia", logo: "🏛️", city: "Medellín" },
-      { name: "Universidad del Valle", logo: "🌄", city: "Cali" },
-      { name: "Universidad Externado", logo: "📚", city: "Bogotá" },
-      { name: "Universidad Central", logo: "🏛️", city: "Bogotá" },
-    ]
-
+  const CompaniesBannerMoving = ({ companies }: { companies: Array<{ name: string; logo?: string; city?: string; logoUrl?: string }> }) => {
     return (
       <div className="w-full bg-white/90 backdrop-blur-sm py-4 overflow-hidden border-t border-b border-gray-200">
         <div className="flex items-center mb-2">
@@ -59,7 +102,12 @@ export default function LMSPlatform() {
                 key={`first-${index}`}
                 className="flex-shrink-0 mx-4 flex flex-col items-center space-y-1 bg-white rounded-xl px-3 py-2 shadow-sm border"
               >
-                <span className="text-xl">{company.logo}</span>
+                {company.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={company.logoUrl} alt={company.name} className="h-6" />
+                ) : (
+                  <span className="text-xl">{company.logo || '🏫'}</span>
+                )}
                 <span className="text-sm font-medium text-gray-700 whitespace-nowrap text-center">{company.name}</span>
                 <div className="text-xs text-gray-500 text-center">{company.city}</div>
               </div>
@@ -70,7 +118,12 @@ export default function LMSPlatform() {
                 key={`second-${index}`}
                 className="flex-shrink-0 mx-4 flex flex-col items-center space-y-1 bg-white rounded-xl px-3 py-2 shadow-sm border"
               >
-                <span className="text-xl">{company.logo}</span>
+                {company.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={company.logoUrl} alt={company.name} className="h-6" />
+                ) : (
+                  <span className="text-xl">{company.logo || '🏫'}</span>
+                )}
                 <span className="text-sm font-medium text-gray-700 whitespace-nowrap text-center">{company.name}</span>
                 <div className="text-xs text-gray-500 text-center">{company.city}</div>
               </div>
@@ -340,40 +393,60 @@ export default function LMSPlatform() {
                   <CardTitle className="text-2xl font-bold">Iniciar Sesión</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 p-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Correo Electrónico</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="username@gmail.com"
-                      className="bg-gray-50 border-gray-200"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Contraseña</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Password"
-                      className="bg-gray-50 border-gray-200"
-                    />
-                  </div>
-                  <Link href="#" className="text-sm text-[#C00102] hover:underline font-medium">
-                    ¿Olvidaste tu contraseña?
-                  </Link>
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Correo Electrónico</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="username@gmail.com"
+                        className="bg-gray-50 border-gray-200"
+                        value={loginData.email}
+                        onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Contraseña</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        placeholder="Password"
+                        className="bg-gray-50 border-gray-200"
+                        value={loginData.password}
+                        onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                        required
+                      />
+                    </div>
+                    
+                    {loginError && (
+                      <div className="text-red-600 text-sm bg-red-50 p-2 rounded border border-red-200">
+                        {loginError}
+                      </div>
+                    )}
+                    
+                    <Link href="#" className="text-sm text-[#C00102] hover:underline font-medium">
+                      ¿Olvidaste tu contraseña?
+                    </Link>
 
-                  <div className="space-y-3">
-                    <Link href="/estudiante">
-                      <Button className="w-full bg-gradient-to-r from-[#C00102] to-[#a00102] hover:from-[#a00102] hover:to-[#800001] text-white font-semibold">
-                        Ingresar como Estudiante
+                    <div className="space-y-3">
+                      <Button 
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-gradient-to-r from-[#C00102] to-[#a00102] hover:from-[#a00102] hover:to-[#800001] text-white font-semibold"
+                      >
+                        {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
                       </Button>
-                    </Link>
-                    <Link href="/admin">
-                      <Button className="w-full bg-gradient-to-r from-[#73A2D3] to-[#5a8bc4] hover:from-[#5a8bc4] hover:to-[#4a7ba7] text-white font-semibold">
-                        Ingresar como Administrador
-                      </Button>
-                    </Link>
-                  </div>
+                      <Link href="/auth/signup">
+                        <Button 
+                          type="button"
+                          className="w-full bg-gradient-to-r from-[#73A2D3] to-[#5a8bc4] hover:from-[#5a8bc4] hover:to-[#4a7ba7] text-white font-semibold"
+                        >
+                          Crear Cuenta
+                        </Button>
+                      </Link>
+                    </div>
+                  </form>
                 </CardContent>
               </Card>
 
@@ -419,8 +492,23 @@ export default function LMSPlatform() {
               </div>
             </div>
           </div>
-          {/* Companies Banners - Now visible without scrolling */}
-          <CompaniesBannerMoving />
+          {/* Companies Banners - Controlled by settings */}
+          {showInstitutionsCarousel && (
+            <CompaniesBannerMoving companies={institutions.length ? institutions : [
+              { name: "Universidad Nacional", logo: "🏛️", city: "Bogotá" },
+              { name: "SENA", logo: "🎓", city: "Nacional" },
+              { name: "Universidad de los Andes", logo: "🏫", city: "Bogotá" },
+              { name: "Pontificia Universidad Javeriana", logo: "⛪", city: "Bogotá" },
+              { name: "Universidad del Rosario", logo: "🌹", city: "Bogotá" },
+              { name: "ICFES", logo: "📊", city: "Nacional" },
+              { name: "Ministerio de Educación", logo: "🏛️", city: "Bogotá" },
+              { name: "Universidad EAFIT", logo: "🏢", city: "Medellín" },
+              { name: "Universidad de Antioquia", logo: "🏛️", city: "Medellín" },
+              { name: "Universidad del Valle", logo: "🌄", city: "Cali" },
+              { name: "Universidad Externado", logo: "📚", city: "Bogotá" },
+              { name: "Universidad Central", logo: "🏛️", city: "Bogotá" },
+            ]} />
+          )}
         </div>
         <Footer />
       </div>

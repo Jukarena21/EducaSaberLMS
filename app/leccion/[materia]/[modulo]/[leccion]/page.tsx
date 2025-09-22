@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { use as usePromise } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -175,21 +176,17 @@ Se multiplica cada término del primer polinomio por cada término del segundo p
   },
 }
 
-interface LeccionPageProps {
-  params: {
-    materia: string
-    modulo: string
-    leccion: string
-  }
-}
+interface LeccionPageParams { materia: string; modulo: string; leccion: string }
+interface LeccionPageProps { params: Promise<LeccionPageParams> }
 
 export default function LeccionPage({ params }: LeccionPageProps) {
   const [activeTab, setActiveTab] = useState("video")
   const [ejercicioActual, setEjercicioActual] = useState(0)
   const [respuestasUsuario, setRespuestasUsuario] = useState<Record<number, number>>({})
   const [mostrarResultados, setMostrarResultados] = useState(false)
+  const p = usePromise(params)
 
-  const leccion = leccionData[params.materia as keyof typeof leccionData]?.[params.modulo]?.[params.leccion]
+  const leccion = leccionData[p.materia as keyof typeof leccionData]?.[p.modulo]?.[p.leccion]
 
   if (!leccion) {
     return (
@@ -232,7 +229,7 @@ export default function LeccionPage({ params }: LeccionPageProps) {
                 Dashboard
               </Link>
               <span>/</span>
-              <Link href={`/curso/${params.materia}/modulos`} className="hover:text-[#73A2D3]">
+              <Link href={`/curso/${p.materia}/modulos`} className="hover:text-[#73A2D3]">
                 {leccion.materia}
               </Link>
               <span>/</span>
@@ -240,8 +237,8 @@ export default function LeccionPage({ params }: LeccionPageProps) {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <Badge className="bg-[#73A2D3] text-white">Módulo {params.modulo}</Badge>
-            <Badge variant="outline">Lección {params.leccion}</Badge>
+            <Badge className="bg-[#73A2D3] text-white">Módulo {p.modulo}</Badge>
+            <Badge variant="outline">Lección {p.leccion}</Badge>
           </div>
         </div>
       </nav>

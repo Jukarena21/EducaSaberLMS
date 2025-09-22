@@ -1,0 +1,3 @@
+name,city,neighborhood,address,institutionType,academicCalendar,totalStudents,numberOfCampuses,yearsOfOperation,contactEmail,contactPhone,daneCode,website
+Colegio Distrital Modelo,Bogotá,Chapinero,"Cra 1 # 2-3",publica,diurno,1200,2,10,contacto@modelo.edu,6011234567,110001000001,https://modelo.edu
+Gimnasio Los Andes,Bogotá,Usaquén,"Cll 10 # 5-60",privada,ambos,800,1,8,admision@losandes.edu,6017654321,110001000002,https://losandes.edu

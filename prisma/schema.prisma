@@ -1,0 +1,629 @@
+// This is your Prisma schema file for SQLite local development
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// =====================================================
+// ENUMERACIONES (SQLite no soporta ENUMs, usamos strings)
+// =====================================================
+
+// =====================================================
+// MODELOS PRINCIPALES
+// =====================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  passwordHash String
+  role      String // 'student', 'school_admin', 'teacher_admin'
+  firstName String
+  lastName  String
+  avatarUrl String?
+  
+  // Información personal (opcional)
+  dateOfBirth DateTime?
+  gender     String?
+  documentType String?
+  documentNumber String?
+  address    String?
+  neighborhood String?
+  city       String?
+  socioeconomicStratum Int?
+  housingType String?
+  
+  // Información educativa (opcional)
+  schoolEntryYear Int?
+  academicAverage Float?
+  areasOfDifficulty String? // JSON string
+  areasOfStrength String? // JSON string
+  repetitionHistory Boolean @default(false)
+  schoolSchedule String?
+  
+  // Condiciones especiales (opcional)
+  disabilities String? // JSON string
+  specialEducationalNeeds String?
+  medicalConditions String?
+  homeTechnologyAccess Boolean?
+  homeInternetAccess Boolean?
+  
+  // Métricas de plataforma
+  totalPlatformTimeMinutes Int @default(0)
+  sessionsStarted Int @default(0)
+  lastSessionAt DateTime?
+  preferredDevice String?
+  preferredBrowser String?
+  averageSessionTimeMinutes Int @default(0)
+  
+  // Relaciones
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id])
+  
+  // Relaciones inversas
+  createdCourses Course[]
+  createdModules Module[]
+  createdExams Exam[]
+  studentContentProgress StudentContentProgress[]
+  studentLessonProgress StudentLessonProgress[]
+  studentModuleProgress StudentModuleProgress[]
+  studentCourseProgress StudentCourseProgress[]
+  examResults ExamResult[]
+  examQuestionAnswers ExamQuestionAnswer[]
+  notifications Notification[]
+  courseEnrollments CourseEnrollment[]
+  userAchievements UserAchievement[]
+  goals Goal[]
+  userStats UserStats?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  daneCode  String?  @unique
+  institutionType String // 'publica', 'privada', 'otro'
+  academicCalendar String // 'diurno', 'nocturno', 'ambos'
+  totalStudents Int?
+  numberOfCampuses Int @default(1)
+  yearsOfOperation Int?
+  qualityCertifications String? // JSON string
+  
+  // Información de ubicación
+  city      String
+  neighborhood String?
+  address   String?
+  
+  // Métricas de uso
+  activeStudentsCount Int @default(0)
+  averageStudentUsageMinutes Int @default(0)
+  averageProgressByCompetency String? // JSON string
+  studentRetentionRate Float?
+  
+  // Información de contacto
+  contactEmail String?
+  contactPhone String?
+  website String?
+  
+  // Relaciones inversas
+  users User[]
+  courses Course[]
+  schoolReports SchoolReport[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Competency {
+  id          String @id @default(cuid())
+  name        String @unique // 'lectura_critica', 'matematicas', etc.
+  displayName String
+  description String?
+  colorHex    String?
+  iconName    String?
+  
+  // Relaciones inversas
+  courses Course[]
+  exams   Exam[]
+  modules Module[]
+  lessons Lesson[]
+  
+  createdAt DateTime @default(now())
+}
+
+model Course {
+  id            String @id @default(cuid())
+  title         String
+  description   String?
+  thumbnailUrl  String?
+  competencyId  String
+  competency    Competency @relation(fields: [competencyId], references: [id])
+  academicGrade String // 'sexto', 'septimo', etc.
+  schoolId      String? // Para cursos específicos de colegio
+  school        School? @relation(fields: [schoolId], references: [id])
+  durationHours Int?
+  difficultyLevel String @default("intermedio") // 'facil', 'intermedio', 'dificil', 'variable' // 'facil', 'intermedio', 'dificil'
+  isPublished   Boolean @default(false)
+  createdById   String?
+  createdBy     User? @relation(fields: [createdById], references: [id])
+  
+  // Progreso calculado
+  totalModules  Int @default(0)
+  totalLessons  Int @default(0)
+  
+  // Relaciones inversas
+  courseModules CourseModule[]
+  exams   Exam[]
+  studentCourseProgress StudentCourseProgress[]
+  courseEnrollments CourseEnrollment[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Module {
+  id                    String @id @default(cuid())
+  title                 String
+  description           String?
+  estimatedTimeMinutes  Int?
+  orderIndex            Int
+  isPublished           Boolean @default(false)
+  createdById           String?
+  createdBy             User? @relation(fields: [createdById], references: [id])
+  
+  // Competencia asociada
+  competencyId          String?
+  competency            Competency? @relation(fields: [competencyId], references: [id])
+  
+  // Progreso calculado
+  totalLessons          Int @default(0)
+  completedLessonsCount Int @default(0)
+  
+  // Relaciones inversas
+  courseModules CourseModule[]
+  moduleLessons ModuleLesson[]
+  studentModuleProgress StudentModuleProgress[]
+  
+  createdAt DateTime @default(now())
+}
+
+// Tabla intermedia para relacionar cursos con módulos
+model CourseModule {
+  id        String @id @default(cuid())
+  courseId  String
+  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  moduleId  String
+  module    Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  orderIndex Int
+  
+  @@unique([courseId, moduleId])
+  createdAt DateTime @default(now())
+}
+
+model Lesson {
+  id                    String @id @default(cuid())
+  title                 String
+  description           String?
+  estimatedTimeMinutes  Int?
+  isPublished           Boolean @default(false)
+  
+  // Contenido
+  videoUrl              String?
+  videoDescription      String?
+  theoryContent         String?
+  
+  // Competencia directa (opcional)
+  competencyId          String?
+  competency            Competency? @relation(fields: [competencyId], references: [id])
+  
+  // Relaciones con módulos (muchos a muchos)
+  moduleLessons ModuleLesson[]
+  
+  // Relaciones inversas
+  lessonQuestions LessonQuestion[]
+  examQuestions   ExamQuestion[]
+  studentContentProgress StudentContentProgress[]
+  studentLessonProgress StudentLessonProgress[]
+  
+  createdAt DateTime @default(now())
+}
+
+// Tabla intermedia para relación muchos a muchos entre Module y Lesson
+model ModuleLesson {
+  id          String @id @default(cuid())
+  moduleId    String
+  lessonId    String
+  orderIndex  Int
+  
+  // Relaciones
+  module      Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  lesson      Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  
+  // Índice único para evitar duplicados
+  @@unique([moduleId, lessonId])
+  
+  createdAt DateTime @default(now())
+}
+
+model LessonQuestion {
+  id              String @id @default(cuid())
+  lessonId        String?
+  lesson          Lesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  
+  // Contenido de la pregunta
+  questionText    String
+  questionImage   String? // URL de imagen en el enunciado
+  questionType    String @default("multiple_choice") // multiple_choice, true_false, fill_blank, etc.
+  
+  // Opciones de respuesta
+  optionA         String
+  optionB         String
+  optionC         String
+  optionD         String
+  optionAImage    String? // URL de imagen para opción A
+  optionBImage    String? // URL de imagen para opción B
+  optionCImage    String? // URL de imagen para opción C
+  optionDImage    String? // URL de imagen para opción D
+  
+  correctOption   String
+  explanation     String?
+  explanationImage String? // URL de imagen en la explicación
+  
+  // Metadatos
+  orderIndex      Int
+  difficultyLevel String @default("intermedio") // 'facil', 'intermedio', 'dificil', 'variable'
+  timeLimit       Int? // Tiempo límite en segundos (opcional)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Exam {
+  id              String @id @default(cuid())
+  title           String
+  description     String?
+  examType        String // 'simulacro_completo', 'por_competencia', etc.
+  courseId        String?
+  course          Course? @relation(fields: [courseId], references: [id])
+  competencyId    String?
+  competency      Competency? @relation(fields: [competencyId], references: [id])
+  academicGrade   String? // 'sexto', 'septimo', 'octavo', 'noveno', 'decimo', 'once'
+  timeLimitMinutes Int?
+  passingScore    Int @default(70)
+  difficultyLevel String @default("intermedio") // 'facil', 'intermedio', 'dificil', 'variable'
+  isAdaptive      Boolean @default(false)
+  isPublished     Boolean @default(false)
+  createdById     String?
+  createdBy       User? @relation(fields: [createdById], references: [id])
+  
+  // Fechas de apertura y cierre
+  openDate        DateTime?
+  closeDate       DateTime?
+  
+  // Configuración de módulos (para exámenes personalizados)
+  includedModules String? // JSON string con array de module_ids
+  
+  // Configuración de selección de preguntas
+  questionsPerModule Int @default(5) // Número de preguntas por módulo
+  totalQuestions     Int? // Total de preguntas (se calcula automáticamente)
+  
+  // Relaciones inversas
+  examQuestions ExamQuestion[]
+  examResults   ExamResult[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ExamQuestion {
+  id              String @id @default(cuid())
+  examId          String
+  exam            Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  
+  // Contenido de la pregunta
+  questionText    String
+  questionImage   String? // URL de imagen en el enunciado
+  questionType    String @default("multiple_choice") // multiple_choice, true_false, fill_blank, etc.
+  
+  // Opciones de respuesta
+  optionA         String
+  optionB         String
+  optionC         String
+  optionD         String
+  optionAImage    String? // URL de imagen para opción A
+  optionBImage    String? // URL de imagen para opción B
+  optionCImage    String? // URL de imagen para opción C
+  optionDImage    String? // URL de imagen para opción D
+  
+  correctOption   String
+  explanation     String?
+  explanationImage String? // URL de imagen en la explicación
+  
+  // Metadatos del examen
+  difficultyLevel String @default("intermedio") // 'facil', 'intermedio', 'dificil', 'variable'
+  points          Int @default(1)
+  orderIndex      Int
+  timeLimit       Int? // Tiempo límite en segundos (opcional)
+  
+  // Referencia a la lección donde se aprende
+  lessonId        String?
+  lesson          Lesson? @relation(fields: [lessonId], references: [id])
+  lessonUrl       String?
+  
+  // Relaciones inversas
+  examQuestionAnswers ExamQuestionAnswer[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =====================================================
+// MODELOS DE PROGRESO Y RESULTADOS
+// =====================================================
+
+model StudentContentProgress {
+  id                String @id @default(cuid())
+  userId            String
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId          String
+  lesson            Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  contentType       String // 'video', 'teoria', 'ejercicios'
+  isCompleted       Boolean @default(false)
+  completedAt       DateTime?
+  timeSpentMinutes  Int @default(0)
+  progressPercentage Int @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentLessonProgress {
+  id                    String @id @default(cuid())
+  userId                String
+  user                  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId              String
+  lesson                Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  status                String @default("no_iniciado") // 'no_iniciado', 'en_progreso', 'completado'
+  videoCompleted        Boolean @default(false)
+  theoryCompleted       Boolean @default(false)
+  exercisesCompleted    Boolean @default(false)
+  totalTimeMinutes      Int @default(0)
+  completedAt           DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentModuleProgress {
+  id                      String @id @default(cuid())
+  userId                  String
+  user                    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleId                String
+  module                  Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progressPercentage      Float @default(0)
+  completedLessonsCount   Int @default(0)
+  totalTimeMinutes        Int @default(0)
+  completedAt             DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentCourseProgress {
+  id                      String @id @default(cuid())
+  userId                  String
+  user                    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId                String
+  course                  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progressPercentage      Float @default(0)
+  completedModulesCount   Int @default(0)
+  totalTimeMinutes        Int @default(0)
+  enrolledAt              DateTime @default(now())
+  completedAt             DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ExamResult {
+  id                      String @id @default(cuid())
+  userId                  String
+  user                    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  examId                  String
+  exam                    Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  score                   Int
+  totalQuestions          Int
+  correctAnswers          Int
+  incorrectAnswers        Int
+  timeTakenMinutes        Int?
+  startedAt               DateTime @default(now())
+  completedAt             DateTime?
+  isPassed                Boolean?
+  
+  // Métricas de detección de trampa
+  averageTimePerQuestion  Float?
+  questionsWithVeryFastAnswers Int @default(0)
+  questionsWithIdenticalTiming Int @default(0)
+  fraudRiskScore          Float @default(0)
+  
+  // Resultados por competencia (para simulacros completos)
+  resultsByCompetency     String? // JSON string
+  
+  // Relaciones inversas
+  examQuestionAnswers ExamQuestionAnswer[]
+  
+  createdAt DateTime @default(now())
+}
+
+model ExamQuestionAnswer {
+  id                String @id @default(cuid())
+  examResultId      String
+  examResult        ExamResult @relation(fields: [examResultId], references: [id], onDelete: Cascade)
+  questionId        String
+  question          ExamQuestion @relation(fields: [questionId], references: [id])
+  selectedOption    String?
+  isCorrect         Boolean?
+  timeSpentSeconds  Int?
+  feedbackViewed    Boolean @default(false)
+  feedbackViewedAt  DateTime?
+  
+  // Relación inversa con User
+  userId            String?
+  user              User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+}
+
+// =====================================================
+// MODELOS DE REPORTES Y ANALÍTICAS
+// =====================================================
+
+model SchoolReport {
+  id                String @id @default(cuid())
+  schoolId          String
+  school            School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  reportType        String
+  reportPeriodStart DateTime
+  reportPeriodEnd   DateTime
+  reportData        String // JSON string
+  generatedAt       DateTime @default(now())
+  sentAt            DateTime?
+  sentToEmail       String?
+}
+
+model ReportCache {
+  id          String @id @default(cuid())
+  cacheKey    String @unique
+  reportData  String // JSON string
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+model CourseEnrollment {
+  id          String @id @default(cuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId    String
+  course      Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  enrolledAt  DateTime @default(now())
+  completedAt DateTime?
+  isActive    Boolean @default(true)
+  
+  @@unique([userId, courseId])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =====================================================
+// MODELOS DE NOTIFICACIONES
+// =====================================================
+
+model Notification {
+  id          String @id @default(cuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String // 'exam_available', 'exam_reminder', 'lesson_completed', 'achievement_unlocked', 'course_enrolled', 'exam_result', 'system'
+  title       String
+  message     String
+  isRead      Boolean @default(false)
+  readAt      DateTime?
+  
+  // Datos adicionales (opcional)
+  metadata    String? // JSON string con datos adicionales
+  actionUrl   String? // URL para redirigir al hacer click
+  
+  // Fechas
+  scheduledAt DateTime? // Para notificaciones programadas
+  expiresAt   DateTime? // Para notificaciones que expiran
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// =====================================================
+// MODELOS DE GAMIFICACIÓN
+// =====================================================
+
+model Achievement {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String
+  iconName    String // Nombre del icono (ej: 'trophy', 'star', 'medal')
+  category    String // 'lessons', 'exams', 'time', 'streak', 'performance'
+  criteria    String // JSON string con los criterios para desbloquear
+  points      Int @default(10) // Puntos que otorga
+  isActive    Boolean @default(true)
+  
+  // Relaciones inversas
+  userAchievements UserAchievement[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UserAchievement {
+  id            String @id @default(cuid())
+  userId        String
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  unlockedAt    DateTime @default(now())
+  
+  @@unique([userId, achievementId])
+  createdAt     DateTime @default(now())
+}
+
+model Goal {
+  id          String @id @default(cuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  type        String // 'lessons_completed', 'exams_passed', 'study_time', 'streak_days', 'score_improvement'
+  targetValue Int // Valor objetivo (ej: 10 lecciones, 5 exámenes, 120 minutos)
+  currentValue Int @default(0) // Valor actual
+  unit        String // 'lessons', 'exams', 'minutes', 'days', 'percentage'
+  deadline    DateTime? // Fecha límite opcional
+  isCompleted Boolean @default(false)
+  completedAt DateTime?
+  points      Int @default(0) // Puntos otorgados al completar
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UserStats {
+  id                    String @id @default(cuid())
+  userId                String @unique
+  user                  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Estadísticas generales
+  totalPoints           Int @default(0)
+  level                 Int @default(1)
+  currentLevelPoints    Int @default(0)
+  pointsToNextLevel     Int @default(100)
+  
+  // Estadísticas de actividad
+  totalLessonsCompleted Int @default(0)
+  totalExamsTaken       Int @default(0)
+  totalExamsPassed      Int @default(0)
+  totalStudyTimeMinutes Int @default(0)
+  currentStreakDays     Int @default(0)
+  longestStreakDays     Int @default(0)
+  lastActivityDate      DateTime?
+  
+  // Estadísticas de rendimiento
+  averageExamScore      Float @default(0)
+  bestExamScore         Int @default(0)
+  totalAchievements     Int @default(0)
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+} 

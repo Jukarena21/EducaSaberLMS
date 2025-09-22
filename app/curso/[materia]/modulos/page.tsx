@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState, use, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -20,18 +20,18 @@ import {
   ArrowLeft,
 } from "lucide-react"
 
-// Datos de los módulos por materia
+// Datos de los modulos por materia
 const modulosData = {
   "lectura-critica": {
-    title: "Lectura Crítica",
+    title: "Lectura Critica",
     color: "#73A2D3",
-    description: "Desarrolla habilidades avanzadas de comprensión lectora y pensamiento crítico",
+    description: "Desarrolla habilidades avanzadas de comprension lectora y pensamiento critico",
     progreso: 85,
     modulos: [
       {
         id: 1,
-        title: "Fundamentos de Comprensión Lectora",
-        description: "Aprende los conceptos básicos de comprensión de textos",
+        title: "Fundamentos de Comprension Lectora",
+        description: "Aprende los conceptos basicos de comprension de textos",
         duration: "2 semanas",
         lessons: 8,
         completed: 8,
@@ -45,14 +45,14 @@ const modulosData = {
           },
           {
             id: 2,
-            title: "Identificación de ideas principales",
+            title: "Identificacion de ideas principales",
             duration: "40 min",
             completed: true,
             type: "video",
           },
           {
             id: 3,
-            title: "Técnicas de lectura rápida",
+            title: "Tecnicas de lectura rapida",
             duration: "35 min",
             completed: true,
             type: "video",
@@ -66,14 +66,14 @@ const modulosData = {
           },
           {
             id: 5,
-            title: "Práctica de comprensión lectora",
+            title: "Practica de comprension lectora",
             duration: "60 min",
             completed: true,
             type: "ejercicio",
           },
           {
             id: 6,
-            title: "Análisis de textos narrativos",
+            title: "Analisis de textos narrativos",
             duration: "45 min",
             completed: true,
             type: "video",
@@ -87,7 +87,7 @@ const modulosData = {
           },
           {
             id: 8,
-            title: "Evaluación del módulo",
+            title: "Evaluacion del modulo",
             duration: "30 min",
             completed: true,
             type: "examen",
@@ -96,8 +96,8 @@ const modulosData = {
       },
       {
         id: 2,
-        title: "Análisis de Textos Argumentativos",
-        description: "Domina el análisis de argumentos y estructuras argumentativas",
+        title: "Analisis de Textos Argumentativos",
+        description: "Domina el analisis de argumentos y estructuras argumentativas",
         duration: "3 semanas",
         lessons: 12,
         completed: 7,
@@ -125,21 +125,21 @@ const modulosData = {
           },
           {
             id: 4,
-            title: "Falacias lógicas comunes",
+            title: "Falacias logicas comunes",
             duration: "55 min",
             completed: true,
             type: "video",
           },
           {
             id: 5,
-            title: "Evaluación de argumentos",
+            title: "Evaluacion de argumentos",
             duration: "45 min",
             completed: true,
             type: "ejercicio",
           },
           {
             id: 6,
-            title: "Práctica de análisis argumentativo",
+            title: "Practica de analisis argumentativo",
             duration: "60 min",
             completed: true,
             type: "ejercicio",
@@ -153,7 +153,7 @@ const modulosData = {
           },
           {
             id: 8,
-            title: "Análisis crítico de editoriales",
+            title: "Analisis critico de editoriales",
             duration: "50 min",
             completed: false,
             type: "video",
@@ -167,115 +167,21 @@ const modulosData = {
           },
           {
             id: 10,
-            title: "Práctica avanzada",
+            title: "Practica avanzada",
             duration: "60 min",
             completed: false,
             type: "ejercicio",
           },
           {
             id: 11,
-            title: "Simulacro de argumentación",
+            title: "Simulacro de argumentacion",
             duration: "40 min",
             completed: false,
             type: "ejercicio",
           },
           {
             id: 12,
-            title: "Evaluación del módulo",
-            duration: "30 min",
-            completed: false,
-            type: "examen",
-          },
-        ],
-      },
-      {
-        id: 3,
-        title: "Literatura y Contexto Cultural",
-        description: "Explora la literatura colombiana y latinoamericana",
-        duration: "3 semanas",
-        lessons: 12,
-        completed: 0,
-        lecciones: [
-          {
-            id: 1,
-            title: "Movimientos literarios latinoamericanos",
-            duration: "50 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 2,
-            title: "Literatura colombiana: autores principales",
-            duration: "45 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 3,
-            title: "Gabriel García Márquez y el realismo mágico",
-            duration: "55 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 4,
-            title: "Figuras retóricas y estilísticas",
-            duration: "40 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 5,
-            title: "Análisis de 'Cien años de soledad'",
-            duration: "60 min",
-            completed: false,
-            type: "ejercicio",
-          },
-          {
-            id: 6,
-            title: "Contexto histórico en la literatura",
-            duration: "45 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 7,
-            title: "Poesía colombiana contemporánea",
-            duration: "40 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 8,
-            title: "Teatro y narrativa moderna",
-            duration: "50 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 9,
-            title: "Análisis comparativo de obras",
-            duration: "60 min",
-            completed: false,
-            type: "ejercicio",
-          },
-          {
-            id: 10,
-            title: "Literatura y sociedad",
-            duration: "45 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 11,
-            title: "Práctica de análisis literario",
-            duration: "55 min",
-            completed: false,
-            type: "ejercicio",
-          },
-          {
-            id: 12,
-            title: "Evaluación del módulo",
+            title: "Evaluacion del modulo",
             duration: "30 min",
             completed: false,
             type: "examen",
@@ -285,15 +191,15 @@ const modulosData = {
     ],
   },
   matematicas: {
-    title: "Matemáticas",
+    title: "Matematicas",
     color: "#C00102",
-    description: "Fortalece conocimientos en álgebra, geometría, estadística y cálculo",
+    description: "Fortalece conocimientos en algebra, geometria, estadistica y calculo",
     progreso: 68,
     modulos: [
       {
         id: 1,
-        title: "Álgebra y Funciones",
-        description: "Domina las operaciones algebraicas y el análisis de funciones",
+        title: "Algebra y Funciones",
+        description: "Domina las operaciones algebraicas y el analisis de funciones",
         duration: "4 semanas",
         lessons: 16,
         completed: 12,
@@ -307,7 +213,7 @@ const modulosData = {
           },
           {
             id: 2,
-            title: "Factorización",
+            title: "Factorizacion",
             duration: "45 min",
             completed: true,
             type: "video",
@@ -321,7 +227,7 @@ const modulosData = {
           },
           {
             id: 4,
-            title: "Ecuaciones cuadráticas",
+            title: "Ecuaciones cuadraticas",
             duration: "55 min",
             completed: true,
             type: "video",
@@ -342,28 +248,28 @@ const modulosData = {
           },
           {
             id: 7,
-            title: "Función lineal",
+            title: "Funcion lineal",
             duration: "40 min",
             completed: true,
             type: "video",
           },
           {
             id: 8,
-            title: "Función cuadrática",
+            title: "Funcion cuadratica",
             duration: "50 min",
             completed: true,
             type: "video",
           },
           {
             id: 9,
-            title: "Función exponencial",
+            title: "Funcion exponencial",
             duration: "45 min",
             completed: true,
             type: "video",
           },
           {
             id: 10,
-            title: "Gráficas de funciones",
+            title: "Graficas de funciones",
             duration: "55 min",
             completed: true,
             type: "ejercicio",
@@ -377,7 +283,7 @@ const modulosData = {
           },
           {
             id: 12,
-            title: "Práctica de álgebra",
+            title: "Practica de algebra",
             duration: "60 min",
             completed: true,
             type: "ejercicio",
@@ -398,108 +304,14 @@ const modulosData = {
           },
           {
             id: 15,
-            title: "Simulacro de álgebra",
+            title: "Simulacro de algebra",
             duration: "40 min",
             completed: false,
             type: "ejercicio",
           },
           {
             id: 16,
-            title: "Evaluación del módulo",
-            duration: "30 min",
-            completed: false,
-            type: "examen",
-          },
-        ],
-      },
-      {
-        id: 2,
-        title: "Geometría Analítica y Plana",
-        description: "Aprende geometría en el plano cartesiano",
-        duration: "3 semanas",
-        lessons: 12,
-        completed: 3,
-        lecciones: [
-          {
-            id: 1,
-            title: "Coordenadas cartesianas",
-            duration: "45 min",
-            completed: true,
-            type: "video",
-          },
-          {
-            id: 2,
-            title: "Distancia entre puntos",
-            duration: "40 min",
-            completed: true,
-            type: "video",
-          },
-          {
-            id: 3,
-            title: "Ecuaciones de rectas",
-            duration: "50 min",
-            completed: true,
-            type: "video",
-          },
-          {
-            id: 4,
-            title: "Ecuaciones de circunferencias",
-            duration: "45 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 5,
-            title: "Áreas de figuras planas",
-            duration: "55 min",
-            completed: false,
-            type: "ejercicio",
-          },
-          {
-            id: 6,
-            title: "Perímetros y áreas",
-            duration: "40 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 7,
-            title: "Teoremas de geometría",
-            duration: "50 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 8,
-            title: "Transformaciones geométricas",
-            duration: "45 min",
-            completed: false,
-            type: "video",
-          },
-          {
-            id: 9,
-            title: "Práctica de geometría",
-            duration: "60 min",
-            completed: false,
-            type: "ejercicio",
-          },
-          {
-            id: 10,
-            title: "Problemas de aplicación",
-            duration: "50 min",
-            completed: false,
-            type: "ejercicio",
-          },
-          {
-            id: 11,
-            title: "Simulacro de geometría",
-            duration: "40 min",
-            completed: false,
-            type: "ejercicio",
-          },
-          {
-            id: 12,
-            title: "Evaluación del módulo",
+            title: "Evaluacion del modulo",
             duration: "30 min",
             completed: false,
             type: "examen",
@@ -511,13 +323,13 @@ const modulosData = {
   "ciencias-naturales": {
     title: "Ciencias Naturales",
     color: "#73A2D3",
-    description: "Explora conceptos fundamentales de biología, química y física",
+    description: "Explora conceptos fundamentales de biologia, quimica y fisica",
     progreso: 72,
     modulos: [
       {
         id: 1,
-        title: "Biología Celular y Molecular",
-        description: "Comprende la estructura y función de las células",
+        title: "Biologia Celular y Molecular",
+        description: "Comprende la estructura y funcion de las celulas",
         duration: "4 semanas",
         lessons: 16,
         completed: 10,
@@ -531,35 +343,35 @@ const modulosData = {
           },
           {
             id: 2,
-            title: "Función celular",
+            title: "Funcion celular",
             duration: "40 min",
             completed: true,
             type: "video",
           },
           {
             id: 3,
-            title: "Biomoléculas: carbohidratos",
+            title: "Biomoleculas: carbohidratos",
             duration: "50 min",
             completed: true,
             type: "video",
           },
           {
             id: 4,
-            title: "Biomoléculas: lípidos",
+            title: "Biomoleculas: lipidos",
             duration: "45 min",
             completed: true,
             type: "video",
           },
           {
             id: 5,
-            title: "Biomoléculas: proteínas",
+            title: "Biomoleculas: proteinas",
             duration: "55 min",
             completed: true,
             type: "video",
           },
           {
             id: 6,
-            title: "Ácidos nucleicos",
+            title: "Acidos nucleicos",
             duration: "50 min",
             completed: true,
             type: "video",
@@ -573,63 +385,63 @@ const modulosData = {
           },
           {
             id: 8,
-            title: "Respiración celular",
+            title: "Respiracion celular",
             duration: "45 min",
             completed: true,
             type: "video",
           },
           {
             id: 9,
-            title: "Fotosíntesis",
+            title: "Fotosintesis",
             duration: "50 min",
             completed: true,
             type: "video",
           },
           {
             id: 10,
-            title: "División celular: mitosis",
+            title: "Division celular: mitosis",
             duration: "45 min",
             completed: true,
             type: "video",
           },
           {
             id: 11,
-            title: "División celular: meiosis",
+            title: "Division celular: meiosis",
             duration: "50 min",
             completed: false,
             type: "video",
           },
           {
             id: 12,
-            title: "Genética molecular",
+            title: "Genetica molecular",
             duration: "55 min",
             completed: false,
             type: "video",
           },
           {
             id: 13,
-            title: "Expresión génica",
+            title: "Expresion genica",
             duration: "45 min",
             completed: false,
             type: "video",
           },
           {
             id: 14,
-            title: "Práctica de biología celular",
+            title: "Practica de biologia celular",
             duration: "60 min",
             completed: false,
             type: "ejercicio",
           },
           {
             id: 15,
-            title: "Simulacro de biología",
+            title: "Simulacro de biologia",
             duration: "40 min",
             completed: false,
             type: "ejercicio",
           },
           {
             id: 16,
-            title: "Evaluación del módulo",
+            title: "Evaluacion del modulo",
             duration: "30 min",
             completed: false,
             type: "examen",
@@ -641,41 +453,41 @@ const modulosData = {
   "ciencias-sociales": {
     title: "Ciencias Sociales",
     color: "#C00102",
-    description: "Comprende la historia, geografía y constitución política",
+    description: "Comprende la historia, geografia y constitucion politica",
     progreso: 78,
     modulos: [
       {
         id: 1,
         title: "Historia de Colombia",
-        description: "Explora los eventos más importantes de la historia colombiana",
+        description: "Explora los eventos mas importantes de la historia colombiana",
         duration: "4 semanas",
         lessons: 16,
         completed: 14,
         lecciones: [
           {
             id: 1,
-            title: "Período precolombino",
+            title: "Periodo precolombino",
             duration: "50 min",
             completed: true,
             type: "video",
           },
           {
             id: 2,
-            title: "Culturas indígenas",
+            title: "Culturas indigenas",
             duration: "45 min",
             completed: true,
             type: "video",
           },
           {
             id: 3,
-            title: "Conquista española",
+            title: "Conquista espanola",
             duration: "55 min",
             completed: true,
             type: "video",
           },
           {
             id: 4,
-            title: "Colonización",
+            title: "Colonizacion",
             duration: "50 min",
             completed: true,
             type: "video",
@@ -689,7 +501,7 @@ const modulosData = {
           },
           {
             id: 6,
-            title: "Formación de la República",
+            title: "Formacion de la Republica",
             duration: "45 min",
             completed: true,
             type: "video",
@@ -703,7 +515,7 @@ const modulosData = {
           },
           {
             id: 8,
-            title: "Regeneración",
+            title: "Regeneracion",
             duration: "40 min",
             completed: true,
             type: "video",
@@ -731,14 +543,14 @@ const modulosData = {
           },
           {
             id: 12,
-            title: "Constitución de 1991",
+            title: "Constitucion de 1991",
             duration: "50 min",
             completed: true,
             type: "video",
           },
           {
             id: 13,
-            title: "Colombia contemporánea",
+            title: "Colombia contemporanea",
             duration: "45 min",
             completed: true,
             type: "video",
@@ -752,14 +564,14 @@ const modulosData = {
           },
           {
             id: 15,
-            title: "Práctica de historia",
+            title: "Practica de historia",
             duration: "60 min",
             completed: false,
             type: "ejercicio",
           },
           {
             id: 16,
-            title: "Evaluación del módulo",
+            title: "Evaluacion del modulo",
             duration: "30 min",
             completed: false,
             type: "examen",
@@ -769,9 +581,9 @@ const modulosData = {
     ],
   },
   ingles: {
-    title: "Inglés",
+    title: "Ingles",
     color: "#73A2D3",
-    description: "Desarrolla habilidades de comprensión lectora y gramática en inglés",
+    description: "Desarrolla habilidades de comprension lectora y gramatica en ingles",
     progreso: 90,
     modulos: [
       {
@@ -967,14 +779,81 @@ const modulosData = {
 }
 
 interface ModulosPageProps {
-  params: {
+  params: Promise<{
     materia: string
-  }
+  }>
 }
 
 export default function ModulosPage({ params }: ModulosPageProps) {
   const [moduloActivo, setModuloActivo] = useState(0)
-  const curso = modulosData[params.materia as keyof typeof modulosData]
+
+  // Unwrap params (Next 15)
+  const { materia } = use(params)
+
+  // Detectar modo preview (desde admin) por query ?origin=admin
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+  const isPreview = useMemo(() => searchParams?.get('origin') === 'admin', [searchParams])
+  const courseId = useMemo(() => searchParams?.get('courseId') || undefined, [searchParams])
+
+  // Cargar datos reales del curso si llega courseId (solo modulos)
+  const [apiModules, setApiModules] = useState<Array<{ id: string; title: string }>>([])
+  const [apiLoaded, setApiLoaded] = useState(false)
+  useEffect(() => {
+    let active = true
+    const fetchCourse = async () => {
+      if (!isPreview || !courseId) {
+        setApiLoaded(true)
+        return
+      }
+      try {
+        const res = await fetch(`/api/courses/${courseId}`)
+        if (active) {
+          if (res.ok) {
+            const data = await res.json()
+            const mods = Array.isArray(data.modules)
+              ? data.modules.map((m: any) => ({ id: m.id, title: m.title }))
+              : []
+            setApiModules(mods)
+          }
+          setApiLoaded(true)
+        }
+      } catch (_) {
+        if (active) setApiLoaded(true)
+      }
+    }
+    fetchCourse()
+    return () => {
+      active = false
+    }
+  }, [isPreview, courseId])
+
+  const baseCurso = modulosData[materia as keyof typeof modulosData]
+  const curso = useMemo(() => {
+    // Base visual (para colores/nombre/descripcion)
+    const base = baseCurso || { title: materia, color: "#73A2D3", description: "", progreso: 0, modulos: [] as any[] }
+
+    if (!isPreview) return base
+
+    // En preview: usar modulos reales si existen (aunque esten vacios de lecciones)
+    if (apiModules.length > 0) {
+      return {
+        ...base,
+        progreso: 0,
+        modulos: apiModules.map((m) => ({
+          id: m.id,
+          title: m.title,
+          description: '',
+          duration: '-',
+          lessons: 0,
+          completed: 0,
+          lecciones: [] as any[],
+        })),
+      }
+    }
+
+    // Sin modulos reales recibidos (aun), conservamos base
+    return { ...base, progreso: 0 }
+  }, [isPreview, apiModules, baseCurso, materia])
 
   if (!curso) {
     return (
@@ -1002,6 +881,9 @@ export default function ModulosPage({ params }: ModulosPageProps) {
     }
   }
 
+  const hasModules = Array.isArray((curso as any).modulos) && (curso as any).modulos.length > 0
+  const safeIndex = hasModules ? Math.min(moduloActivo, (curso as any).modulos.length - 1) : 0
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
@@ -1017,19 +899,26 @@ export default function ModulosPage({ params }: ModulosPageProps) {
                 Dashboard
               </Link>
               <span>/</span>
-              <span className="text-[#73A2D3]">{curso.title}</span>
+              <span className="text-[#73A2D3]">{(curso as any).title}</span>
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <Badge style={{ backgroundColor: curso.color }} className="text-white">
-              {curso.title}
+            <Badge style={{ backgroundColor: (curso as any).color }} className="text-white">
+              {(curso as any).title}
             </Badge>
-            <Link href="/estudiante">
-              <Button variant="outline" size="sm">
+            {isPreview ? (
+              <Button variant="outline" size="sm" onClick={() => window.history.back()}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Volver al Dashboard
+                Regresar al panel
               </Button>
-            </Link>
+            ) : (
+              <Link href="/estudiante">
+                <Button variant="outline" size="sm">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Volver al Dashboard
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </nav>
@@ -1039,30 +928,36 @@ export default function ModulosPage({ params }: ModulosPageProps) {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">{curso.title}</h1>
-              <p className="text-lg text-gray-600 mb-4">{curso.description}</p>
+              <h1 className="text-3xl font-bold text-gray-800 mb-2">{(curso as any).title}</h1>
+              <p className="text-lg text-gray-600 mb-4">{(curso as any).description}</p>
               <div className="flex items-center space-x-6 text-sm text-gray-600">
-                <div className="flex items-center space-x-1">
-                  <Users className="h-4 w-4" />
-                  <span>1,234 estudiantes</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  <span>4.8/5</span>
-                </div>
+                {!isPreview && (
+                  <>
+                    <div className="flex items-center space-x-1">
+                      <Users className="h-4 w-4" />
+                      <span>1,234 estudiantes</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      <span>4.8/5</span>
+                    </div>
+                  </>
+                )}
                 <div className="flex items-center space-x-1">
                   <BookOpen className="h-4 w-4" />
-                  <span>{curso.modulos.length} módulos</span>
+                  <span>{hasModules ? (curso as any).modulos.length : 0} modulos</span>
                 </div>
               </div>
             </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold mb-2" style={{ color: curso.color }}>
-                {curso.progreso}%
+            {!isPreview && (
+              <div className="text-center">
+                <div className="text-3xl font-bold mb-2" style={{ color: (curso as any).color }}>
+                  {(curso as any).progreso}%
+                </div>
+                <div className="text-sm text-gray-600">Progreso General</div>
+                <Progress value={(curso as any).progreso} className="w-32 h-3 mt-2" />
               </div>
-              <div className="text-sm text-gray-600">Progreso General</div>
-              <Progress value={curso.progreso} className="w-32 h-3 mt-2" />
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -1073,29 +968,39 @@ export default function ModulosPage({ params }: ModulosPageProps) {
           <div className="lg:col-span-1">
             <Card>
               <CardHeader>
-                <CardTitle>Módulos del Curso</CardTitle>
+                <CardTitle>Modulos del Curso</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {curso.modulos.map((modulo, index) => (
-                  <button
-                    key={modulo.id}
-                    onClick={() => setModuloActivo(index)}
-                    className={`w-full text-left p-3 rounded-lg transition-colors ${
-                      moduloActivo === index
-                        ? "bg-blue-50 border-2 border-blue-200"
-                        : "hover:bg-gray-50 border border-gray-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-medium text-sm">Módulo {modulo.id}</div>
-                      <div className="text-xs text-gray-500">
-                        {modulo.completed}/{modulo.lessons}
+                {hasModules ? (
+                  (curso as any).modulos.map((modulo: any, index: number) => (
+                    <button
+                      key={modulo.id ?? index}
+                      onClick={() => setModuloActivo(index)}
+                      className={`w-full text-left p-3 rounded-lg transition-colors ${
+                        safeIndex === index
+                          ? "bg-blue-50 border-2 border-blue-200"
+                          : "hover:bg-gray-50 border border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-medium text-sm">Modulo {index + 1}</div>
+                        {!isPreview && (
+                          <div className="text-xs text-gray-500">
+                            {modulo.completed}/{modulo.lessons}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    <div className="text-xs text-gray-600 mb-2">{modulo.title}</div>
-                    <Progress value={(modulo.completed / modulo.lessons) * 100} className="h-1" />
-                  </button>
-                ))}
+                      <div className="text-xs text-gray-600 mb-2">{modulo.title ?? 'Sin titulo'}</div>
+                      {!isPreview && (
+                        <Progress value={((modulo.completed ?? 0) / (modulo.lessons || 1)) * 100} className="h-1" />
+                      )}
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500">
+                    {apiLoaded ? 'Este curso aun no tiene modulos.' : 'Cargando modulos...'}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -1104,104 +1009,111 @@ export default function ModulosPage({ params }: ModulosPageProps) {
           <div className="lg:col-span-3">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-2xl">
-                      Módulo {curso.modulos[moduloActivo].id}: {curso.modulos[moduloActivo].title}
-                    </CardTitle>
-                    <p className="text-gray-600 mt-2">{curso.modulos[moduloActivo].description}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-600">Progreso del módulo</div>
-                    <div className="text-2xl font-bold" style={{ color: curso.color }}>
-                      {Math.round((curso.modulos[moduloActivo].completed / curso.modulos[moduloActivo].lessons) * 100)}%
+                {hasModules ? (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-2xl">
+                        Modulo {safeIndex + 1}: {(curso as any).modulos[safeIndex].title ?? 'Sin titulo'}
+                      </CardTitle>
+                      <p className="text-gray-600 mt-2">{(curso as any).modulos[safeIndex].description ?? ''}</p>
                     </div>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-6 text-sm text-gray-600 mt-4">
-                  <span className="flex items-center space-x-1">
-                    <Clock className="h-4 w-4" />
-                    <span>{curso.modulos[moduloActivo].duration}</span>
-                  </span>
-                  <span className="flex items-center space-x-1">
-                    <BookOpen className="h-4 w-4" />
-                    <span>{curso.modulos[moduloActivo].lessons} lecciones</span>
-                  </span>
-                  <span className="flex items-center space-x-1">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span>{curso.modulos[moduloActivo].completed} completadas</span>
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {curso.modulos[moduloActivo].lecciones.map((leccion, index) => (
-                    <div
-                      key={leccion.id}
-                      className={`flex items-center justify-between p-4 rounded-lg border transition-all ${
-                        leccion.completed
-                          ? "bg-green-50 border-green-200"
-                          : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
-                      }`}
-                    >
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2">
-                          {leccion.completed ? (
-                            <CheckCircle className="h-5 w-5 text-green-500" />
-                          ) : (
-                            <div className="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
-                          )}
-                          {getIconForType(leccion.type)}
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-800">
-                            Lección {leccion.id}: {leccion.title}
-                          </div>
-                          <div className="text-sm text-gray-600 flex items-center space-x-4">
-                            <span className="flex items-center space-x-1">
-                              <Clock className="h-3 w-3" />
-                              <span>{leccion.duration}</span>
-                            </span>
-                            <Badge
-                              variant="outline"
-                              className={`text-xs ${
-                                leccion.type === "video"
-                                  ? "border-blue-200 text-blue-700"
-                                  : leccion.type === "ejercicio"
-                                    ? "border-green-200 text-green-700"
-                                    : "border-purple-200 text-purple-700"
-                              }`}
-                            >
-                              {leccion.type === "video"
-                                ? "Video"
-                                : leccion.type === "ejercicio"
-                                  ? "Ejercicio"
-                                  : "Examen"}
-                            </Badge>
-                          </div>
+                    {!isPreview && (
+                      <div className="text-right">
+                        <div className="text-sm text-gray-600">Progreso del modulo</div>
+                        <div className="text-2xl font-bold" style={{ color: (curso as any).color }}>
+                          {Math.round((((curso as any).modulos[safeIndex].completed ?? 0) / ((curso as any).modulos[safeIndex].lessons || 1)) * 100)}%
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        {leccion.completed ? (
-                          <Link href={`/leccion/${params.materia}/${curso.modulos[moduloActivo].id}/${leccion.id}`}>
-                            <Button size="sm" variant="outline">
-                              Revisar
-                            </Button>
-                          </Link>
-                        ) : (
-                          <Link href={`/leccion/${params.materia}/${curso.modulos[moduloActivo].id}/${leccion.id}`}>
-                            <Button size="sm" style={{ backgroundColor: curso.color }} className="text-white">
-                              {index === 0 || curso.modulos[moduloActivo].lecciones[index - 1].completed
-                                ? "Comenzar"
-                                : "Bloqueado"}
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <CardTitle className="text-2xl">Sin modulos</CardTitle>
+                    <p className="text-gray-600 mt-2">{apiLoaded ? 'Este curso aun no tiene modulos asignados.' : 'Cargando...'}</p>
+                  </div>
+                )}
+                {hasModules && (
+                  <div className="flex items-center space-x-6 text-sm text-gray-600 mt-4">
+                    <span className="flex items-center space-x-1">
+                      <Clock className="h-4 w-4" />
+                      <span>{(curso as any).modulos[safeIndex].duration ?? '-'}</span>
+                    </span>
+                    <span className="flex items-center space-x-1">
+                      <BookOpen className="h-4 w-4" />
+                      <span>{(curso as any).modulos[safeIndex].lessons ?? 0} lecciones</span>
+                    </span>
+                    {!isPreview && (
+                      <span className="flex items-center space-x-1">
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        <span>{(curso as any).modulos[safeIndex].completed ?? 0} completadas</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                {hasModules ? (
+                  <div className="space-y-3">
+                    {((curso as any).modulos[safeIndex].lecciones ?? []).map((leccion: any, index: number) => (
+                      <div
+                        key={leccion.id ?? index}
+                        className={`flex items-center justify-between p-4 rounded-lg border transition-all ${
+                          leccion.completed
+                            ? "bg-green-50 border-green-200"
+                            : "bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-2">
+                            {leccion.completed ? (
+                              <CheckCircle className="h-5 w-5 text-green-500" />
+                            ) : (
+                              <div className="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
+                            )}
+                            {getIconForType(leccion.type || 'video')}
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-800">
+                              Leccion {leccion.id ?? index + 1}: {leccion.title ?? 'Sin titulo'}
+                            </div>
+                            <div className="text-sm text-gray-600 flex items-center space-x-4">
+                              <span className="flex items-center space-x-1">
+                                <Clock className="h-3 w-3" />
+                                <span>{leccion.duration ?? '-'}</span>
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${
+                                  (leccion.type || 'video') === "video"
+                                    ? "border-blue-200 text-blue-700"
+                                    : (leccion.type || 'video') === "ejercicio"
+                                      ? "border-green-200 text-green-700"
+                                      : "border-purple-200 text-purple-700"
+                                }`}
+                              >
+                                {(leccion.type || 'video') === "video"
+                                  ? "Video"
+                                  : (leccion.type || 'video') === "ejercicio"
+                                    ? "Ejercicio"
+                                    : "Examen"}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Link href={`/leccion/${materia}/${(curso as any).modulos[safeIndex].id ?? safeIndex + 1}/${leccion.id ?? index + 1}`}>
+                            <Button size="sm" style={{ backgroundColor: (curso as any).color }} className="text-white">
+                              Comenzar
                               <ChevronRight className="h-4 w-4 ml-2" />
                             </Button>
                           </Link>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500">{apiLoaded ? 'No hay lecciones para mostrar.' : 'Cargando...'}</div>
+                )}
               </CardContent>
             </Card>
           </div>

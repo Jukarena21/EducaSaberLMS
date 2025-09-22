@@ -1,0 +1,410 @@
+// This is your Prisma schema file for SQLite local development
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// ENUMERACIONES (SQLite no soporta ENUMs, usamos strings)
+// =====================================================
+
+// =====================================================
+// MODELOS PRINCIPALES
+// =====================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  passwordHash String
+  role      String // 'student', 'school_admin', 'teacher_admin'
+  firstName String
+  lastName  String
+  avatarUrl String?
+  
+  // Información personal (opcional)
+  dateOfBirth DateTime?
+  gender     String?
+  documentType String?
+  documentNumber String?
+  address    String?
+  neighborhood String?
+  city       String?
+  socioeconomicStratum Int?
+  housingType String?
+  
+  // Información educativa (opcional)
+  schoolEntryYear Int?
+  academicAverage Float?
+  areasOfDifficulty String? // JSON string
+  areasOfStrength String? // JSON string
+  repetitionHistory Boolean @default(false)
+  schoolSchedule String?
+  
+  // Condiciones especiales (opcional)
+  disabilities String? // JSON string
+  specialEducationalNeeds String?
+  medicalConditions String?
+  homeTechnologyAccess Boolean?
+  homeInternetAccess Boolean?
+  
+  // Métricas de plataforma
+  totalPlatformTimeMinutes Int @default(0)
+  sessionsStarted Int @default(0)
+  lastSessionAt DateTime?
+  preferredDevice String?
+  preferredBrowser String?
+  averageSessionTimeMinutes Int @default(0)
+  
+  // Relaciones
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id])
+  
+  // Relaciones inversas
+  createdCourses Course[]
+  createdExams Exam[]
+  studentContentProgress StudentContentProgress[]
+  studentLessonProgress StudentLessonProgress[]
+  studentModuleProgress StudentModuleProgress[]
+  studentCourseProgress StudentCourseProgress[]
+  examResults ExamResult[]
+  examQuestionAnswers ExamQuestionAnswer[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  daneCode  String?  @unique
+  institutionType String // 'publica', 'privada', 'otro'
+  academicCalendar String // 'diurno', 'nocturno', 'ambos'
+  totalStudents Int?
+  numberOfCampuses Int @default(1)
+  yearsOfOperation Int?
+  qualityCertifications String? // JSON string
+  
+  // Información de ubicación
+  city      String
+  neighborhood String?
+  address   String?
+  
+  // Métricas de uso
+  activeStudentsCount Int @default(0)
+  averageStudentUsageMinutes Int @default(0)
+  averageProgressByCompetency String? // JSON string
+  studentRetentionRate Float?
+  
+  // Información de contacto
+  contactEmail String?
+  contactPhone String?
+  website String?
+  
+  // Relaciones inversas
+  users User[]
+  schoolReports SchoolReport[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Competency {
+  id          String @id @default(cuid())
+  name        String @unique // 'lectura_critica', 'matematicas', etc.
+  displayName String
+  description String?
+  colorHex    String?
+  iconName    String?
+  
+  // Relaciones inversas
+  courses Course[]
+  exams   Exam[]
+  
+  createdAt DateTime @default(now())
+}
+
+model Course {
+  id            String @id @default(cuid())
+  title         String
+  description   String?
+  thumbnailUrl  String?
+  competencyId  String
+  competency    Competency @relation(fields: [competencyId], references: [id])
+  academicGrade String // 'sexto', 'septimo', etc.
+  durationHours Int?
+  difficultyLevel String @default("intermedio") // 'facil', 'intermedio', 'dificil'
+  isPublished   Boolean @default(false)
+  createdById   String?
+  createdBy     User? @relation(fields: [createdById], references: [id])
+  
+  // Progreso calculado
+  totalModules  Int @default(0)
+  totalLessons  Int @default(0)
+  
+  // Relaciones inversas
+  modules Module[]
+  exams   Exam[]
+  studentCourseProgress StudentCourseProgress[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Module {
+  id                    String @id @default(cuid())
+  courseId              String
+  course                Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title                 String
+  description           String?
+  estimatedTimeMinutes  Int?
+  orderIndex            Int
+  isPublished           Boolean @default(false)
+  
+  // Progreso calculado
+  totalLessons          Int @default(0)
+  completedLessonsCount Int @default(0)
+  
+  // Relaciones inversas
+  lessons Lesson[]
+  studentModuleProgress StudentModuleProgress[]
+  
+  createdAt DateTime @default(now())
+}
+
+model Lesson {
+  id                    String @id @default(cuid())
+  moduleId              String
+  module                Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title                 String
+  description           String?
+  estimatedTimeMinutes  Int?
+  orderIndex            Int
+  isPublished           Boolean @default(false)
+  
+  // Contenido
+  videoUrl              String?
+  videoDescription      String?
+  theoryContent         String?
+  
+  // Relaciones inversas
+  lessonQuestions LessonQuestion[]
+  examQuestions   ExamQuestion[]
+  studentContentProgress StudentContentProgress[]
+  studentLessonProgress StudentLessonProgress[]
+  
+  createdAt DateTime @default(now())
+}
+
+model LessonQuestion {
+  id              String @id @default(cuid())
+  lessonId        String
+  lesson          Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questionText    String
+  optionA         String
+  optionB         String
+  optionC         String
+  optionD         String
+  correctOption   String
+  explanation     String?
+  orderIndex      Int
+  difficultyLevel String @default("intermedio")
+  
+  createdAt DateTime @default(now())
+}
+
+model Exam {
+  id              String @id @default(cuid())
+  title           String
+  description     String?
+  examType        String // 'simulacro_completo', 'por_competencia', etc.
+  courseId        String?
+  course          Course? @relation(fields: [courseId], references: [id])
+  competencyId    String?
+  competency      Competency? @relation(fields: [competencyId], references: [id])
+  timeLimitMinutes Int?
+  passingScore    Int @default(70)
+  difficultyLevel String @default("intermedio")
+  isAdaptive      Boolean @default(false)
+  isPublished     Boolean @default(false)
+  createdById     String?
+  createdBy       User? @relation(fields: [createdById], references: [id])
+  
+  // Configuración de módulos (para exámenes personalizados)
+  includedModules String? // JSON string
+  
+  // Relaciones inversas
+  examQuestions ExamQuestion[]
+  examResults   ExamResult[]
+  
+  createdAt DateTime @default(now())
+}
+
+model ExamQuestion {
+  id              String @id @default(cuid())
+  examId          String
+  exam            Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  questionText    String
+  optionA         String
+  optionB         String
+  optionC         String
+  optionD         String
+  correctOption   String
+  explanation     String?
+  difficultyLevel String @default("intermedio")
+  points          Int @default(1)
+  orderIndex      Int
+  
+  // Referencia a la lección donde se aprende
+  lessonId        String?
+  lesson          Lesson? @relation(fields: [lessonId], references: [id])
+  lessonUrl       String?
+  
+  // Relaciones inversas
+  examQuestionAnswers ExamQuestionAnswer[]
+  
+  createdAt DateTime @default(now())
+}
+
+// =====================================================
+// MODELOS DE PROGRESO Y RESULTADOS
+// =====================================================
+
+model StudentContentProgress {
+  id                String @id @default(cuid())
+  userId            String
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId          String
+  lesson            Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  contentType       String // 'video', 'teoria', 'ejercicios'
+  isCompleted       Boolean @default(false)
+  completedAt       DateTime?
+  timeSpentMinutes  Int @default(0)
+  progressPercentage Int @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentLessonProgress {
+  id                    String @id @default(cuid())
+  userId                String
+  user                  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId              String
+  lesson                Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  status                String @default("no_iniciado") // 'no_iniciado', 'en_progreso', 'completado'
+  videoCompleted        Boolean @default(false)
+  theoryCompleted       Boolean @default(false)
+  exercisesCompleted    Boolean @default(false)
+  totalTimeMinutes      Int @default(0)
+  completedAt           DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentModuleProgress {
+  id                      String @id @default(cuid())
+  userId                  String
+  user                    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleId                String
+  module                  Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  progressPercentage      Float @default(0)
+  completedLessonsCount   Int @default(0)
+  totalTimeMinutes        Int @default(0)
+  completedAt             DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StudentCourseProgress {
+  id                      String @id @default(cuid())
+  userId                  String
+  user                    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId                String
+  course                  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progressPercentage      Float @default(0)
+  completedModulesCount   Int @default(0)
+  totalTimeMinutes        Int @default(0)
+  enrolledAt              DateTime @default(now())
+  completedAt             DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ExamResult {
+  id                      String @id @default(cuid())
+  userId                  String
+  user                    User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  examId                  String
+  exam                    Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  score                   Int
+  totalQuestions          Int
+  correctAnswers          Int
+  incorrectAnswers        Int
+  timeTakenMinutes        Int?
+  startedAt               DateTime @default(now())
+  completedAt             DateTime?
+  isPassed                Boolean?
+  
+  // Métricas de detección de trampa
+  averageTimePerQuestion  Float?
+  questionsWithVeryFastAnswers Int @default(0)
+  questionsWithIdenticalTiming Int @default(0)
+  fraudRiskScore          Float @default(0)
+  
+  // Resultados por competencia (para simulacros completos)
+  resultsByCompetency     String? // JSON string
+  
+  // Relaciones inversas
+  examQuestionAnswers ExamQuestionAnswer[]
+  
+  createdAt DateTime @default(now())
+}
+
+model ExamQuestionAnswer {
+  id                String @id @default(cuid())
+  examResultId      String
+  examResult        ExamResult @relation(fields: [examResultId], references: [id], onDelete: Cascade)
+  questionId        String
+  question          ExamQuestion @relation(fields: [questionId], references: [id])
+  selectedOption    String?
+  isCorrect         Boolean?
+  timeSpentSeconds  Int?
+  feedbackViewed    Boolean @default(false)
+  feedbackViewedAt  DateTime?
+  
+  createdAt DateTime @default(now())
+}
+
+// =====================================================
+// MODELOS DE REPORTES Y ANALÍTICAS
+// =====================================================
+
+model SchoolReport {
+  id                String @id @default(cuid())
+  schoolId          String
+  school            School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  reportType        String
+  reportPeriodStart DateTime
+  reportPeriodEnd   DateTime
+  reportData        String // JSON string
+  generatedAt       DateTime @default(now())
+  sentAt            DateTime?
+  sentToEmail       String?
+}
+
+model ReportCache {
+  id          String @id @default(cuid())
+  cacheKey    String @unique
+  reportData  String // JSON string
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+} 
