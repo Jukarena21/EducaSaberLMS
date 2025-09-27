@@ -208,7 +208,7 @@ export default function AdminDashboard() {
     }
     
     refetchAnalytics(filters)
-  }, [activeTab, filterSchoolId, filterCourseId, filterGrade, filterCompetencyId, filterMinAge, filterMaxAge, refetchAnalytics])
+  }, [activeTab, filterSchoolId, filterCourseId, filterGrade, filterCompetencyId, filterMinAge, filterMaxAge]) // Removed refetchAnalytics from deps
 
 
   const exportCompCSV = () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 
 interface KPIData {
@@ -50,7 +50,7 @@ export function useAnalytics() {
     error: null
   })
 
-  const fetchAnalytics = async (filters: {
+  const fetchAnalytics = useCallback(async (filters: {
     schoolId?: string
     courseId?: string
     grade?: string
@@ -115,13 +115,13 @@ export function useAnalytics() {
         error: 'Error al cargar los datos de analytics'
       }))
     }
-  }
+  }, [session?.user])
 
   useEffect(() => {
     if (session?.user) {
       fetchAnalytics()
     }
-  }, [session])
+  }, [session?.user?.id, fetchAnalytics]) // Solo cuando cambia el ID del usuario
 
   return {
     ...data,

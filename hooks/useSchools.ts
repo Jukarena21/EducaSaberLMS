@@ -111,7 +111,7 @@ export function useSchools(): UseSchoolsReturn {
 
   useEffect(() => {
     fetchSchools()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     schools,
