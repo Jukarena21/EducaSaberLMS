@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireRole } from '@/lib/rbac'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -13,13 +14,11 @@ const TEN_MINUTES_MS = 10 * 60 * 1000
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
+    const gate = await requireRole(['teacher_admin','school_admin'])
+    if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
     // Restricciones de rol
-    if (session.user.role === 'school_admin' && !session.user.schoolId) {
+    if (gate.session.user.role === 'school_admin' && !gate.session.user.schoolId) {
       return NextResponse.json({ error: 'Usuario sin colegio asignado' }, { status: 403 })
     }
 
@@ -29,8 +28,8 @@ export async function GET(request: NextRequest) {
     const fromParam = searchParams.get('from')
     const toParam = searchParams.get('to')
     // Para school_admin, forzar el filtro por su schoolId
-    const schoolId = session.user.role === 'school_admin' 
-      ? session.user.schoolId 
+    const schoolId = gate.session.user.role === 'school_admin' 
+      ? gate.session.user.schoolId 
       : (searchParams.get('schoolId') || undefined)
     const courseId = searchParams.get('courseId') || undefined
     const academicGrade = searchParams.get('academicGrade') || undefined

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -56,6 +56,17 @@ export default function SignUpPage() {
       setIsLoading(false);
     }
   };
+
+  // Esta página no estará en el producto final: redirigir al home con aviso
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      const target = '/?signup=disabled'
+      window.location.replace(target)
+    } catch {
+      window.location.replace('/')
+    }
+  }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({

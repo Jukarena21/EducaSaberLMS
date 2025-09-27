@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -11,6 +11,18 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+
+  // Esta página no estará en el producto final: redirigir al home con aviso
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      const from = url.searchParams.get('redirectedFrom') || ''
+      const target = `/?signin=disabled${from ? `&redirectedFrom=${encodeURIComponent(from)}` : ''}`
+      window.location.replace(target)
+    } catch {
+      window.location.replace('/')
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +39,23 @@ export default function SignInPage() {
       if (result?.error) {
         setError("Credenciales inválidas");
       } else {
-        router.push("/dashboard");
+        // Esperar a que NextAuth escriba la cookie y la sesión esté disponible
+        let tries = 0
+        let role: string | undefined
+        while (tries < 10 && !role) {
+          const session = await getSession()
+          role = (session as any)?.user?.role as string | undefined
+          if (role) break
+          await new Promise(r => setTimeout(r, 100))
+          tries++
+        }
+
+        const target = role === 'student' ? '/estudiante'
+          : (role === 'teacher_admin' || role === 'school_admin') ? '/admin' : '/'
+
+        // Forzar navegación completa para asegurar que el middleware vea el token
+        // Añadimos un parámetro para evitar que el middleware interprete que venimos de protegido
+        window.location.href = target + '?from=signin'
       }
     } catch (error) {
       setError("Error al iniciar sesión");

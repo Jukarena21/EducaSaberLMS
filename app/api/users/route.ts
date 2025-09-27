@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireRole } from '@/lib/rbac'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -119,6 +120,8 @@ export async function GET(request: NextRequest) {
 // POST /api/users - Create new user
 export async function POST(request: NextRequest) {
   try {
+    const gate = await requireRole(['teacher_admin'])
+    if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
     const session = await getServerSession(authOptions)
     
     if (!session) {

@@ -36,7 +36,7 @@ import {
   Award,
   Clock,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useUsers } from "@/hooks/useUsers"
 import { useSchools } from "@/hooks/useSchools"
@@ -102,6 +102,8 @@ const actividadDiaria = [
 
 export default function AdminDashboard() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const forbidden = searchParams.get('forbidden') === '1'
   const { data: session, status } = useSession()
   const [activeTab, setActiveTab] = useState("analytics")
   const [selectedPeriod, setSelectedPeriod] = useState("6m")
@@ -401,6 +403,15 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {forbidden && (
+        <div className="container mx-auto px-4 pt-4">
+          <div className="rounded-md border border-yellow-300 bg-yellow-50 text-yellow-900 p-3 text-sm flex items-start justify-between">
+            <div>
+              Acceso restringido. No tienes permisos para acceder a esa sección.
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="flex items-center justify-between p-4">

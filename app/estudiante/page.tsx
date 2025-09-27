@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { BookOpen, Award, Clock, CheckCircle, LogOut, TrendingUp, BarChart3, Calendar } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useState } from "react"
 import { useStudentDashboard } from "@/hooks/useStudentDashboard"
@@ -23,6 +23,8 @@ import { GamificationPanel } from "@/components/GamificationPanel"
 
 export default function EstudianteDashboard() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const forbidden = searchParams.get('forbidden') === '1'
   const { data: session, status } = useSession()
 
   // Hook dashboard (siempre en mismo orden de render)
@@ -65,6 +67,15 @@ export default function EstudianteDashboard() {
   }
   return (
     <div className="min-h-screen bg-gray-50">
+      {forbidden && (
+        <div className="container mx-auto px-4 pt-4">
+          <div className="rounded-md border border-yellow-300 bg-yellow-50 text-yellow-900 p-3 text-sm flex items-start justify-between">
+            <div>
+              Acceso restringido. No tienes permisos para acceder a esa sección.
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="flex items-center justify-between p-4">

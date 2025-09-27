@@ -34,6 +34,10 @@ export default function LMSPlatform() {
   // Homepage settings
   const [showInstitutionsCarousel, setShowInstitutionsCarousel] = useState<boolean>(true)
   const [institutions, setInstitutions] = useState<Array<{ name: string; logo: string; city?: string; logoUrl?: string }>>([])
+  // Redirect notice
+  const [redirectedFrom, setRedirectedFrom] = useState<string | null>(null)
+  const [signinDisabled, setSigninDisabled] = useState<boolean>(false)
+  const [signupDisabled, setSignupDisabled] = useState<boolean>(false)
 
   useEffect(() => {
     let mounted = true
@@ -51,6 +55,19 @@ export default function LMSPlatform() {
       } catch {}
     })()
     return () => { mounted = false }
+  }, [])
+  
+  // Detect redirectedFrom to show a friendly notice
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const from = params.get('redirectedFrom')
+      setRedirectedFrom(from)
+      const sd = params.get('signin') === 'disabled'
+      const sud = params.get('signup') === 'disabled'
+      setSigninDisabled(sd)
+      setSignupDisabled(sud)
+    } catch {}
   }, [])
   
   // Estado para el formulario de login
@@ -383,6 +400,31 @@ export default function LMSPlatform() {
 
           {/* Main Content - Reduced height */}
           <div className="flex-1 container mx-auto px-4 py-4">
+            {(redirectedFrom || signinDisabled || signupDisabled) && (
+              <div className="mb-4">
+                <div className="rounded-md border border-yellow-300 bg-yellow-50 text-yellow-900 p-3 text-sm flex items-start justify-between">
+                  <div>
+                    {signinDisabled ? (
+                      <>La página de inicio de sesión dedicada no está disponible. Usa el formulario de esta página para ingresar.</>
+                    ) : signupDisabled ? (
+                      <>El registro público no está disponible. Si necesitas una cuenta, contáctanos.</>
+                    ) : (
+                      <>
+                        Acceso restringido. Te redirigimos desde
+                        <span className="font-medium"> {redirectedFrom}</span>.
+                        Inicia sesión con un rol autorizado o navega desde el menú.
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setRedirectedFrom(null)}
+                    className="ml-3 text-yellow-800 hover:underline"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="grid lg:grid-cols-2 gap-8 items-center h-full">
               {/* Login Form */}
               <Card className="w-full max-w-md mx-auto bg-white/95 backdrop-blur-sm shadow-2xl border-0">

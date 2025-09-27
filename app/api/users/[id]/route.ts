@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireRole } from '@/lib/rbac'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -10,16 +11,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
-    // Only school_admin and teacher_admin can access user management
-    if (session.user?.role !== 'school_admin' && session.user?.role !== 'teacher_admin') {
-      return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
-    }
+    const gate = await requireRole(['school_admin','teacher_admin'])
+    if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
     const { id } = await params
 
@@ -27,8 +20,8 @@ export async function GET(
     let whereClause: any = { id }
     
     // School admins can only see users from their school
-    if (session.user?.role === 'school_admin' && session.user?.schoolId) {
-      whereClause.schoolId = session.user.schoolId
+    if (gate.session?.user.role === 'school_admin' && gate.session.user.schoolId) {
+      whereClause.schoolId = gate.session.user.schoolId
     }
 
     const user = await prisma.user.findFirst({
@@ -103,16 +96,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
-    // Only school_admin and teacher_admin can update users
-    if (session.user?.role !== 'school_admin' && session.user?.role !== 'teacher_admin') {
-      return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
-    }
+    const gate = await requireRole(['school_admin','teacher_admin'])
+    if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
     const { id } = await params
     const body = await request.json()
@@ -149,8 +134,8 @@ export async function PUT(
     let whereClause: any = { id }
     
     // School admins can only update users from their school
-    if (session.user?.role === 'school_admin' && session.user?.schoolId) {
-      whereClause.schoolId = session.user.schoolId
+    if (gate.session?.user.role === 'school_admin' && gate.session.user.schoolId) {
+      whereClause.schoolId = gate.session.user.schoolId
     }
 
     // Check if user exists and user has permission to update
