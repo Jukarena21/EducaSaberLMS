@@ -45,6 +45,7 @@ import { useCompetencies } from "@/hooks/useCompetencies"
 import { useLessons } from "@/hooks/useLessons"
 import { useModules } from "@/hooks/useModules"
 import { useCourses } from "@/hooks/useCourses"
+import { useAnalytics } from "@/hooks/useAnalytics"
 import UserForm from "@/components/UserForm"
 import SchoolForm from "@/components/SchoolForm"
 import QuestionForm from "@/components/QuestionForm"
@@ -107,30 +108,23 @@ export default function AdminDashboard() {
   const { data: session, status } = useSession()
   const [activeTab, setActiveTab] = useState("analytics")
   const [selectedPeriod, setSelectedPeriod] = useState("6m")
-  const [analyticsLoading, setAnalyticsLoading] = useState(false)
-  const [analyticsError, setAnalyticsError] = useState<string | null>(null)
-  const [kpis, setKpis] = useState<{ activeStudents: number; examAttempts: number; averageScore: number; institutions: number } | null>(null)
-  const [gradeSeries, setGradeSeries] = useState<any[]>([])
-  const [gradeDistribution, setGradeDistribution] = useState<any[]>([])
-  const [schoolRanking, setSchoolRanking] = useState<any[]>([])
-  const [hourlyActivity, setHourlyActivity] = useState<any[]>([])
-  const [engagementMetrics, setEngagementMetrics] = useState<{
-    totalLessonsCompleted: number;
-    totalStudyTimeHours: number;
-    averageSessionDurationMinutes: number;
-    activeUsers: number;
-    courseCompletions: number;
-    averageProgress: number;
-    completionRate: number;
-  } | null>(null)
-  // Reportes detallados
-  const [reportLoading, setReportLoading] = useState(false)
-  const [reportRows, setReportRows] = useState<any[]>([])
-  const [reportSeries, setReportSeries] = useState<any[]>([])
-  const [reportDistribution, setReportDistribution] = useState<any[]>([])
-  const [reportError, setReportError] = useState('')
-  // Reporte competencia/dificultad
-  const [compReportRows, setCompReportRows] = useState<any[]>([])
+  
+  // Analytics hook con datos reales
+  const {
+    kpis,
+    engagementMetrics,
+    gradeSeries,
+    gradeDistribution,
+    hourlyActivity,
+    schoolRanking,
+    reportRows,
+    compReportRows,
+    reportSeries,
+    reportDistribution,
+    loading: analyticsLoading,
+    error: analyticsError,
+    refetch: refetchAnalytics
+  } = useAnalytics()
   // Programaciones de informes (stub en memoria)
   const [scheduledReports, setScheduledReports] = useState<Array<{ id: string; name: string; cron: string; nextRun: string; active: boolean }>>([
     { id: 'weekly', name: 'Informe Semanal', cron: '0 8 * * 1', nextRun: 'Lunes 8:00 AM', active: true },
@@ -200,126 +194,22 @@ export default function AdminDashboard() {
     }
   }, [session, status, router])
 
-  // Fetch analytics KPIs when tab/period changes
+  // Refetch analytics when filters change
   useEffect(() => {
     if (activeTab !== 'analytics') return
-    const controller = new AbortController()
-    const now = new Date()
-    const to = now.toISOString()
-    const from = (() => {
-      const d = new Date(now)
-      if (selectedPeriod === '1m') d.setMonth(d.getMonth() - 1)
-      else if (selectedPeriod === '3m') d.setMonth(d.getMonth() - 3)
-      else if (selectedPeriod === '6m') d.setMonth(d.getMonth() - 6)
-      else if (selectedPeriod === '1y') d.setFullYear(d.getFullYear() - 1)
-      return d.toISOString()
-    })()
-
-    async function fetchAnalytics() {
-      try {
-        setAnalyticsLoading(true)
-        setAnalyticsError(null)
-        const params = new URLSearchParams({ from, to })
-        // Para school_admin, usar automáticamente su schoolId
-        const schoolIdToUse = session?.user?.role === 'school_admin' 
-          ? session.user.schoolId 
-          : (filterSchoolId !== 'all' && filterSchoolId ? filterSchoolId : undefined)
-        if (schoolIdToUse) params.set('schoolId', schoolIdToUse)
-        if (filterCourseId !== 'all' && filterCourseId) params.set('courseId', filterCourseId)
-        if (filterGrade !== 'all' && filterGrade) params.set('academicGrade', filterGrade)
-        if (filterCompetencyId !== 'all' && filterCompetencyId) params.set('competencyId', filterCompetencyId)
-        if (filterMinAge) params.set('minAge', filterMinAge)
-        if (filterMaxAge) params.set('maxAge', filterMaxAge)
-        const res = await fetch(`/api/analytics/grades?${params.toString()}`, { signal: controller.signal })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        setKpis(data.kpis || { activeStudents: 0, examAttempts: 0, averageScore: 0, institutions: 0 })
-        setGradeSeries(data.series || [])
-        setGradeDistribution(data.distribution || [])
-        setSchoolRanking(data.ranking || [])
-        setHourlyActivity((data.hourly || []).map((h: any) => ({ hora: `${String(h.hour).padStart(2,'0')}:00`, estudiantes: h.count })))
-        
-        // Fetch engagement metrics (usar los mismos parámetros)
-        const engagementRes = await fetch(`/api/analytics/engagement?${params.toString()}`, { signal: controller.signal })
-        if (engagementRes.ok) {
-          const engagementData = await engagementRes.json()
-          setEngagementMetrics(engagementData)
-        }
-      } catch (e: any) {
-        if (e.name !== 'AbortError') setAnalyticsError('') // silenciar en KPI cards
-      } finally {
-        setAnalyticsLoading(false)
-      }
+    
+    const filters = {
+      schoolId: filterSchoolId !== 'all' ? filterSchoolId : undefined,
+      courseId: filterCourseId !== 'all' ? filterCourseId : undefined,
+      grade: filterGrade !== 'all' ? filterGrade : undefined,
+      competencyId: filterCompetencyId !== 'all' ? filterCompetencyId : undefined,
+      minAge: filterMinAge || undefined,
+      maxAge: filterMaxAge || undefined
     }
-    fetchAnalytics()
-    return () => controller.abort()
-  }, [activeTab, selectedPeriod, filterSchoolId, filterCourseId, filterGrade, filterCompetencyId, filterMinAge, filterMaxAge])
+    
+    refetchAnalytics(filters)
+  }, [activeTab, filterSchoolId, filterCourseId, filterGrade, filterCompetencyId, filterMinAge, filterMaxAge, refetchAnalytics])
 
-  // Fetch reports when entering Reports tab or filters change
-  useEffect(() => {
-    if (activeTab !== 'reports') return
-    const controller = new AbortController()
-    const now = new Date()
-    const to = now.toISOString()
-    const fromDate = new Date(now)
-    fromDate.setFullYear(fromDate.getFullYear() - 1)
-    const params = new URLSearchParams({ from: fromDate.toISOString(), to })
-    // Para school_admin, usar automáticamente su schoolId
-    const schoolIdToUse = session?.user?.role === 'school_admin' 
-      ? session.user.schoolId 
-      : (filterSchoolId !== 'all' && filterSchoolId ? filterSchoolId : undefined)
-    if (schoolIdToUse) params.set('schoolId', schoolIdToUse)
-    if (filterCourseId !== 'all' && filterCourseId) params.set('courseId', filterCourseId)
-    if (filterGrade !== 'all' && filterGrade) params.set('academicGrade', filterGrade)
-    if (filterCompetencyId !== 'all' && filterCompetencyId) params.set('competencyId', filterCompetencyId)
-    async function fetchReports() {
-      try {
-        setReportLoading(true)
-        setReportError('')
-        const res = await fetch(`/api/reports/summary?${params.toString()}`, { signal: controller.signal })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        setReportRows(data.rows || [])
-        setReportSeries(data.series || [])
-        setReportDistribution(data.distribution || [])
-      } catch (e: any) {
-        if (e.name !== 'AbortError') setReportError('No se pudieron cargar los informes')
-      } finally {
-        setReportLoading(false)
-      }
-    }
-    fetchReports()
-    return () => controller.abort()
-  }, [activeTab, filterSchoolId, filterCourseId, filterGrade, filterCompetencyId])
-
-  // Fetch Competency x Difficulty report (merged in analytics tab)
-  useEffect(() => {
-    if (activeTab !== 'analytics') return
-    const controller = new AbortController()
-    const now = new Date()
-    const to = now.toISOString()
-    const fromDate = new Date(now)
-    fromDate.setFullYear(fromDate.getFullYear() - 1)
-    const params = new URLSearchParams({ from: fromDate.toISOString(), to })
-    // Para school_admin, usar automáticamente su schoolId
-    const schoolIdToUse = session?.user?.role === 'school_admin' 
-      ? session.user.schoolId 
-      : (filterSchoolId !== 'all' && filterSchoolId ? filterSchoolId : undefined)
-    if (schoolIdToUse) params.set('schoolId', schoolIdToUse)
-    if (filterCourseId !== 'all' && filterCourseId) params.set('courseId', filterCourseId)
-    if (filterGrade !== 'all' && filterGrade) params.set('academicGrade', filterGrade)
-    if (filterCompetencyId !== 'all' && filterCompetencyId) params.set('competencyId', filterCompetencyId)
-    async function fetchComp() {
-      try {
-        const res = await fetch(`/api/reports/competencies?${params.toString()}`, { signal: controller.signal })
-        if (!res.ok) throw new Error('HTTP '+res.status)
-        const data = await res.json()
-        setCompReportRows(data.rows || [])
-      } catch {}
-    }
-    fetchComp()
-    return () => controller.abort()
-  }, [activeTab, filterSchoolId, filterCourseId, filterGrade, filterCompetencyId])
 
   const exportCompCSV = () => {
     const header = ['Competencia','Dificultad','Intentos','Promedio','Aprobación %']
@@ -467,137 +357,139 @@ export default function AdminDashboard() {
             )}
           </TabsList>
 
-          {/* ANALYTICS + REPORTS TAB */}
-          <TabsContent value="analytics" className="space-y-6">
-            {/* Filtros */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Filtros</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className={`grid grid-cols-1 md:grid-cols-${session?.user?.role === 'teacher_admin' ? '7' : '6'} gap-4`}>
-                  {/* Solo mostrar filtro de colegio para teacher_admin */}
-                  {session?.user?.role === 'teacher_admin' && (
-                    <div>
-                      <Label>Colegio</Label>
-                      <Select value={filterSchoolId} onValueChange={setFilterSchoolId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Todos</SelectItem>
-                          {schools.map(s => (
-                            <SelectItem key={s.id} value={s.id || ''}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div>
-                    <Label>Curso</Label>
-                    <Select value={filterCourseId} onValueChange={setFilterCourseId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Todos" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        {courses.map(c => (
-                          <SelectItem key={c.id} value={c.id || ''}>{c.title}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Año Escolar</Label>
-                    <Select value={filterGrade} onValueChange={setFilterGrade}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Todos" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        {['sexto','septimo','octavo','noveno','decimo','once'].map(g => (
-                          <SelectItem key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Competencia</Label>
-                    <Select value={filterCompetencyId} onValueChange={setFilterCompetencyId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Todas" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas</SelectItem>
-                        {competencies.map(comp => (
-                          <SelectItem key={comp.id} value={comp.id || ''}>{comp.displayName}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Edad mínima</Label>
-                    <Input value={filterMinAge} onChange={(e) => setFilterMinAge(e.target.value)} placeholder="Ej: 12" />
-                  </div>
-                  <div>
-                    <Label>Edad máxima</Label>
-                    <Input value={filterMaxAge} onChange={(e) => setFilterMaxAge(e.target.value)} placeholder="Ej: 18" />
-                  </div>
-                  <div>
-                    <Label>Comparar con</Label>
-                    <Select value={comparePeriod} onValueChange={setComparePeriod}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sin comparación" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sin comparación</SelectItem>
-                        <SelectItem value="previous">Período anterior</SelectItem>
-                        <SelectItem value="last_year">Mismo período año pasado</SelectItem>
-                        <SelectItem value="custom">Período personalizado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                 {/* ANALYTICS + REPORTS TAB */}
+                 <TabsContent value="analytics" className="space-y-6">
+                   {/* Resumen Ejecutivo */}
+                   {kpis && (
+                     <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+                       <CardHeader>
+                         <CardTitle className="flex items-center space-x-2">
+                           <BarChart3 className="h-5 w-5 text-blue-600" />
+                           <span className="text-blue-800">
+                             Resumen Ejecutivo
+                             {session?.user?.role === 'school_admin' && (
+                               <span className="text-sm font-normal text-gray-600 ml-2">
+                                 (Datos de tu colegio únicamente)
+                               </span>
+                             )}
+                           </span>
+                         </CardTitle>
+                       </CardHeader>
+                       <CardContent>
+                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                           <div className="text-center">
+                             <div className="text-3xl font-bold text-blue-600">{kpis.activeStudents.toLocaleString('es-CO')}</div>
+                             <div className="text-sm text-blue-700">Estudiantes Activos</div>
+                             <div className="text-xs text-gray-600 mt-1">En el período seleccionado</div>
+                           </div>
+                           <div className="text-center">
+                             <div className="text-3xl font-bold text-green-600">{kpis.averageScore.toFixed(1)}%</div>
+                             <div className="text-sm text-green-700">Promedio General</div>
+                             <div className="text-xs text-gray-600 mt-1">Rendimiento académico</div>
+                           </div>
+                           <div className="text-center">
+                             <div className="text-3xl font-bold text-purple-600">{kpis.examAttempts.toLocaleString('es-CO')}</div>
+                             <div className="text-sm text-purple-700">Exámenes Realizados</div>
+                             <div className="text-xs text-gray-600 mt-1">Actividad de evaluación</div>
+                           </div>
+                         </div>
+                       </CardContent>
+                     </Card>
+                   )}
 
-            {/* Resumen Ejecutivo */}
-            {kpis && (
-              <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <BarChart3 className="h-5 w-5 text-blue-600" />
-                    <span className="text-blue-800">
-                      Resumen Ejecutivo
-                      {session?.user?.role === 'school_admin' && (
-                        <span className="text-sm font-normal text-gray-600 ml-2">
-                          (Datos de tu colegio únicamente)
-                        </span>
-                      )}
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-blue-600">{kpis.activeStudents.toLocaleString('es-CO')}</div>
-                      <div className="text-sm text-blue-700">Estudiantes Activos</div>
-                      <div className="text-xs text-gray-600 mt-1">En el período seleccionado</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-green-600">{kpis.averageScore.toFixed(1)}%</div>
-                      <div className="text-sm text-green-700">Promedio General</div>
-                      <div className="text-xs text-gray-600 mt-1">Rendimiento académico</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-3xl font-bold text-purple-600">{kpis.examAttempts.toLocaleString('es-CO')}</div>
-                      <div className="text-sm text-purple-700">Exámenes Realizados</div>
-                      <div className="text-xs text-gray-600 mt-1">Actividad de evaluación</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                   {/* Filtros */}
+                   <Card>
+                     <CardHeader>
+                       <CardTitle>Filtros de Análisis</CardTitle>
+                     </CardHeader>
+                     <CardContent>
+                       <div className={`grid grid-cols-1 md:grid-cols-${session?.user?.role === 'teacher_admin' ? '4' : '3'} gap-4`}>
+                         {/* Solo mostrar filtro de colegio para teacher_admin */}
+                         {session?.user?.role === 'teacher_admin' && (
+                           <div>
+                             <Label>Colegio</Label>
+                             <Select value={filterSchoolId} onValueChange={setFilterSchoolId}>
+                               <SelectTrigger>
+                                 <SelectValue placeholder="Todos" />
+                               </SelectTrigger>
+                               <SelectContent>
+                                 <SelectItem value="all">Todos</SelectItem>
+                                 {schools.map(s => (
+                                   <SelectItem key={s.id} value={s.id || ''}>{s.name}</SelectItem>
+                                 ))}
+                               </SelectContent>
+                             </Select>
+                           </div>
+                         )}
+                         <div>
+                           <Label>Curso</Label>
+                           <Select value={filterCourseId} onValueChange={setFilterCourseId}>
+                             <SelectTrigger>
+                               <SelectValue placeholder="Todos" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="all">Todos</SelectItem>
+                               {courses.map(c => (
+                                 <SelectItem key={c.id} value={c.id || ''}>{c.title}</SelectItem>
+                               ))}
+                             </SelectContent>
+                           </Select>
+                         </div>
+                         <div>
+                           <Label>Año Escolar</Label>
+                           <Select value={filterGrade} onValueChange={setFilterGrade}>
+                             <SelectTrigger>
+                               <SelectValue placeholder="Todos" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="all">Todos</SelectItem>
+                               {['sexto','septimo','octavo','noveno','decimo','once'].map(g => (
+                                 <SelectItem key={g} value={g}>{g.charAt(0).toUpperCase()+g.slice(1)}</SelectItem>
+                               ))}
+                             </SelectContent>
+                           </Select>
+                         </div>
+                         <div>
+                           <Label>Competencia</Label>
+                           <Select value={filterCompetencyId} onValueChange={setFilterCompetencyId}>
+                             <SelectTrigger>
+                               <SelectValue placeholder="Todas" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="all">Todas</SelectItem>
+                               {competencies.map(comp => (
+                                 <SelectItem key={comp.id} value={comp.id || ''}>{comp.displayName}</SelectItem>
+                               ))}
+                             </SelectContent>
+                           </Select>
+                         </div>
+                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                         <div>
+                           <Label>Edad mínima</Label>
+                           <Input value={filterMinAge} onChange={(e) => setFilterMinAge(e.target.value)} placeholder="Ej: 12" />
+                         </div>
+                         <div>
+                           <Label>Edad máxima</Label>
+                           <Input value={filterMaxAge} onChange={(e) => setFilterMaxAge(e.target.value)} placeholder="Ej: 18" />
+                         </div>
+                         <div>
+                           <Label>Comparar con</Label>
+                           <Select value={comparePeriod} onValueChange={setComparePeriod}>
+                             <SelectTrigger>
+                               <SelectValue placeholder="Sin comparación" />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="none">Sin comparación</SelectItem>
+                               <SelectItem value="previous">Período anterior</SelectItem>
+                               <SelectItem value="last_year">Mismo período año pasado</SelectItem>
+                               <SelectItem value="custom">Período personalizado</SelectItem>
+                             </SelectContent>
+                           </Select>
+                         </div>
+                       </div>
+                     </CardContent>
+                   </Card>
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -937,10 +829,10 @@ export default function AdminDashboard() {
                 <CardTitle>Tabla de Rendimiento</CardTitle>
               </CardHeader>
               <CardContent>
-                {reportLoading ? (
+                {analyticsLoading ? (
                   <div className="py-8 text-center">Cargando...</div>
-                ) : reportError ? (
-                  <div className="py-8 text-center text-red-600">{reportError}</div>
+                ) : analyticsError ? (
+                  <div className="py-8 text-center text-red-600">{analyticsError}</div>
                 ) : (
                   <Table>
                     <TableHeader>
