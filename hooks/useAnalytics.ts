@@ -94,8 +94,8 @@ export function useAnalytics() {
       const competencyData = competencyResponse.ok ? await competencyResponse.json() : null
 
       setData({
-        kpis: kpisData,
-        engagementMetrics: engagementData,
+        kpis: kpisData || null,
+        engagementMetrics: engagementData || null,
         gradeSeries: gradesData?.gradeSeries || [],
         gradeDistribution: gradesData?.gradeDistribution || [],
         hourlyActivity: gradesData?.hourlyActivity || [],

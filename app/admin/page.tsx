@@ -497,7 +497,7 @@ export default function AdminDashboard() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-2xl font-bold text-[#73A2D3]">{kpis ? (kpis.activeStudents).toLocaleString('es-CO') : '...'}</div>
+                      <div className="text-2xl font-bold text-[#73A2D3]">{kpis?.activeStudents?.toLocaleString('es-CO') || '0'}</div>
                       <div className="text-sm text-gray-600">Estudiantes Activos</div>
                       {comparePeriod !== 'none' && (
                         <div className="text-xs text-green-600 flex items-center mt-1">
@@ -515,7 +515,7 @@ export default function AdminDashboard() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-2xl font-bold text-[#C00102]">{kpis ? (kpis.examAttempts).toLocaleString('es-CO') : '...'}</div>
+                      <div className="text-2xl font-bold text-[#C00102]">{kpis?.examAttempts?.toLocaleString('es-CO') || '0'}</div>
                       <div className="text-sm text-gray-600">Exámenes Realizados</div>
                     </div>
                     <FileText className="h-8 w-8 text-[#C00102]" />
@@ -527,7 +527,7 @@ export default function AdminDashboard() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-2xl font-bold text-[#73A2D3]">{kpis ? `${kpis.averageScore.toFixed(1)}%` : '...'}</div>
+                      <div className="text-2xl font-bold text-[#73A2D3]">{kpis?.averageScore?.toFixed(1) || '0.0'}%</div>
                       <div className="text-sm text-gray-600">Promedio General</div>
                     </div>
                     <Award className="h-8 w-8 text-[#73A2D3]" />
@@ -539,7 +539,7 @@ export default function AdminDashboard() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-2xl font-bold text-[#C00102]">{kpis ? (kpis.institutions).toLocaleString('es-CO') : '...'}</div>
+                      <div className="text-2xl font-bold text-[#C00102]">{kpis?.institutions?.toLocaleString('es-CO') || '0'}</div>
                       <div className="text-sm text-gray-600">Instituciones</div>
                     </div>
                     <Building className="h-8 w-8 text-[#C00102]" />
@@ -579,7 +579,7 @@ export default function AdminDashboard() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-2xl font-bold text-[#8b5cf6]">{engagementMetrics.completionRate.toFixed(1)}%</div>
+                        <div className="text-2xl font-bold text-[#8b5cf6]">{engagementMetrics?.completionRate?.toFixed(1) || '0.0'}%</div>
                         <div className="text-sm text-gray-600">Tasa de Finalización</div>
                       </div>
                       <TrendingUp className="h-8 w-8 text-[#8b5cf6]" />
@@ -763,23 +763,23 @@ export default function AdminDashboard() {
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">Progreso Promedio</span>
-                        <span className="text-2xl font-bold text-[#73A2D3]">{engagementMetrics.averageProgress.toFixed(1)}%</span>
+                        <span className="text-2xl font-bold text-[#73A2D3]">{engagementMetrics?.averageProgress?.toFixed(1) || '0.0'}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div 
                           className="bg-[#73A2D3] h-2 rounded-full" 
-                          style={{ width: `${engagementMetrics.averageProgress}%` }}
+                          style={{ width: `${engagementMetrics?.averageProgress || 0}%` }}
                         ></div>
                       </div>
                       
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">Tasa de Finalización</span>
-                        <span className="text-2xl font-bold text-[#22c55e]">{engagementMetrics.completionRate.toFixed(1)}%</span>
+                        <span className="text-2xl font-bold text-[#22c55e]">{engagementMetrics?.completionRate?.toFixed(1) || '0.0'}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div 
                           className="bg-[#22c55e] h-2 rounded-full" 
-                          style={{ width: `${engagementMetrics.completionRate}%` }}
+                          style={{ width: `${engagementMetrics?.completionRate || 0}%` }}
                         ></div>
                       </div>
                     </div>
