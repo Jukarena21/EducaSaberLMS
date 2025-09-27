@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { requireRole } from '@/lib/rbac'
 
 const schoolSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido'),
@@ -20,17 +21,11 @@ const schoolSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      )
-    }
+    const gate = await requireRole(['teacher_admin', 'school_admin'])
+    if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
     // Only teacher admins can see all schools
-    if (session.user.role !== 'teacher_admin') {
+    if (gate.session.user.role !== 'teacher_admin') {
       return NextResponse.json(
         { error: 'Acceso denegado' },
         { status: 403 }
@@ -95,22 +90,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    
-    if (!session) {
-      return NextResponse.json(
-        { error: 'No autorizado' },
-        { status: 401 }
-      )
-    }
-
-    // Only teacher admins can create schools
-    if (session.user.role !== 'teacher_admin') {
-      return NextResponse.json(
-        { error: 'Acceso denegado' },
-        { status: 403 }
-      )
-    }
+    const gate = await requireRole(['teacher_admin'])
+    if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
     const body = await request.json()
     

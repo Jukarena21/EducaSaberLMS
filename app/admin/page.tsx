@@ -378,17 +378,17 @@ export default function AdminDashboard() {
                        <CardContent>
                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                            <div className="text-center">
-                             <div className="text-3xl font-bold text-blue-600">{kpis.activeStudents.toLocaleString('es-CO')}</div>
+                             <div className="text-3xl font-bold text-blue-600">{kpis?.activeStudents?.toLocaleString('es-CO') || '0'}</div>
                              <div className="text-sm text-blue-700">Estudiantes Activos</div>
                              <div className="text-xs text-gray-600 mt-1">En el período seleccionado</div>
                            </div>
                            <div className="text-center">
-                             <div className="text-3xl font-bold text-green-600">{kpis.averageScore.toFixed(1)}%</div>
+                             <div className="text-3xl font-bold text-green-600">{kpis?.averageScore?.toFixed(1) || '0.0'}%</div>
                              <div className="text-sm text-green-700">Promedio General</div>
                              <div className="text-xs text-gray-600 mt-1">Rendimiento académico</div>
                            </div>
                            <div className="text-center">
-                             <div className="text-3xl font-bold text-purple-600">{kpis.examAttempts.toLocaleString('es-CO')}</div>
+                             <div className="text-3xl font-bold text-purple-600">{kpis?.examAttempts?.toLocaleString('es-CO') || '0'}</div>
                              <div className="text-sm text-purple-700">Exámenes Realizados</div>
                              <div className="text-xs text-gray-600 mt-1">Actividad de evaluación</div>
                            </div>
@@ -555,7 +555,7 @@ export default function AdminDashboard() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-2xl font-bold text-[#22c55e]">{engagementMetrics.totalLessonsCompleted.toLocaleString('es-CO')}</div>
+                        <div className="text-2xl font-bold text-[#22c55e]">{engagementMetrics?.totalLessonsCompleted?.toLocaleString('es-CO') || '0'}</div>
                         <div className="text-sm text-gray-600">Lecciones Completadas</div>
                       </div>
                       <BookOpen className="h-8 w-8 text-[#22c55e]" />
@@ -567,7 +567,7 @@ export default function AdminDashboard() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-2xl font-bold text-[#f97316]">{engagementMetrics.totalStudyTimeHours.toLocaleString('es-CO')}h</div>
+                        <div className="text-2xl font-bold text-[#f97316]">{engagementMetrics?.totalStudyTimeHours?.toLocaleString('es-CO') || '0'}h</div>
                         <div className="text-sm text-gray-600">Tiempo de Estudio</div>
                       </div>
                       <Clock className="h-8 w-8 text-[#f97316]" />
@@ -591,7 +591,7 @@ export default function AdminDashboard() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-2xl font-bold text-[#06b6d4]">{engagementMetrics.courseCompletions.toLocaleString('es-CO')}</div>
+                        <div className="text-2xl font-bold text-[#06b6d4]">{engagementMetrics?.courseCompletions?.toLocaleString('es-CO') || '0'}</div>
                         <div className="text-sm text-gray-600">Cursos Completados</div>
                       </div>
                       <Award className="h-8 w-8 text-[#06b6d4]" />
@@ -796,17 +796,17 @@ export default function AdminDashboard() {
                   <CardContent>
                     <div className="space-y-6">
                       <div className="text-center">
-                        <div className="text-3xl font-bold text-[#f97316]">{engagementMetrics.totalStudyTimeHours.toLocaleString('es-CO')}h</div>
+                        <div className="text-3xl font-bold text-[#f97316]">{engagementMetrics?.totalStudyTimeHours?.toLocaleString('es-CO') || '0'}h</div>
                         <div className="text-sm text-gray-600">Tiempo Total de Estudio</div>
                       </div>
                       
                       <div className="text-center">
-                        <div className="text-3xl font-bold text-[#8b5cf6]">{engagementMetrics.averageSessionDurationMinutes.toFixed(0)}min</div>
+                        <div className="text-3xl font-bold text-[#8b5cf6]">{engagementMetrics?.averageSessionDurationMinutes?.toFixed(0) || '0'}min</div>
                         <div className="text-sm text-gray-600">Duración Promedio de Sesión</div>
                       </div>
                       
                       <div className="text-center">
-                        <div className="text-3xl font-bold text-[#06b6d4]">{engagementMetrics.activeUsers.toLocaleString('es-CO')}</div>
+                        <div className="text-3xl font-bold text-[#06b6d4]">{engagementMetrics?.activeUsers?.toLocaleString('es-CO') || '0'}</div>
                         <div className="text-sm text-gray-600">Usuarios Activos</div>
                       </div>
                     </div>

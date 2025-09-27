@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { SchoolData, SchoolFormData } from '@/types/school'
 
 interface UseSchoolsReturn {
@@ -12,6 +13,7 @@ interface UseSchoolsReturn {
 }
 
 export function useSchools(): UseSchoolsReturn {
+  const { data: session } = useSession()
   const [schools, setSchools] = useState<SchoolData[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -110,8 +112,10 @@ export function useSchools(): UseSchoolsReturn {
   const refreshSchools = fetchSchools
 
   useEffect(() => {
-    fetchSchools()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (session?.user) {
+      fetchSchools()
+    }
+  }, [session?.user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     schools,
