@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { BookOpen, Award, Clock, CheckCircle, TrendingUp, BarChart3, Calendar, Home, GraduationCap, FileText, BarChart, Trophy, Video } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useStudentDashboard } from "@/hooks/useStudentDashboard"
 import { StudentExamsTab } from "@/components/StudentExamsTab"
 import { ProgressTracker } from "@/components/ProgressTracker"
@@ -27,7 +27,7 @@ import { useSchoolBranding } from "@/hooks/useSchoolBranding"
 import { BrandLoading } from "@/components/BrandLoading"
 import { LiveClassCalendar } from "@/components/LiveClassCalendar"
 
-export default function EstudianteDashboard() {
+function EstudianteDashboardInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const forbidden = searchParams.get('forbidden') === '1'
@@ -325,5 +325,14 @@ export default function EstudianteDashboard() {
         onClose={(id) => markAsRead(id)}
       />
     </div>
+  )
+}
+
+export default function EstudianteDashboard() {
+  // En Next 15, los hooks de navegación (useSearchParams) deben ir dentro de un Suspense
+  return (
+    <Suspense fallback={<BrandLoading message="Cargando tu panel de estudiante..." />}>
+      <EstudianteDashboardInner />
+    </Suspense>
   )
 }
