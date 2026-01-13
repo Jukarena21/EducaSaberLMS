@@ -425,9 +425,9 @@ export async function POST(request: NextRequest) {
           courses: updatedModule.courseModules.map(cm => ({
             id: cm.course.id,
             title: cm.course.title,
-            school: cm.course.school ? {
-              id: cm.course.school.id,
-              name: cm.course.school.name
+            school: cm.course.courseSchools?.[0]?.school ? {
+              id: cm.course.courseSchools[0].school.id,
+              name: cm.course.courseSchools[0].school.name
             } : undefined
           })),
           createdAt: updatedModule.createdAt,
