@@ -303,14 +303,17 @@ export async function PUT(
         title: lesson.title,
         orderIndex: lesson.orderIndex
       })),
-      courses: module.courses.map(course => ({
-        id: course.id,
-        title: course.title,
-        school: course.school ? {
-          id: course.school.id,
-          name: course.school.name
-        } : undefined
-      })),
+      courses: module.courseModules.map(cm => {
+        const firstSchool = cm.course.courseSchools?.[0]?.school;
+        return {
+          id: cm.course.id,
+          title: cm.course.title,
+          school: firstSchool ? {
+            id: firstSchool.id,
+            name: firstSchool.name
+          } : undefined
+        };
+      }),
       createdAt: module.createdAt,
       updatedAt: module.updatedAt
     };
