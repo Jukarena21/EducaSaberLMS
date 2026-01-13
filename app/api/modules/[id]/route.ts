@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { yearToAcademicGrade, academicGradeToYear } from '@/lib/academicGrades';
 
 // Schema de validación para actualizar módulos
 const moduleUpdateSchema = z.object({
@@ -10,6 +11,8 @@ const moduleUpdateSchema = z.object({
   description: z.string().min(1, 'La descripción es requerida'),
   estimatedTime: z.number().min(1, 'El tiempo estimado debe ser mayor a 0'),
   competencyId: z.string().optional(),
+  isIcfesModule: z.boolean().optional().default(false),
+  year: z.number().min(1).max(11).optional(), // Año escolar (1-11) solo para módulos ICFES
   orderIndex: z.number().min(0, 'El índice de orden debe ser mayor o igual a 0'),
 });
 
@@ -57,13 +60,7 @@ export async function GET(
         courses: {
           select: {
             id: true,
-            title: true,
-            school: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
+            title: true
           }
         }
       }
@@ -89,14 +86,25 @@ export async function GET(
       }
     }
 
+    // Convertir academicGrade a year si existe
+    let year: number | undefined = undefined;
+    if (module.academicGrade) {
+      year = academicGradeToYear(module.academicGrade) || undefined;
+    }
+
     // Transformar datos
     const transformedModule = {
       id: module.id,
       title: module.title,
       description: module.description,
-      estimatedTime: module.estimatedTime,
+      estimatedTime: module.estimatedTimeMinutes,
       orderIndex: module.orderIndex,
       createdById: module.createdById,
+      competencyId: module.competencyId,
+      competency: module.competency,
+      isIcfesModule: module.isIcfesModule,
+      academicGrade: module.academicGrade,
+      year: year,
       createdBy: module.createdBy ? {
         id: module.createdBy.id,
         name: module.createdBy.name,
@@ -171,13 +179,32 @@ export async function PUT(
       );
     }
 
+    // Validar que si es ICFES, tenga año escolar
+    if (validatedData.isIcfesModule && !validatedData.year) {
+      return NextResponse.json(
+        { error: 'El año escolar es requerido para módulos ICFES' },
+        { status: 400 }
+      );
+    }
+
+    // Convertir year a academicGrade si es ICFES
+    let academicGrade: string | null = null;
+    if (validatedData.isIcfesModule && validatedData.year) {
+      academicGrade = yearToAcademicGrade(validatedData.year) || null;
+    } else if (validatedData.isIcfesModule === false) {
+      // Para módulos generales, academicGrade debe ser null
+      academicGrade = null;
+    }
+
     const module = await prisma.module.update({
       where: { id },
       data: {
         title: validatedData.title,
         description: validatedData.description,
-        estimatedTime: validatedData.estimatedTime,
+        estimatedTimeMinutes: validatedData.estimatedTime,
         competencyId: validatedData.competencyId || null,
+        isIcfesModule: validatedData.isIcfesModule !== undefined ? validatedData.isIcfesModule : existingModule.isIcfesModule,
+        academicGrade: academicGrade !== null ? academicGrade : (validatedData.isIcfesModule === false ? null : existingModule.academicGrade),
         orderIndex: validatedData.orderIndex,
       },
       include: {
@@ -206,14 +233,23 @@ export async function PUT(
             orderIndex: 'asc'
           }
         },
-        courses: {
+        courseModules: {
           select: {
-            id: true,
-            title: true,
-            school: {
+            course: {
               select: {
                 id: true,
-                name: true
+                title: true,
+                courseSchools: {
+                  select: {
+                    school: {
+                      select: {
+                        id: true,
+                        name: true,
+                        type: true
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -221,14 +257,25 @@ export async function PUT(
       }
     });
 
+    // Convertir academicGrade a year si existe
+    let year: number | undefined = undefined;
+    if (module.academicGrade) {
+      year = academicGradeToYear(module.academicGrade) || undefined;
+    }
+
     // Transformar respuesta
     const transformedModule = {
       id: module.id,
       title: module.title,
       description: module.description,
-      estimatedTime: module.estimatedTime,
+      estimatedTime: module.estimatedTimeMinutes,
       orderIndex: module.orderIndex,
       createdById: module.createdById,
+      competencyId: module.competencyId,
+      competency: module.competency,
+      isIcfesModule: module.isIcfesModule,
+      academicGrade: module.academicGrade,
+      year: year,
       createdBy: module.createdBy ? {
         id: module.createdBy.id,
         name: module.createdBy.name,
