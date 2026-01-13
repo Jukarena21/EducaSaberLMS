@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { yearToAcademicGrade, academicGradeToYear } from '@/lib/academicGrades';
 
 // Schema de validación para módulos
 const moduleSchema = z.object({
@@ -10,6 +11,8 @@ const moduleSchema = z.object({
   description: z.string().min(1, 'La descripción es requerida'),
   estimatedTime: z.number().min(1, 'El tiempo estimado debe ser mayor a 0'),
   competencyId: z.string().optional(),
+  isIcfesModule: z.boolean().optional().default(false),
+  year: z.number().min(1).max(11).optional(), // Año escolar (1-11) solo para módulos ICFES
   selectedLessons: z.array(z.object({
     lessonId: z.string().min(1, 'ID de lección requerido'),
     orderIndex: z.number().min(1, 'Orden debe ser mayor a 0')
@@ -33,17 +36,24 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || undefined;
     const createdById = searchParams.get('createdById') || undefined;
+    const competencyId = searchParams.get('competencyId') || undefined;
+    const isIcfesModuleParam = searchParams.get('isIcfesModule');
     const forCourseCreation = searchParams.get('forCourseCreation') === 'true';
+    const applyPagination = !forCourseCreation;
+    const pageParam = parseInt(searchParams.get('page') || '1', 10);
+    const limitParam = parseInt(searchParams.get('limit') || '6', 10);
+    const page = applyPagination ? Math.max(1, isNaN(pageParam) ? 1 : pageParam) : 1;
+    const limit = applyPagination ? Math.min(50, Math.max(1, isNaN(limitParam) ? 6 : limitParam)) : undefined;
     
-    console.log('🔍 [DEBUG] Parámetros GET:', { search, createdById, forCourseCreation });
+    console.log('🔍 [DEBUG] Parámetros GET:', { search, createdById, competencyId, isIcfesModuleParam, forCourseCreation, page, limit });
 
     // Construir filtros
     const where: any = {};
     
     if (search) {
       where.OR = [
-        { title: { contains: search } },
-        { description: { contains: search } },
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -51,14 +61,37 @@ export async function GET(request: NextRequest) {
       where.createdById = createdById;
     }
 
-    // Si es admin de colegio y no es para creación de curso, solo puede ver módulos que están en cursos de su colegio
+    if (competencyId) {
+      where.competencyId = competencyId;
+    }
+
+    // Filtro por tipo ICFES vs Personalizado
+    if (isIcfesModuleParam !== null && isIcfesModuleParam !== undefined) {
+      const isIcfesModule = isIcfesModuleParam === 'true' || isIcfesModuleParam === '1';
+      where.isIcfesModule = isIcfesModule;
+    }
+
+    // Si es admin de colegio y no es para creación de curso, solo puede ver módulos que están en cursos de su colegio o generales
     if (session.user.role === 'school_admin' && !forCourseCreation) {
       console.log('🔍 [DEBUG] Usuario es school_admin, schoolId:', session.user.schoolId);
       if (session.user.schoolId) {
         where.courseModules = {
           some: {
             course: {
-              schoolId: session.user.schoolId
+              OR: [
+                {
+                  courseSchools: {
+                    some: {
+                      schoolId: session.user.schoolId
+                    }
+                  }
+                },
+                {
+                  courseSchools: {
+                    none: {} // Cursos generales
+                  }
+                }
+              ]
             }
           }
         };
@@ -70,94 +103,150 @@ export async function GET(request: NextRequest) {
     console.log('🔍 [DEBUG] Filtros WHERE:', where);
     console.log('🔍 [DEBUG] Ejecutando consulta a la base de datos...');
     
-    const modules = await prisma.module.findMany({
-      where,
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        },
-        competency: {
-          select: {
-            id: true,
-            name: true,
-            displayName: true,
-            colorHex: true
-          }
-        },
-        moduleLessons: {
-          select: {
-            orderIndex: true,
-            lesson: {
-              select: {
-                id: true,
-                title: true
-              }
+    let modules;
+    let totalModules = 0;
+    
+    const includeConfig = {
+      createdBy: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true
+        }
+      },
+      competency: {
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          colorHex: true
+        }
+      },
+      moduleLessons: {
+        select: {
+          orderIndex: true,
+          lesson: {
+            select: {
+              id: true,
+              title: true
             }
-          },
-          orderBy: {
-            orderIndex: 'asc'
           }
         },
-        courseModules: {
-          select: {
-            course: {
-              select: {
-                id: true,
-                title: true,
-                school: {
-                  select: {
-                    id: true,
-                    name: true
+        orderBy: {
+          orderIndex: 'asc'
+        }
+      },
+      courseModules: {
+        include: {
+          course: {
+            select: {
+              id: true,
+              title: true,
+              courseSchools: {
+                include: {
+                  school: {
+                    select: {
+                      id: true,
+                      name: true,
+                      type: true
+                    }
                   }
                 }
               }
             }
           }
         }
-      },
-      orderBy: [
-        { orderIndex: 'asc' },
-        { title: 'asc' }
-      ]
-    });
+      }
+    };
+    
+    if (applyPagination && limit) {
+      const skip = (page - 1) * limit;
+      const [results, count] = await prisma.$transaction([
+        prisma.module.findMany({
+          where,
+          include: includeConfig,
+          orderBy: [
+            { orderIndex: 'asc' },
+            { title: 'asc' }
+          ],
+          skip,
+          take: limit
+        }),
+        prisma.module.count({ where })
+      ]);
+      modules = results;
+      totalModules = count;
+    } else {
+      modules = await prisma.module.findMany({
+        where,
+        include: includeConfig,
+        orderBy: [
+          { orderIndex: 'asc' },
+          { title: 'asc' }
+        ]
+      });
+      totalModules = modules.length;
+    }
 
     // Transformar datos para el frontend
-    const transformedModules = modules.map(module => ({
-      id: module.id,
-      title: module.title,
-      description: module.description,
-      estimatedTime: module.estimatedTimeMinutes,
-      orderIndex: module.orderIndex,
-      createdById: module.createdById,
-      createdBy: module.createdBy ? {
-        id: module.createdBy.id,
-        name: `${module.createdBy.firstName} ${module.createdBy.lastName}`,
-        email: module.createdBy.email
-      } : undefined,
-      lessons: module.moduleLessons.map(ml => ({
-        id: ml.lesson.id,
-        title: ml.lesson.title,
-        orderIndex: ml.orderIndex
-      })),
-      courses: module.courseModules.map(cm => ({
-        id: cm.course.id,
-        title: cm.course.title,
-        school: cm.course.school ? {
-          id: cm.course.school.id,
-          name: cm.course.school.name
-        } : undefined
-      })),
-      createdAt: module.createdAt,
-      updatedAt: module.updatedAt
-    }));
+    const transformedModules = modules.map(module => {
+      // Convertir academicGrade a year si existe
+      let year: number | undefined = undefined;
+      if (module.academicGrade) {
+        year = academicGradeToYear(module.academicGrade) || undefined;
+      }
+
+      return {
+        id: module.id,
+        title: module.title,
+        description: module.description,
+        estimatedTime: module.estimatedTimeMinutes,
+        orderIndex: module.orderIndex,
+        createdById: module.createdById,
+        competencyId: module.competencyId,
+        competency: module.competency,
+        isIcfesModule: module.isIcfesModule,
+        academicGrade: module.academicGrade,
+        year: year,
+        createdBy: module.createdBy ? {
+          id: module.createdBy.id,
+          name: `${module.createdBy.firstName} ${module.createdBy.lastName}`,
+          email: module.createdBy.email
+        } : undefined,
+        lessons: module.moduleLessons.map(ml => ({
+          id: ml.lesson.id,
+          title: ml.lesson.title,
+          orderIndex: ml.orderIndex
+        })),
+        courses: module.courseModules.map(cm => ({
+          id: cm.course.id,
+          title: cm.course.title,
+          school: cm.course.courseSchools?.[0]?.school ? {
+            id: cm.course.courseSchools[0].school.id,
+            name: cm.course.courseSchools[0].school.name
+          } : undefined
+        })),
+        createdAt: module.createdAt,
+        updatedAt: module.updatedAt
+      };
+    });
 
     console.log('✅ [DEBUG] Módulos obtenidos exitosamente:', transformedModules.length);
-    return NextResponse.json(transformedModules);
+    
+    if (!applyPagination || !limit) {
+      return NextResponse.json(transformedModules);
+    }
+    
+    return NextResponse.json({
+      data: transformedModules,
+      pagination: {
+        total: totalModules,
+        page,
+        pages: Math.max(1, Math.ceil(totalModules / limit)),
+        limit
+      }
+    });
   } catch (error) {
     console.error('❌ [DEBUG] Error al obtener módulos:', error);
     return NextResponse.json(
@@ -196,6 +285,12 @@ export async function POST(request: NextRequest) {
     const validatedData = moduleSchema.parse(body);
     console.log('🔍 [DEBUG] Datos validados:', validatedData);
 
+    // Convertir año a academicGrade si aplica
+    let academicGrade: string | null = null;
+    if (validatedData.isIcfesModule && validatedData.year) {
+      academicGrade = yearToAcademicGrade(validatedData.year) || null;
+    }
+
     const module = await prisma.module.create({
       data: {
         title: validatedData.title,
@@ -204,6 +299,8 @@ export async function POST(request: NextRequest) {
         orderIndex: 1, // Valor por defecto, se ajustará en cursos
         competencyId: validatedData.competencyId || null,
         createdById: session.user.id,
+        isIcfesModule: validatedData.isIcfesModule ?? false,
+        academicGrade,
       },
       include: {
         createdBy: {
@@ -241,13 +338,7 @@ export async function POST(request: NextRequest) {
             course: {
               select: {
                 id: true,
-                title: true,
-                school: {
-                  select: {
-                    id: true,
-                    name: true
-                  }
-                }
+                title: true
               }
             }
           }
@@ -347,6 +438,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Convertir academicGrade a year si existe
+    let year: number | undefined = undefined;
+    if (module.academicGrade) {
+      year = academicGradeToYear(module.academicGrade) || undefined;
+    }
+
     // Transformar respuesta si no se crearon relaciones ModuleLesson
     const transformedModule = {
       id: module.id,
@@ -355,6 +452,11 @@ export async function POST(request: NextRequest) {
       estimatedTime: module.estimatedTimeMinutes,
       orderIndex: module.orderIndex,
       createdById: module.createdById,
+      competencyId: module.competencyId,
+      competency: module.competency,
+      isIcfesModule: module.isIcfesModule,
+      academicGrade: module.academicGrade,
+      year: year,
       createdBy: module.createdBy ? {
         id: module.createdBy.id,
         name: `${module.createdBy.firstName} ${module.createdBy.lastName}`,
@@ -368,9 +470,9 @@ export async function POST(request: NextRequest) {
       courses: module.courseModules.map(cm => ({
         id: cm.course.id,
         title: cm.course.title,
-        school: cm.course.school ? {
-          id: cm.course.school.id,
-          name: cm.course.school.name
+        school: cm.course.courseSchools?.[0]?.school ? {
+          id: cm.course.courseSchools[0].school.id,
+          name: cm.course.courseSchools[0].school.name
         } : undefined
       })),
       createdAt: module.createdAt,
