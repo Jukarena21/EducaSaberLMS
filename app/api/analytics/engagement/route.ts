@@ -10,6 +10,10 @@ export async function GET(request: NextRequest) {
     if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
     // Restricciones de rol
+    if (!gate.session) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+    
     if (gate.session.user.role === 'school_admin' && !gate.session.user.schoolId) {
       return NextResponse.json({ error: 'Usuario sin colegio asignado' }, { status: 403 })
     }
@@ -29,7 +33,13 @@ export async function GET(request: NextRequest) {
 
     // Construir filtros
     const whereCourse: any = {}
-    if (schoolId) whereCourse.schoolId = schoolId
+    if (schoolId) {
+      whereCourse.courseSchools = {
+        some: {
+          schoolId: schoolId
+        }
+      }
+    }
     if (courseId) whereCourse.id = courseId
 
     // Métricas de engagement
@@ -44,12 +54,18 @@ export async function GET(request: NextRequest) {
       // Lecciones completadas
       prisma.studentLessonProgress.count({
         where: {
-          completed: true,
+          status: 'completed',
           updatedAt: { gte: from, lte: to },
           lesson: {
-            modules: {
+            moduleLessons: {
               some: {
-                course: whereCourse
+                module: {
+                  courseModules: {
+                    some: {
+                      course: whereCourse
+                    }
+                  }
+                }
               }
             }
           }
@@ -61,15 +77,21 @@ export async function GET(request: NextRequest) {
         where: {
           updatedAt: { gte: from, lte: to },
           lesson: {
-            modules: {
+            moduleLessons: {
               some: {
-                course: whereCourse
+                module: {
+                  courseModules: {
+                    some: {
+                      course: whereCourse
+                    }
+                  }
+                }
               }
             }
           }
         },
         _sum: {
-          timeSpentMinutes: true
+          totalTimeMinutes: true
         }
       }),
       
@@ -82,7 +104,7 @@ export async function GET(request: NextRequest) {
           }
         },
         _avg: {
-          durationMinutes: true
+          timeTakenMinutes: true
         }
       }),
       
@@ -94,7 +116,7 @@ export async function GET(request: NextRequest) {
             {
               studentLessonProgress: {
                 some: {
-                  completed: true,
+                  status: 'completed',
                   updatedAt: { gte: from, lte: to }
                 }
               }
@@ -113,44 +135,49 @@ export async function GET(request: NextRequest) {
       // Cursos completados
       prisma.courseEnrollment.count({
         where: {
-          status: 'completed',
+          completedAt: { not: null },
           updatedAt: { gte: from, lte: to },
           course: whereCourse
         }
       }),
       
-      // Progreso por lección (últimas 7 días)
+      // Progreso por lección (usar el período from/to en lugar de hardcoded 7 días)
       prisma.studentLessonProgress.findMany({
         where: {
-          updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+          updatedAt: { gte: from, lte: to },
           lesson: {
-            modules: {
+            moduleLessons: {
               some: {
-                course: whereCourse
+                module: {
+                  courseModules: {
+                    some: {
+                      course: whereCourse
+                    }
+                  }
+                }
               }
             }
           }
         },
         select: {
-          progressPercentage: true,
-          completed: true,
+          status: true,
           updatedAt: true
         }
       })
     ])
 
     // Calcular métricas derivadas
-    const totalStudyTimeHours = Math.round((totalStudyTime._sum.timeSpentMinutes || 0) / 60 * 10) / 10
-    const averageSessionDurationMinutes = Math.round((averageSessionDuration._avg.durationMinutes || 0) * 10) / 10
+    const totalStudyTimeHours = Math.round((totalStudyTime._sum.totalTimeMinutes || 0) / 60 * 10) / 10
+    const averageSessionDurationMinutes = Math.round((averageSessionDuration._avg.timeTakenMinutes || 0) * 10) / 10
     
     // Progreso promedio de lecciones
     const averageProgress = lessonProgress.length > 0 
-      ? lessonProgress.reduce((sum, lp) => sum + (lp.progressPercentage || 0), 0) / lessonProgress.length
+      ? lessonProgress.reduce((sum, lp) => sum + (lp.status === 'completed' ? 100 : 0), 0) / lessonProgress.length
       : 0
 
     // Tasa de finalización de lecciones
     const completionRate = lessonProgress.length > 0
-      ? (lessonProgress.filter(lp => lp.completed).length / lessonProgress.length) * 100
+      ? (lessonProgress.filter(lp => lp.status === 'completed').length / lessonProgress.length) * 100
       : 0
 
     return NextResponse.json({
