@@ -15,36 +15,56 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
-
-        const user = await prisma.user.findUnique({
-          where: {
-            email: credentials.email
+        try {
+          if (!credentials?.email || !credentials?.password) {
+            console.log('[Auth] Missing credentials');
+            return null;
           }
-        });
 
-        if (!user) {
+          console.log('[Auth] Attempting login for:', credentials.email);
+
+          const user = await prisma.user.findUnique({
+            where: {
+              email: credentials.email
+            }
+          });
+
+          if (!user) {
+            console.log('[Auth] User not found:', credentials.email);
+            return null;
+          }
+
+          console.log('[Auth] User found:', {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            hashLength: user.passwordHash?.length
+          });
+
+          const isPasswordValid = await bcrypt.compare(
+            credentials.password,
+            user.passwordHash
+          );
+
+          console.log('[Auth] Password validation result:', isPasswordValid);
+
+          if (!isPasswordValid) {
+            console.log('[Auth] Invalid password for:', credentials.email);
+            return null;
+          }
+
+          console.log('[Auth] Login successful for:', credentials.email);
+          return {
+            id: user.id,
+            email: user.email,
+            name: `${user.firstName} ${user.lastName}`,
+            role: user.role,
+            schoolId: user.schoolId
+          };
+        } catch (error) {
+          console.error('[Auth] Error during authorization:', error);
           return null;
         }
-
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.passwordHash
-        );
-
-        if (!isPasswordValid) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: `${user.firstName} ${user.lastName}`,
-          role: user.role,
-          schoolId: user.schoolId
-        };
       }
     })
   ],
