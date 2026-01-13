@@ -4,11 +4,23 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
 
+// Detectar la URL base automáticamente
+const getBaseUrl = () => {
+  // En producción, usar NEXTAUTH_URL si está configurado
+  if (process.env.NEXTAUTH_URL) {
+    return process.env.NEXTAUTH_URL;
+  }
+  // Fallback para desarrollo
+  return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+};
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   secret: process.env.NEXTAUTH_SECRET || "38a9e82d4f38033786ecf90716dae010634e1cd3058bda8ec3bab7ec519bc557",
   // Configuración para soportar múltiples dominios (Vercel y dominio personalizado)
   useSecureCookies: process.env.NODE_ENV === 'production',
+  // Permitir múltiples URLs de origen
+  trustHost: true,
   cookies: {
     sessionToken: {
       name: process.env.NODE_ENV === 'production' 
@@ -19,8 +31,7 @@ export const authOptions: NextAuthOptions = {
         sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        // Permitir cookies en ambos dominios
-        domain: process.env.NODE_ENV === 'production' ? undefined : undefined, // undefined permite cookies en cualquier dominio del mismo sitio
+        // No especificar domain para permitir cookies en cualquier subdominio/dominio
       },
     },
   },
