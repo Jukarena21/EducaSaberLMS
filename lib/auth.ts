@@ -7,6 +7,23 @@ import bcrypt from "bcryptjs";
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   secret: process.env.NEXTAUTH_SECRET || "38a9e82d4f38033786ecf90716dae010634e1cd3058bda8ec3bab7ec519bc557",
+  // Configuración para soportar múltiples dominios (Vercel y dominio personalizado)
+  useSecureCookies: process.env.NODE_ENV === 'production',
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === 'production' 
+        ? `__Secure-next-auth.session-token`
+        : `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        // Permitir cookies en ambos dominios
+        domain: process.env.NODE_ENV === 'production' ? undefined : undefined, // undefined permite cookies en cualquier dominio del mismo sitio
+      },
+    },
+  },
   providers: [
     CredentialsProvider({
       name: "credentials",
