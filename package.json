@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "node scripts/verify-db-config.js && rm -rf node_modules/.prisma node_modules/@prisma/client && prisma generate --schema=./prisma/schema.prisma && next build",
+    "build": "node scripts/verify-db-config.js && node scripts/clean-prisma.js && prisma generate --schema=./prisma/schema.prisma && next build",
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
