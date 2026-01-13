@@ -35,20 +35,13 @@ export async function GET(request: NextRequest) {
     const where: any = {};
     
     if (search) {
-      // PostgreSQL case-insensitive search - usar ILIKE a través de Prisma
-      // Si mode: 'insensitive' falla, intentar sin mode (case-sensitive)
-      try {
-        where.OR = [
-          { title: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-        ];
-      } catch (e) {
-        // Fallback a case-sensitive si mode: 'insensitive' no está soportado
-        where.OR = [
-          { title: { contains: search.toLowerCase() } },
-          { description: { contains: search.toLowerCase() } },
-        ];
-      }
+      // PostgreSQL case-insensitive search
+      // Nota: mode: 'insensitive' requiere que los campos sean de tipo text/varchar
+      // y que PostgreSQL tenga soporte para collation case-insensitive
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
     // Filtro por tipo ICFES vs Personalizado
