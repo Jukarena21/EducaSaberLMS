@@ -7,7 +7,7 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "postinstall": "prisma generate --schema=./prisma/schema.prisma",
+    "postinstall": "node scripts/clean-prisma.js && prisma generate --schema=./prisma/schema.prisma",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:seed:complete": "npx tsx prisma/seed-complete.ts"
   },
