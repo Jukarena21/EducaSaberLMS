@@ -24,11 +24,21 @@ if (dbUrl?.startsWith('file:')) {
 }
 
 // PrismaClient usa DATABASE_URL automáticamente desde process.env
-// Forzar explícitamente la URL para asegurar que use PostgreSQL
+// Configurar para trabajar con PgBouncer (Transaction Pooler de Supabase)
+let databaseUrl = process.env.DATABASE_URL || ''
+const isPooler = databaseUrl.includes('pooler') || databaseUrl.includes(':6543')
+
+// Agregar parámetros para PgBouncer si es necesario
+if (isPooler && !databaseUrl.includes('pgbouncer=true')) {
+  const separator = databaseUrl.includes('?') ? '&' : '?'
+  databaseUrl = `${databaseUrl}${separator}pgbouncer=true&connection_limit=1`
+  console.log('[Prisma Init] Agregando parámetros PgBouncer a DATABASE_URL')
+}
+
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   datasources: {
     db: {
-      url: process.env.DATABASE_URL
+      url: databaseUrl
     }
   }
 })
