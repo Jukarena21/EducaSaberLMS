@@ -57,10 +57,25 @@ export async function GET(
             orderIndex: 'asc'
           }
         },
-        courses: {
-          select: {
-            id: true,
-            title: true
+        courseModules: {
+          include: {
+            course: {
+              select: {
+                id: true,
+                title: true,
+                courseSchools: {
+                  include: {
+                    school: {
+                      select: {
+                        id: true,
+                        name: true,
+                        type: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -75,9 +90,11 @@ export async function GET(
 
     // Si es admin de colegio, verificar que el módulo está en cursos de su colegio
     if (session.user.role === 'school_admin') {
-      const hasAccess = module.courses.some(course => 
-        course.school?.id === session.user.schoolId
-      );
+      const hasAccess = module.courseModules.some(cm => {
+        const courseSchoolIds = cm.course.courseSchools?.map(cs => cs.school.id) || [];
+        return courseSchoolIds.length === 0 || // Cursos generales
+               courseSchoolIds.includes(session.user.schoolId!);
+      });
       if (!hasAccess) {
         return NextResponse.json(
           { error: 'No tienes permisos para ver este módulo' },
