@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 const questionSchema = z.object({
+  contextText: z.string().min(1, 'El enunciado es requerido'),
   questionText: z.string().min(1, 'El texto de la pregunta es requerido'),
   questionImage: z.string().optional(),
   questionType: z.enum(['multiple_choice']).default('multiple_choice'), // Solo opción múltiple para simulacros manuales
@@ -130,6 +131,8 @@ export async function POST(
     const question = await prisma.examQuestion.create({
       data: {
         examId: id,
+        // Usamos lessonUrl como campo interno para almacenar el enunciado estilo ICFES
+        lessonUrl: validatedData.contextText,
         questionText: validatedData.questionText,
         questionImage: validatedData.questionImage || null,
         questionType: 'multiple_choice', // Forzar siempre opción múltiple

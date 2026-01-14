@@ -24,6 +24,9 @@ export interface ManualSimulacroQuestionData extends ExamQuestionData {
 
 // Formulario para crear/editar pregunta de simulacro manual
 export interface ManualSimulacroQuestionFormData {
+  // Enunciado base (texto largo previo a la pregunta, propio del estilo ICFES)
+  contextText: string
+  // Pregunta específica que se formula sobre el enunciado
   questionText: string
   questionImage?: string
   questionType: 'multiple_choice' | 'true_false' | 'fill_blank' | 'matching' | 'essay'

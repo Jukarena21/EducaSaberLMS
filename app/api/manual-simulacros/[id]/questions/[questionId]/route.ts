@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 const questionSchema = z.object({
+  contextText: z.string().optional(),
   questionText: z.string().min(1).optional(),
   questionImage: z.string().optional(),
   questionType: z.enum(['multiple_choice']).optional(), // Solo opción múltiple para simulacros manuales
@@ -80,7 +81,12 @@ export async function PUT(
     const updateData: any = {}
     Object.keys(validatedData).forEach(key => {
       if (validatedData[key as keyof typeof validatedData] !== undefined) {
-        updateData[key] = validatedData[key as keyof typeof validatedData]
+        if (key === 'contextText') {
+          // Guardar el enunciado en lessonUrl (campo interno no usado en otros flujos)
+          updateData.lessonUrl = validatedData.contextText
+        } else {
+          updateData[key] = validatedData[key as keyof typeof validatedData]
+        }
       }
     })
     

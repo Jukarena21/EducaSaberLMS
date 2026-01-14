@@ -40,6 +40,7 @@ export function ManualSimulacroQuestionEditor({
   const [showForm, setShowForm] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState<ManualSimulacroQuestionData | null>(null)
   const [formData, setFormData] = useState<ManualSimulacroQuestionFormData>({
+    contextText: '',
     questionText: '',
     questionImage: '',
     questionType: 'multiple_choice', // Siempre opción múltiple para simulacros manuales
@@ -95,6 +96,7 @@ export function ManualSimulacroQuestionEditor({
   const handleCreate = () => {
     setEditingQuestion(null)
     setFormData({
+      contextText: '',
       questionText: '',
       questionImage: '',
       questionType: 'multiple_choice', // Siempre opción múltiple
@@ -123,6 +125,7 @@ export function ManualSimulacroQuestionEditor({
   const handleEdit = (question: ManualSimulacroQuestionData) => {
     setEditingQuestion(question)
     setFormData({
+      contextText: (question as any).lessonUrl || '',
       questionText: question.questionText,
       questionImage: question.questionImage || '',
       questionType: 'multiple_choice' as any, // Siempre opción múltiple
@@ -152,6 +155,15 @@ export function ManualSimulacroQuestionEditor({
     e.preventDefault()
 
     // Validaciones
+    if (!formData.contextText.trim()) {
+      toast({
+        title: "Error",
+        description: "El enunciado es requerido",
+        variant: "destructive"
+      })
+      return
+    }
+
     if (!formData.questionText.trim()) {
       toast({
         title: "Error",
@@ -296,17 +308,29 @@ export function ManualSimulacroQuestionEditor({
                         </Badge>
                       )}
                     </div>
-                    <CardTitle className="text-base">{question.questionText}</CardTitle>
-                    {question.questionImage && (
-                      <div className="mt-2">
-                        <img 
-                          src={question.questionImage} 
-                          alt="Enunciado" 
-                          className="max-w-full h-auto rounded border"
-                          style={{ maxHeight: '200px' }}
-                        />
+                    {/* Enunciado + imagen */}
+                    {((question as any).lessonUrl || question.questionImage) && (
+                      <div className="mb-3">
+                        {(question as any).lessonUrl && (
+                          <p className="text-sm text-gray-800 whitespace-pre-line">
+                            {(question as any).lessonUrl}
+                          </p>
+                        )}
+                        {question.questionImage && (
+                          <div className="mt-2">
+                            <img 
+                              src={question.questionImage} 
+                              alt="Enunciado" 
+                              className="max-w-full h-auto rounded border"
+                              style={{ maxHeight: '200px' }}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
+
+                    {/* Pregunta específica */}
+                    <CardTitle className="text-base">{question.questionText}</CardTitle>
                     <div className="mt-3 text-sm text-gray-500 space-y-2">
                       <div className="space-y-2">
                         <div className="flex items-start gap-2">
@@ -417,19 +441,21 @@ export function ManualSimulacroQuestionEditor({
               {editingQuestion ? "Editar Pregunta" : "Nueva Pregunta"}
             </DialogTitle>
             <DialogDescription>
-              Completa todos los campos. Los metadatos (tema, subtema, componente) son requeridos.
+              Primero escribe el enunciado (texto base del ICFES) y luego la pregunta específica de opción múltiple.
+              Los metadatos (tema, subtema, componente) son requeridos.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <Label htmlFor="questionText">Texto de la Pregunta *</Label>
+              <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="contextText">Enunciado / Texto base *</Label>
                 <Textarea
-                  id="questionText"
-                  value={formData.questionText}
-                  onChange={(e) => setFormData({ ...formData, questionText: e.target.value })}
+                  id="contextText"
+                  value={formData.contextText}
+                  onChange={(e) => setFormData({ ...formData, contextText: e.target.value })}
                   required
-                  rows={3}
+                  rows={4}
+                  placeholder="Texto introductorio o situación problema sobre la cual se harán las preguntas (estilo ICFES)."
                 />
               </div>
 
@@ -437,8 +463,20 @@ export function ManualSimulacroQuestionEditor({
                 <ImageUpload
                   value={formData.questionImage}
                   onChange={(url) => setFormData({ ...formData, questionImage: url })}
-                  placeholder="Imagen del enunciado (opcional)"
+                  placeholder="Imagen asociada al enunciado (opcional)"
                   maxSize={3}
+                />
+              </div>
+
+              <div className="md:col-span-2 space-y-2">
+                <Label htmlFor="questionText">Pregunta (enunciado de opción múltiple) *</Label>
+                <Textarea
+                  id="questionText"
+                  value={formData.questionText}
+                  onChange={(e) => setFormData({ ...formData, questionText: e.target.value })}
+                  required
+                  rows={3}
+                  placeholder="Ej: Según el texto anterior, ¿cuál de las siguientes opciones..."
                 />
               </div>
 
