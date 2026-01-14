@@ -499,13 +499,13 @@ export function ManualSimulacroQuestionEditor({
               </div>
 
               <div>
-                <Label htmlFor="competencyId">Competencia *</Label>
+                <Label htmlFor="competencyId">Área *</Label>
                 <Select
                   value={formData.competencyId}
                   onValueChange={(value) => setFormData({ ...formData, competencyId: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar competencia" />
+                    <SelectValue placeholder="Seleccionar área" />
                   </SelectTrigger>
                   <SelectContent>
                     {competencies.map((comp) => (

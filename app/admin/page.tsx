@@ -83,6 +83,7 @@ import { NotificationManagement } from "@/components/NotificationManagement"
 import { StudentsManagement } from "@/components/StudentsManagement"
 import { LiveClassManagement } from "@/components/LiveClassManagement"
 import { ManualSimulacroManagement } from "@/components/ManualSimulacroManagement"
+import { OtrosSimulacroManagement } from "@/components/OtrosSimulacroManagement"
 import * as XLSX from "xlsx"
 import {
   LineChart as RechartsLineChart,
@@ -682,7 +683,13 @@ export default function AdminDashboard() {
               {session?.user?.role === 'teacher_admin' && (
                 <TabsTrigger value="manual-simulacros" className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm">
                   <ClipboardCheck className="h-4 w-4 flex-shrink-0" />
-                  <span>Simulacros Manuales</span>
+                  <span>Simulacro saber</span>
+                </TabsTrigger>
+              )}
+              {session?.user?.role === 'teacher_admin' && (
+                <TabsTrigger value="otros-simulacros" className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm">
+                  <ClipboardCheck className="h-4 w-4 flex-shrink-0" />
+                  <span>Otros simulacros</span>
                 </TabsTrigger>
               )}
               <TabsTrigger value="live-classes" className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm">
@@ -2704,6 +2711,12 @@ export default function AdminDashboard() {
           {session?.user?.role === 'teacher_admin' && (
             <TabsContent value="manual-simulacros" className="space-y-6">
               <ManualSimulacroManagement />
+            </TabsContent>
+          )}
+
+          {session?.user?.role === 'teacher_admin' && (
+            <TabsContent value="otros-simulacros" className="space-y-6">
+              <OtrosSimulacroManagement />
             </TabsContent>
           )}
 

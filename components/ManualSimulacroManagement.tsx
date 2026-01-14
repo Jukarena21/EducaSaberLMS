@@ -276,9 +276,9 @@ export function ManualSimulacroManagement() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Simulacros Manuales</CardTitle>
+              <CardTitle>Simulacro saber</CardTitle>
               <CardDescription>
-                Gestiona los simulacros predefinidos de EducaSaber
+                Gestiona los simulacros tipo ICFES (Saber) creados manualmente
               </CardDescription>
             </div>
             <Button onClick={() => {
