@@ -3,15 +3,17 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { yearToAcademicGrade, academicGradeToYear } from '@/lib/academicGrades';
 
 // Schema de validación para actualizar cursos
 const courseUpdateSchema = z.object({
   title: z.string().min(1, 'El título es requerido'),
   description: z.string().min(1, 'La descripción es requerida'),
-  year: z.number().min(6, 'El año debe ser al menos 6').max(11, 'El año debe ser máximo 11'),
+  year: z.number().min(1, 'El año debe ser al menos 1').max(11, 'El año debe ser máximo 11').optional(),
   competencyId: z.string().min(1, 'La competencia es requerida'),
-  schoolId: z.string().min(1, 'El colegio es requerido'),
-  moduleIds: z.array(z.string()).optional(),
+  schoolIds: z.array(z.string()).optional(), // Array de IDs de colegios (puede estar vacío para curso general)
+  moduleIds: z.array(z.string()).optional(), // Array de IDs de módulos (puede estar vacío)
+  isIcfesCourse: z.boolean().optional(),
 });
 
 // GET - Obtener curso específico
@@ -33,13 +35,19 @@ export async function GET(
         competency: {
           select: {
             id: true,
-            name: true
+            name: true,
+            displayName: true
           }
         },
-        school: {
-          select: {
-            id: true,
-            name: true
+        courseSchools: {
+          include: {
+            school: {
+              select: {
+                id: true,
+                name: true,
+                type: true
+              }
+            }
           }
         },
         courseModules: {
@@ -71,12 +79,28 @@ export async function GET(
       );
     }
 
-    // Si es admin de colegio, verificar que el curso pertenece a su colegio
-    if (session.user.role === 'school_admin' && course.schoolId !== session.user.schoolId) {
-      return NextResponse.json(
-        { error: 'No tienes permisos para ver este curso' },
-        { status: 403 }
-      );
+    // Si es admin de colegio, verificar que el curso pertenece a su colegio o es general
+    if (session.user.role === 'school_admin') {
+      if (!session.user.schoolId) {
+        return NextResponse.json(
+          { error: 'Usuario sin colegio asignado' },
+          { status: 400 }
+        );
+      }
+      const hasAccess = course.courseSchools.length === 0 || // Curso general
+        course.courseSchools.some(cs => cs.schoolId === session.user.schoolId);
+      if (!hasAccess) {
+        return NextResponse.json(
+          { error: 'No tienes permisos para ver este curso' },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Convertir academicGrade a year (solo si existe academicGrade)
+    let year: number | undefined = undefined;
+    if (course.academicGrade) {
+      year = academicGradeToYear(course.academicGrade) || undefined;
     }
 
     // Transformar datos
@@ -84,17 +108,20 @@ export async function GET(
       id: course.id,
       title: course.title,
       description: course.description,
-      year: course.year,
+      year: year,
       competencyId: course.competencyId,
+      isIcfesCourse: course.isIcfesCourse,
       competency: course.competency ? {
         id: course.competency.id,
-        name: course.competency.name
+        name: course.competency.name,
+        displayName: course.competency.displayName
       } : undefined,
-      schoolId: course.schoolId,
-      school: course.school ? {
-        id: course.school.id,
-        name: course.school.name
-      } : undefined,
+      schoolIds: course.courseSchools.map(cs => cs.schoolId),
+      schools: course.courseSchools.map(cs => ({
+        id: cs.school.id,
+        name: cs.school.name,
+        type: cs.school.type
+      })),
       modules: course.courseModules.map(cm => ({
         id: cm.module.id,
         title: cm.module.title,
@@ -139,11 +166,48 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const validatedData = courseUpdateSchema.parse(body);
+    
+    // Asegurar que los arrays sean arrays válidos o undefined
+    if (body.moduleIds !== undefined) {
+      if (!Array.isArray(body.moduleIds)) {
+        body.moduleIds = [];
+      }
+    }
+    if (body.schoolIds !== undefined) {
+      if (!Array.isArray(body.schoolIds)) {
+        body.schoolIds = [];
+      }
+    }
+    
+    // Log para debugging
+    console.log('📝 [PUT /api/courses/[id]] Body recibido:', JSON.stringify(body, null, 2));
+    
+    let validatedData;
+    try {
+      validatedData = courseUpdateSchema.parse(body);
+      console.log('✅ [PUT /api/courses/[id]] Datos validados correctamente');
+    } catch (validationError) {
+      console.error('❌ [PUT /api/courses/[id]] Error de validación:', validationError);
+      if (validationError instanceof z.ZodError) {
+        console.error('❌ [PUT /api/courses/[id]] Detalles del error:', JSON.stringify(validationError.errors, null, 2));
+        return NextResponse.json(
+          { error: 'Datos inválidos', details: validationError.errors },
+          { status: 400 }
+        );
+      }
+      throw validationError;
+    }
 
     // Verificar que el curso existe
     const existingCourse = await prisma.course.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        courseSchools: {
+          select: {
+            schoolId: true
+          }
+        }
+      }
     });
 
     if (!existingCourse) {
@@ -153,32 +217,43 @@ export async function PUT(
       );
     }
 
-    // Si es admin de colegio, verificar que el curso pertenece a su colegio
-    if (session.user.role === 'school_admin' && existingCourse.schoolId !== session.user.schoolId) {
-      return NextResponse.json(
-        { error: 'Solo puedes actualizar cursos de tu colegio' },
-        { status: 403 }
-      );
+    // Convertir year a academicGrade (solo si es ICFES y se proporciona year)
+    let academicGrade: string | null = null;
+    if (validatedData.isIcfesCourse && validatedData.year) {
+      academicGrade = yearToAcademicGrade(validatedData.year) || null;
+    } else if (!validatedData.isIcfesCourse) {
+      // Para cursos generales, academicGrade debe ser null
+      academicGrade = null;
     }
 
-    // Si es admin de colegio, no puede cambiar el colegio del curso
-    if (session.user.role === 'school_admin' && validatedData.schoolId !== session.user.schoolId) {
-      return NextResponse.json(
-        { error: 'No puedes cambiar el colegio del curso' },
-        { status: 403 }
-      );
-    }
-
-    // Verificar que el colegio existe
-    const school = await prisma.school.findUnique({
-      where: { id: validatedData.schoolId }
-    });
-
-    if (!school) {
-      return NextResponse.json(
-        { error: 'El colegio especificado no existe' },
-        { status: 400 }
-      );
+    // Si es admin de colegio, verificar que el curso pertenece a su colegio o es general
+    if (session.user.role === 'school_admin') {
+      if (!session.user.schoolId) {
+        return NextResponse.json(
+          { error: 'Usuario sin colegio asignado' },
+          { status: 400 }
+        );
+      }
+      const existingSchoolIds = existingCourse.courseSchools.map(cs => cs.schoolId);
+      const hasAccess = existingSchoolIds.length === 0 || existingSchoolIds.includes(session.user.schoolId);
+      if (!hasAccess) {
+        return NextResponse.json(
+          { error: 'Solo puedes actualizar cursos de tu colegio' },
+          { status: 403 }
+        );
+      }
+      // Si se especifican schoolIds, debe incluir su colegio
+      if (validatedData.schoolIds && validatedData.schoolIds.length > 0) {
+        if (!validatedData.schoolIds.includes(session.user.schoolId)) {
+          return NextResponse.json(
+            { error: 'Debes incluir tu colegio en la asignación' },
+            { status: 403 }
+          );
+        }
+      } else {
+        // Si no se especifican, usar solo su colegio
+        validatedData.schoolIds = [session.user.schoolId];
+      }
     }
 
     // Verificar que la competencia existe
@@ -193,23 +268,53 @@ export async function PUT(
       );
     }
 
-    // Validación crítica: Verificar que no existe otro curso con la misma competencia/año/colegio (excluyendo el actual)
-    const existingCourseConflict = await prisma.course.findFirst({
-      where: {
-        schoolId: validatedData.schoolId,
-        competencyId: validatedData.competencyId,
-        year: validatedData.year,
-        id: { not: id }
-      }
-    });
+    // Verificar que los colegios existen (si se especificaron)
+    let schools: Array<{ id: string; name: string }> = [];
+    if (validatedData.schoolIds && validatedData.schoolIds.length > 0) {
+      schools = await prisma.school.findMany({
+        where: { id: { in: validatedData.schoolIds } },
+        select: {
+          id: true,
+          name: true
+        }
+      });
 
-    if (existingCourseConflict) {
-      return NextResponse.json(
-        { 
-          error: `Ya existe un curso de ${competency.name} para ${validatedData.year}° grado en este colegio. Solo se permite un curso por competencia/año por colegio.` 
-        },
-        { status: 400 }
-      );
+      if (schools.length !== validatedData.schoolIds.length) {
+        return NextResponse.json(
+          { error: 'Uno o más colegios especificados no existen' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validación crítica: Verificar que no existe otro curso con la misma competencia/año/colegio (excluyendo el actual)
+    // Solo aplica si se especifican schoolIds
+    if (validatedData.schoolIds && validatedData.schoolIds.length > 0) {
+      for (const schoolId of validatedData.schoolIds) {
+        const existingCourseConflict = await prisma.course.findFirst({
+          where: {
+            id: { not: id },
+            competencyId: validatedData.competencyId,
+            academicGrade: academicGrade,
+            courseSchools: {
+              some: {
+                schoolId: schoolId
+              }
+            }
+          }
+        });
+
+        if (existingCourseConflict) {
+          const school = schools.find(s => s.id === schoolId);
+          const yearText = validatedData.year ? `${validatedData.year}° grado` : 'este tipo';
+          return NextResponse.json(
+            { 
+              error: `Ya existe un curso de ${competency.displayName || competency.name} para ${yearText} en ${school?.name || 'este colegio'}. Solo se permite un curso por competencia/año por colegio.` 
+            },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     // Verificar que todos los módulos existen y fueron creados por Profesor Admin
@@ -246,32 +351,35 @@ export async function PUT(
       data: {
         title: validatedData.title,
         description: validatedData.description,
-        year: validatedData.year,
+        academicGrade: academicGrade,
         competencyId: validatedData.competencyId,
-        schoolId: validatedData.schoolId,
+        ...(validatedData.isIcfesCourse !== undefined ? { isIcfesCourse: validatedData.isIcfesCourse } : {}),
       },
       include: {
         competency: {
           select: {
             id: true,
-            name: true
+            name: true,
+            displayName: true
           }
         },
-        school: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        modules: {
-          select: {
-            id: true,
-            title: true,
-            orderIndex: true,
-            createdBy: {
+        courseSchools: {
+          include: {
+            school: {
               select: {
                 id: true,
-                name: true
+                name: true,
+                type: true
+              }
+            }
+          }
+        },
+        courseModules: {
+          include: {
+            module: {
+              select: {
+                id: true,
+                title: true
               }
             }
           },
@@ -281,6 +389,24 @@ export async function PUT(
         }
       }
     });
+
+    // Actualizar asignaciones de colegios
+    if (validatedData.schoolIds !== undefined) {
+      // Eliminar todas las asignaciones existentes
+      await prisma.courseSchool.deleteMany({
+        where: { courseId: id }
+      });
+
+      // Crear nuevas asignaciones si se especificaron colegios
+      if (validatedData.schoolIds.length > 0) {
+        await prisma.courseSchool.createMany({
+          data: validatedData.schoolIds.map((schoolId: string) => ({
+            courseId: id,
+            schoolId: schoolId
+          }))
+        });
+      }
+    }
 
     // Actualizar módulos asociados
     if (validatedData.moduleIds !== undefined) {
@@ -306,24 +432,27 @@ export async function PUT(
           competency: {
             select: {
               id: true,
-              name: true
+              name: true,
+              displayName: true
             }
           },
-          school: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          modules: {
-            select: {
-              id: true,
-              title: true,
-              orderIndex: true,
-              createdBy: {
+          courseSchools: {
+            include: {
+              school: {
                 select: {
                   id: true,
-                  name: true
+                  name: true,
+                  type: true
+                }
+              }
+            }
+          },
+          courseModules: {
+            include: {
+              module: {
+                select: {
+                  id: true,
+                  title: true
                 }
               }
             },
@@ -335,30 +464,34 @@ export async function PUT(
       });
 
       if (courseWithModules) {
+        // Convertir academicGrade a year (solo si existe academicGrade)
+        let year: number | undefined = undefined;
+        if (courseWithModules.academicGrade) {
+          year = academicGradeToYear(courseWithModules.academicGrade) || undefined;
+        }
+
         // Transformar respuesta
         const transformedCourse = {
           id: courseWithModules.id,
           title: courseWithModules.title,
           description: courseWithModules.description,
-          year: courseWithModules.year,
+          year: year,
           competencyId: courseWithModules.competencyId,
           competency: courseWithModules.competency ? {
             id: courseWithModules.competency.id,
-            name: courseWithModules.competency.name
+            name: courseWithModules.competency.name,
+            displayName: courseWithModules.competency.displayName
           } : undefined,
-          schoolId: courseWithModules.schoolId,
-          school: courseWithModules.school ? {
-            id: courseWithModules.school.id,
-            name: courseWithModules.school.name
-          } : undefined,
-          modules: courseWithModules.modules.map(module => ({
-            id: module.id,
-            title: module.title,
-            orderIndex: module.orderIndex,
-            createdBy: module.createdBy ? {
-              id: module.createdBy.id,
-              name: module.createdBy.name
-            } : undefined
+          schoolIds: courseWithModules.courseSchools.map(cs => cs.schoolId),
+          schools: courseWithModules.courseSchools.map(cs => ({
+            id: cs.school.id,
+            name: cs.school.name,
+            type: cs.school.type
+          })),
+          modules: courseWithModules.courseModules.map(cm => ({
+            id: cm.module.id,
+            title: cm.module.title,
+            orderIndex: cm.orderIndex
           })),
           createdAt: courseWithModules.createdAt,
           updatedAt: courseWithModules.updatedAt
@@ -368,33 +501,82 @@ export async function PUT(
       }
     }
 
+    // Recargar el curso actualizado
+    const updatedCourse = await prisma.course.findUnique({
+      where: { id },
+      include: {
+        competency: {
+          select: {
+            id: true,
+            name: true,
+            displayName: true
+          }
+        },
+        courseSchools: {
+          include: {
+            school: {
+              select: {
+                id: true,
+                name: true,
+                type: true
+              }
+            }
+          }
+        },
+        courseModules: {
+          include: {
+            module: {
+              select: {
+                id: true,
+                title: true
+              }
+            }
+          },
+          orderBy: {
+            orderIndex: 'asc'
+          }
+        }
+      }
+    });
+
+    if (!updatedCourse) {
+      return NextResponse.json(
+        { error: 'Error al recargar el curso' },
+        { status: 500 }
+      );
+    }
+
+    // Convertir academicGrade a year (solo si existe academicGrade)
+    let year: number | undefined = undefined;
+    if (updatedCourse.academicGrade) {
+      year = academicGradeToYear(updatedCourse.academicGrade) || undefined;
+    }
+
     // Transformar respuesta sin actualizar módulos
     const transformedCourse = {
-      id: course.id,
-      title: course.title,
-      description: course.description,
-      year: course.year,
-      competencyId: course.competencyId,
-      competency: course.competency ? {
-        id: course.competency.id,
-        name: course.competency.name
+      id: updatedCourse.id,
+      title: updatedCourse.title,
+      description: updatedCourse.description,
+      year: year,
+      competencyId: updatedCourse.competencyId,
+      competency: updatedCourse.competency ? {
+        id: updatedCourse.competency.id,
+        name: updatedCourse.competency.name,
+        displayName: updatedCourse.competency.displayName
       } : undefined,
-      schoolId: course.schoolId,
-      school: course.school ? {
-        id: course.school.id,
-        name: course.school.name
-      } : undefined,
-      modules: course.modules.map(module => ({
-        id: module.id,
-        title: module.title,
-        orderIndex: module.orderIndex,
-        createdBy: module.createdBy ? {
-          id: module.createdBy.id,
-          name: module.createdBy.name
-        } : undefined
+      schoolIds: updatedCourse.courseSchools.map(cs => cs.schoolId),
+      schools: updatedCourse.courseSchools.map(cs => ({
+        id: cs.school.id,
+        name: cs.school.name,
+        type: cs.school.type
       })),
-      createdAt: course.createdAt,
-      updatedAt: course.updatedAt
+      modules: updatedCourse.courseModules.map(cm => ({
+        id: cm.module.id,
+        title: cm.module.title,
+        orderIndex: cm.orderIndex
+      })),
+      createdAt: updatedCourse.createdAt,
+      updatedAt: updatedCourse.updatedAt
     };
 
     return NextResponse.json(transformedCourse);
@@ -437,7 +619,14 @@ export async function DELETE(
 
     // Verificar que el curso existe
     const existingCourse = await prisma.course.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        courseSchools: {
+          select: {
+            schoolId: true
+          }
+        }
+      }
     });
 
     if (!existingCourse) {
@@ -447,12 +636,22 @@ export async function DELETE(
       );
     }
 
-    // Si es admin de colegio, verificar que el curso pertenece a su colegio
-    if (session.user.role === 'school_admin' && existingCourse.schoolId !== session.user.schoolId) {
-      return NextResponse.json(
-        { error: 'Solo puedes eliminar cursos de tu colegio' },
-        { status: 403 }
-      );
+    // Si es admin de colegio, verificar que el curso pertenece a su colegio o es general
+    if (session.user.role === 'school_admin') {
+      if (!session.user.schoolId) {
+        return NextResponse.json(
+          { error: 'Usuario sin colegio asignado' },
+          { status: 400 }
+        );
+      }
+      const existingSchoolIds = existingCourse.courseSchools.map(cs => cs.schoolId);
+      const hasAccess = existingSchoolIds.length === 0 || existingSchoolIds.includes(session.user.schoolId);
+      if (!hasAccess) {
+        return NextResponse.json(
+          { error: 'Solo puedes eliminar cursos de tu colegio' },
+          { status: 403 }
+        );
+      }
     }
 
     // Eliminar el curso (esto también eliminará las asociaciones con módulos por CASCADE)

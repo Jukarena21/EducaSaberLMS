@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useSession } from 'next-auth/react';
 import { X, Save, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -17,7 +18,7 @@ interface StudentFormData {
   password?: string;
   firstName: string;
   lastName: string;
-  phone?: string;
+  contactPhone?: string;
   academicGrade?: string;
   dateOfBirth?: string;
   gender?: string;
@@ -75,7 +76,7 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
     password: '',
     firstName: '',
     lastName: '',
-    phone: '',
+    contactPhone: '',
     academicGrade: '',
     dateOfBirth: '',
     gender: '',
@@ -110,6 +111,15 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
         areasOfDifficulty: student.areasOfDifficulty || [],
         areasOfStrength: student.areasOfStrength || [],
         disabilities: student.disabilities || [],
+        contactPhone: student.contactPhone || student.phone || '',
+        academicGrade: student.academicGrade ?? '',
+        specialEducationalNeeds: student.specialEducationalNeeds ?? '',
+        medicalConditions: student.medicalConditions ?? '',
+        schoolSchedule: student.schoolSchedule ?? '',
+        housingType: student.housingType ?? '',
+        address: student.address ?? '',
+        neighborhood: student.neighborhood ?? '',
+        city: student.city ?? '',
       });
     }
   }, [student]);
@@ -161,18 +171,20 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+    <Dialog open={true} onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
             {isEditing ? 'Editar Estudiante' : 'Crear Nuevo Estudiante'}
-          </CardTitle>
-          <Button variant="ghost" size="icon" onClick={onCancel}>
-            <X className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent>
+          </DialogTitle>
+          <DialogDescription>
+            {isEditing 
+              ? 'Modifica la información del estudiante. El colegio se asigna automáticamente según tu institución.'
+              : 'Completa el formulario para crear un nuevo estudiante. El colegio se asignará automáticamente según tu institución.'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-6">
           {isEditing && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-center space-x-2">
@@ -237,11 +249,11 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
                     />
                   </div>
                   <div>
-                    <Label htmlFor="phone">Teléfono</Label>
+                    <Label htmlFor="contactPhone">Teléfono</Label>
                     <Input
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) => handleInputChange('phone', e.target.value)}
+                      id="contactPhone"
+                      value={formData.contactPhone}
+                      onChange={(e) => handleInputChange('contactPhone', e.target.value)}
                     />
                   </div>
                   <div>
@@ -507,8 +519,8 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

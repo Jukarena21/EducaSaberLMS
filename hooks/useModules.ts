@@ -1,39 +1,126 @@
 import { useState, useEffect } from 'react';
 import { ModuleData, ModuleFormData, ModuleFilters } from '@/types/module';
 
+type ModulePagination = {
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+};
+
+type ModuleCacheValue = {
+  data: ModuleData[];
+  pagination?: ModulePagination;
+};
+
+const MODULE_CACHE_TTL = 5 * 60 * 1000;
+const DEFAULT_LIMIT = 6;
+const moduleCache = new Map<string, { value: ModuleCacheValue; timestamp: number }>();
+
+const getModuleCacheEntry = (key: string) => {
+  const entry = moduleCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > MODULE_CACHE_TTL) {
+    moduleCache.delete(key);
+    return null;
+  }
+  return entry.value;
+};
+
+const setModuleCacheEntry = (key: string, value: ModuleCacheValue) => {
+  moduleCache.set(key, { value, timestamp: Date.now() });
+};
+
+const invalidateModuleCache = () => {
+  moduleCache.clear();
+};
+
 export function useModules(forCourseCreation: boolean = false) {
   const [modules, setModules] = useState<ModuleData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<ModuleFilters>({});
+  const [pagination, setPagination] = useState<ModulePagination>({
+    total: 0,
+    page: 1,
+    pages: 1,
+    limit: DEFAULT_LIMIT,
+  });
+  const enablePagination = !forCourseCreation;
 
-  // Función para construir la URL con filtros
   const buildUrl = (baseUrl: string, filters: ModuleFilters) => {
     const params = new URLSearchParams();
     if (filters.search) params.append('search', filters.search);
     if (filters.createdById) params.append('createdById', filters.createdById);
+    if (filters.competencyId) params.append('competencyId', filters.competencyId);
+    if (filters.isIcfesModule !== undefined) params.append('isIcfesModule', filters.isIcfesModule.toString());
     if (forCourseCreation) params.append('forCourseCreation', 'true');
-    
     const queryString = params.toString();
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   };
 
-  // Obtener módulos
-  const fetchModules = async (newFilters?: ModuleFilters) => {
+  const fetchModules = async ({
+    filters: overrideFilters,
+    page,
+    skipCache,
+  }: { filters?: ModuleFilters; page?: number; skipCache?: boolean } = {}) => {
+    const activeFilters = overrideFilters ?? filters;
+    const baseUrl = buildUrl('/api/modules', activeFilters);
+
+    let finalUrl = baseUrl;
+    let targetPage = pagination.page || 1;
+
+    if (enablePagination) {
+      targetPage = page ?? pagination.page ?? 1;
+      const paginationParams = new URLSearchParams({
+        page: targetPage.toString(),
+        limit: pagination.limit.toString(),
+      });
+      finalUrl += (finalUrl.includes('?') ? '&' : '?') + paginationParams.toString();
+    }
+
+    const cacheKey = finalUrl;
+
+    if (!skipCache) {
+      const cached = getModuleCacheEntry(cacheKey);
+      if (cached) {
+        setModules(cached.data);
+        if (enablePagination && cached.pagination) {
+          setPagination(cached.pagination);
+        }
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
     
     try {
-      const url = buildUrl('/api/modules', newFilters || filters);
-      const response = await fetch(url);
+      const response = await fetch(finalUrl);
       
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Error al obtener módulos');
       }
       
-      const data = await response.json();
-      setModules(data);
+      if (enablePagination) {
+        const payload = await response.json();
+        const data: ModuleData[] = payload.data || [];
+        const meta = payload.pagination || {};
+        const normalizedPagination: ModulePagination = {
+          total: meta.total || 0,
+          page: meta.page || targetPage,
+          pages: meta.pages || Math.max(1, Math.ceil((meta.total || 0) / pagination.limit) || 1),
+          limit: meta.limit || pagination.limit,
+        };
+        setModules(data);
+        setPagination(normalizedPagination);
+        setModuleCacheEntry(cacheKey, { data, pagination: normalizedPagination });
+      } else {
+        const data = await response.json();
+        setModules(data || []);
+        setModuleCacheEntry(cacheKey, { data: data || [] });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -61,7 +148,8 @@ export function useModules(forCourseCreation: boolean = false) {
       }
       
       const newModule = await response.json();
-      setModules(prev => [...prev, newModule]);
+      invalidateModuleCache();
+      await fetchModules({ skipCache: true });
       return newModule;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -91,9 +179,8 @@ export function useModules(forCourseCreation: boolean = false) {
       }
       
       const updatedModule = await response.json();
-      setModules(prev => prev.map(module => 
-        module.id === id ? updatedModule : module
-      ));
+      invalidateModuleCache();
+      await fetchModules({ skipCache: true });
       return updatedModule;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -122,8 +209,8 @@ export function useModules(forCourseCreation: boolean = false) {
         throw new Error(errorData.error || 'Error al eliminar módulo');
       }
       
-      // Refrescar la lista completa para asegurar datos actualizados
-      await fetchModules();
+      await fetchModules({ skipCache: true });
+      invalidateModuleCache();
       return true;
     } catch (err) {
       console.error('Error en deleteModule:', err);
@@ -157,21 +244,36 @@ export function useModules(forCourseCreation: boolean = false) {
     }
   };
 
-  // Aplicar filtros
   const applyFilters = (newFilters: ModuleFilters) => {
     setFilters(newFilters);
-    fetchModules(newFilters);
+    if (enablePagination) {
+      setPagination(prev => ({ ...prev, page: 1 }));
+      fetchModules({ filters: newFilters, page: 1, skipCache: true });
+    } else {
+      fetchModules({ filters: newFilters, skipCache: true });
+    }
   };
 
-  // Limpiar filtros
   const clearFilters = () => {
     setFilters({});
-    fetchModules({});
+    if (enablePagination) {
+      setPagination(prev => ({ ...prev, page: 1 }));
+      fetchModules({ filters: {}, page: 1, skipCache: true });
+    } else {
+      fetchModules({ filters: {}, skipCache: true });
+    }
   };
 
-  // Cargar módulos al montar el hook
+  const goToPage = (page: number) => {
+    if (!enablePagination) return;
+    const target = Math.max(1, page);
+    setPagination(prev => ({ ...prev, page: target }));
+    fetchModules({ page: target, skipCache: true });
+  };
+
   useEffect(() => {
-    fetchModules();
+    // Try cache first, only fetch if no cached data
+    fetchModules({ skipCache: false });
   }, []);
 
   return {
@@ -179,7 +281,9 @@ export function useModules(forCourseCreation: boolean = false) {
     loading,
     error,
     filters,
+    pagination,
     fetchModules,
+    goToPage,
     createModule,
     updateModule,
     deleteModule,
@@ -187,4 +291,4 @@ export function useModules(forCourseCreation: boolean = false) {
     applyFilters,
     clearFilters,
   };
-} 
+}

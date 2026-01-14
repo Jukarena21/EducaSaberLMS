@@ -40,6 +40,7 @@ export async function GET(
             name: true,
           }
         },
+        academicGrade: true,
         dateOfBirth: true,
         gender: true,
         documentType: true,
@@ -60,6 +61,7 @@ export async function GET(
         medicalConditions: true,
         homeTechnologyAccess: true,
         homeInternetAccess: true,
+        status: true,
         totalPlatformTimeMinutes: true,
         sessionsStarted: true,
         lastSessionAt: true,
@@ -119,6 +121,7 @@ export async function PUT(
       housingType,
       schoolEntryYear,
       academicAverage,
+      academicGrade, // Grado académico del estudiante
       areasOfDifficulty,
       areasOfStrength,
       repetitionHistory,
@@ -156,14 +159,14 @@ export async function PUT(
     }
 
     // School admins can only update students and school_admin users for their school
-    if (session.user?.role === 'school_admin') {
+    if (gate.session?.user.role === 'school_admin') {
       if (existingUser.role === 'teacher_admin') {
         return NextResponse.json(
           { error: 'No puedes modificar usuarios teacher_admin' },
           { status: 403 }
         )
       }
-      if (schoolId && schoolId !== session.user?.schoolId) {
+      if (schoolId && schoolId !== gate.session.user.schoolId) {
         return NextResponse.json(
           { error: 'Solo puedes asignar usuarios a tu colegio' },
           { status: 403 }
@@ -192,6 +195,7 @@ export async function PUT(
       lastName: lastName || existingUser.lastName,
       role: role || existingUser.role,
       schoolId: schoolId || existingUser.schoolId,
+      academicGrade: academicGrade !== undefined ? academicGrade : existingUser.academicGrade,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : existingUser.dateOfBirth,
       gender: gender !== undefined ? gender : existingUser.gender,
       documentType: documentType !== undefined ? documentType : existingUser.documentType,
@@ -212,6 +216,7 @@ export async function PUT(
       medicalConditions: medicalConditions !== undefined ? medicalConditions : existingUser.medicalConditions,
       homeTechnologyAccess: homeTechnologyAccess !== undefined ? homeTechnologyAccess : existingUser.homeTechnologyAccess,
       homeInternetAccess: homeInternetAccess !== undefined ? homeInternetAccess : existingUser.homeInternetAccess,
+      status: body.status !== undefined ? body.status : existingUser.status,
     }
 
     // Hash password if provided
@@ -236,9 +241,144 @@ export async function PUT(
             name: true,
           }
         },
+        academicGrade: true,
+        dateOfBirth: true,
+        gender: true,
+        documentType: true,
+        documentNumber: true,
+        address: true,
+        neighborhood: true,
+        city: true,
+        contactPhone: true,
+        socioeconomicStratum: true,
+        housingType: true,
+        schoolEntryYear: true,
+        academicAverage: true,
+        areasOfDifficulty: true,
+        areasOfStrength: true,
+        repetitionHistory: true,
+        schoolSchedule: true,
+        disabilities: true,
+        specialEducationalNeeds: true,
+        medicalConditions: true,
+        homeTechnologyAccess: true,
+        homeInternetAccess: true,
+        status: true,
         updatedAt: true,
       },
     })
+
+    // Si es un estudiante y se proporcionó academicGrade, actualizar asignaciones de cursos
+    if (existingUser.role === 'student' && academicGrade !== undefined) {
+      try {
+        // Obtener todos los cursos ICFES activos del estudiante para determinar el grado actual
+        const currentEnrollments = await prisma.courseEnrollment.findMany({
+          where: {
+            userId: id,
+            isActive: true,
+          },
+          include: {
+            course: {
+              select: {
+                id: true,
+                academicGrade: true,
+                isIcfesCourse: true,
+                title: true,
+              },
+            },
+          },
+        })
+
+        // Filtrar solo cursos ICFES con grado académico
+        const icfesEnrollments = currentEnrollments.filter(
+          e => e.course.isIcfesCourse && e.course.academicGrade
+        )
+
+        // Obtener el grado actual (el más común entre los cursos activos)
+        const gradeCounts = new Map<string, number>()
+        icfesEnrollments.forEach(e => {
+          const grade = e.course.academicGrade!
+          gradeCounts.set(grade, (gradeCounts.get(grade) || 0) + 1)
+        })
+        
+        const currentGrade = Array.from(gradeCounts.entries())
+          .sort((a, b) => b[1] - a[1])[0]?.[0] // Grado más común
+
+        // Si el grado cambió o es la primera vez que se asigna
+        if (currentGrade !== academicGrade) {
+          // 1. DESACTIVAR cursos ICFES del grado anterior (si existe)
+          if (currentGrade) {
+            const coursesToDeactivate = icfesEnrollments
+              .filter(e => e.course.academicGrade === currentGrade)
+              .map(e => e.course.id)
+
+            if (coursesToDeactivate.length > 0) {
+              await prisma.courseEnrollment.updateMany({
+                where: {
+                  userId: id,
+                  courseId: { in: coursesToDeactivate },
+                },
+                data: {
+                  isActive: false,
+                },
+              })
+
+              console.log(`🔄 Desactivados ${coursesToDeactivate.length} cursos del grado ${currentGrade} para estudiante ${id}`)
+            }
+          }
+
+          // 2. ASIGNAR cursos ICFES del nuevo grado
+          const coursesToEnroll = await prisma.course.findMany({
+            where: {
+              isIcfesCourse: true,
+              isPublished: true,
+              academicGrade: academicGrade,
+            },
+            select: {
+              id: true,
+              title: true,
+            },
+          })
+
+          // Crear/actualizar las inscripciones para los cursos del nuevo grado
+          if (coursesToEnroll.length > 0) {
+            await Promise.all(
+              coursesToEnroll.map(course =>
+                prisma.courseEnrollment.upsert({
+                  where: {
+                    userId_courseId: {
+                      userId: id,
+                      courseId: course.id,
+                    },
+                  },
+                  update: {
+                    isActive: true, // Reactivar si ya existía pero estaba inactiva
+                    enrolledAt: new Date(), // Actualizar fecha de inscripción
+                  },
+                  create: {
+                    userId: id,
+                    courseId: course.id,
+                    isActive: true,
+                    enrolledAt: new Date(),
+                  },
+                })
+              )
+            )
+
+            console.log(`✅ Asignados ${coursesToEnroll.length} cursos del grado ${academicGrade} al estudiante ${id}`)
+          } else {
+            console.log(`ℹ️ No se encontraron cursos ICFES para el grado ${academicGrade}.`)
+          }
+
+          // NOTA: No eliminamos el progreso histórico (StudentCourseProgress, StudentLessonProgress, etc.)
+          // porque es información histórica valiosa. Solo desactivamos las inscripciones.
+          // Los resultados de exámenes también se mantienen como registro histórico.
+        }
+      } catch (enrollmentError) {
+        // No fallar la actualización del usuario si hay error en la asignación de cursos
+        console.error('Error al actualizar cursos automáticamente:', enrollmentError)
+      }
+    }
 
     return NextResponse.json({
       message: 'Usuario actualizado exitosamente',

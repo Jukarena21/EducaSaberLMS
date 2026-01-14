@@ -44,12 +44,16 @@ export async function GET(request: NextRequest) {
     const lessonsCompleted = await prisma.studentLessonProgress.count({
       where: {
         userId,
-        status: 'completado'
+        status: 'completed'
       }
     });
 
+    // Solo considerar exámenes completados para estadísticas
     const examResults = await prisma.examResult.findMany({
-      where: { userId },
+      where: { 
+        userId,
+        completedAt: { not: null } // Solo exámenes completados
+      },
       select: {
         score: true,
         isPassed: true,

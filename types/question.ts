@@ -6,6 +6,9 @@ export interface QuestionData {
   questionText: string
   questionImage?: string // URL de imagen en el enunciado
   questionType: 'multiple_choice' | 'true_false' | 'fill_blank' | 'matching' | 'essay'
+
+  // Uso de la pregunta dentro del banco
+  usage?: 'lesson' | 'exam' | 'both'
   
   // Opciones de respuesta
   optionA: string
@@ -30,6 +33,8 @@ export interface QuestionData {
   lesson?: {
     id: string
     title: string
+    academicGrade?: string
+    year?: number
     modules: Array<{
       moduleId: string
       moduleTitle: string
@@ -37,6 +42,7 @@ export interface QuestionData {
       course?: {
         id: string
         title: string
+        isIcfesCourse?: boolean
         competency?: {
           id: string
           name: string
@@ -48,6 +54,10 @@ export interface QuestionData {
       }
     }>
   }
+  
+  // Año escolar directo (si está disponible)
+  academicGrade?: string
+  year?: number
   
   createdAt?: Date
   updatedAt?: Date
@@ -67,6 +77,9 @@ export interface QuestionFormData {
   questionText: string
   questionImage?: string
   questionType: 'multiple_choice' | 'true_false' | 'fill_blank' | 'matching' | 'essay'
+
+  // Uso de la pregunta dentro del banco
+  usage: 'lesson' | 'exam' | 'both'
   
   // Opciones de respuesta
   optionA: string
@@ -91,10 +104,22 @@ export interface QuestionFormData {
 export interface QuestionFormProps {
   question?: QuestionFormData | null
   competencies: Array<{ id: string; name: string; displayName: string }>
-  lessons: Array<{ id: string; title: string; competencyId: string }>
+  lessons: Array<{ 
+    id: string; 
+    title: string; 
+    competencyId: string; 
+    isIcfesCourse?: boolean;
+    academicGrade?: string;
+    year?: number;
+  }>
   onSubmit: (data: QuestionFormData) => Promise<void>
   onCancel: () => void
   loading?: boolean
+  onTypeSelected?: () => void
+  questionTypeSelected?: boolean
+  setQuestionTypeSelected?: (value: boolean) => void
+  onQuestionTypeChange?: (type: 'multiple_choice' | 'true_false' | 'fill_blank' | 'matching' | 'essay') => void
+  initialQuestionType?: 'multiple_choice' | 'true_false' | 'fill_blank' | 'matching' | 'essay'
 }
 
 // Tipos para vistas previas
@@ -113,4 +138,6 @@ export interface QuestionFilters {
   difficultyLevel?: string
   questionType?: string
   lessonId?: string
+  hasImages?: 'all' | 'yes' | 'no'
+  isIcfesCourse?: boolean
 } 

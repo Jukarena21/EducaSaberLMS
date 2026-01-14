@@ -16,96 +16,101 @@ export async function GET(
     const { attemptId } = await params
     const userId = session.user.id
 
-    // Obtener el intento de examen
-    const attempt = await prisma.examAttempt.findFirst({
+    // Obtener el resultado de examen
+    const result = await prisma.examResult.findFirst({
       where: {
         id: attemptId,
-        userId,
-        status: 'in_progress'
+        userId
       },
       include: {
         exam: {
           include: {
-            examQuestions: {
-              include: {
-                question: {
-                  include: {
-                    questionOptions: true,
-                    lesson: {
-                      include: {
-                        modules: {
-                          include: {
-                            competency: true
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            examQuestions: true
           }
         }
       }
     })
 
-    if (!attempt) {
-      return NextResponse.json({ error: 'Intento de examen no encontrado' }, { status: 404 })
+    if (!result) {
+      return NextResponse.json({ error: 'Resultado de examen no encontrado' }, { status: 404 })
     }
 
-    // Verificar que no se ha excedido el tiempo límite
-    const now = new Date()
-    const timeElapsed = now.getTime() - attempt.startedAt.getTime()
-    const timeLimitMs = (attempt.timeLimitMinutes || 60) * 60 * 1000
+    if (!result.exam) {
+      return NextResponse.json({ error: 'Examen asociado no encontrado' }, { status: 404 })
+    }
 
-    if (timeElapsed > timeLimitMs) {
-      return NextResponse.json({ error: 'Tiempo límite excedido' }, { status: 400 })
+    if (!result.exam.examQuestions || result.exam.examQuestions.length === 0) {
+      return NextResponse.json({ error: 'El examen no tiene preguntas asignadas' }, { status: 400 })
     }
 
     // Obtener respuestas existentes
-    const existingAnswers = await prisma.examAnswer.findMany({
-      where: { attemptId },
+    const existingAnswers = await prisma.examQuestionAnswer.findMany({
+      where: { examResultId: attemptId },
       select: {
         questionId: true,
-        selectedOptionId: true,
-        answerText: true
+        selectedOption: true,
+        answerText: true,
+        isCorrect: true
       }
     })
 
     const answersMap = existingAnswers.reduce((acc, answer) => {
+      // Para matching, parsear el JSON string si existe
+      let parsedAnswer: any = answer.selectedOption || answer.answerText
+      if (answer.answerText && answer.answerText.startsWith('{')) {
+        try {
+          parsedAnswer = JSON.parse(answer.answerText)
+        } catch (e) {
+          parsedAnswer = answer.answerText
+        }
+      }
+      
       acc[answer.questionId] = {
-        optionId: answer.selectedOptionId,
-        text: answer.answerText
+        optionId: answer.selectedOption,
+        text: answer.answerText,
+        answer: parsedAnswer,
+        isCorrect: answer.isCorrect
       }
       return acc
-    }, {} as Record<string, { optionId?: string; text?: string }>)
+    }, {} as Record<string, any>)
 
     // Preparar preguntas para el examen (sin respuestas correctas)
-    const questions = attempt.exam.examQuestions.map(eq => ({
-      id: eq.question.id,
-      text: eq.question.text,
-      type: eq.question.type,
-      difficultyLevel: eq.question.difficultyLevel,
-      imageUrl: eq.question.imageUrl,
-      options: eq.question.questionOptions.map(opt => ({
-        id: opt.id,
-        text: opt.text,
-        isCorrect: false // No enviar la respuesta correcta
-      })),
-      competency: eq.question.lesson?.modules?.[0]?.competency?.name || 'Sin competencia'
+    const questions = result.exam.examQuestions.map(eq => ({
+      id: eq.id,
+      text: eq.questionText,
+      type: eq.questionType,
+      difficultyLevel: eq.difficultyLevel,
+      imageUrl: eq.questionImage,
+      questionImage: eq.questionImage,
+      questionType: eq.questionType,
+      optionA: eq.optionA,
+      optionB: eq.optionB,
+      optionC: eq.optionC,
+      optionD: eq.optionD,
+      optionAImage: eq.optionAImage,
+      optionBImage: eq.optionBImage,
+      optionCImage: eq.optionCImage,
+      optionDImage: eq.optionDImage,
+      options: [
+        { id: 'A', text: eq.optionA, isCorrect: false },
+        { id: 'B', text: eq.optionB, isCorrect: false },
+        { id: 'C', text: eq.optionC, isCorrect: false },
+        { id: 'D', text: eq.optionD, isCorrect: false }
+      ],
+      competency: 'General'
     }))
 
     return NextResponse.json({
-      attemptId: attempt.id,
+      attemptId: result.id,
       exam: {
-        id: attempt.exam.id,
-        title: attempt.exam.title,
-        description: attempt.exam.description,
-        timeLimitMinutes: attempt.timeLimitMinutes,
+        id: result.exam.id,
+        title: result.exam.title,
+        description: result.exam.description,
+        timeLimitMinutes: result.exam.timeLimitMinutes,
         totalQuestions: questions.length
       },
       questions,
-      startedAt: attempt.startedAt,
+      startedAt: result.startedAt || result.createdAt,
       existingAnswers: answersMap
     })
 

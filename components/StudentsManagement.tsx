@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,9 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { useUsers } from '@/hooks/useUsers';
 import { useSchools } from '@/hooks/useSchools';
+import { useCourses } from '@/hooks/useCourses';
 import { StudentForm } from './StudentForm';
 import { useSession } from 'next-auth/react';
 import { UserFilters } from '@/types/user';
@@ -32,59 +35,124 @@ import {
   User as UserIcon,
   Activity,
   BookOpen,
-  Award
+  Award,
+  BookCheck,
+  BookX,
+  CheckSquare,
+  Square,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 export function StudentsManagement() {
   const { toast } = useToast();
   const { data: session } = useSession();
-  const { users, loading: usersLoading, error: usersError, refetch: refetchUsers } = useUsers();
+  const { users, loading: usersLoading, error: usersError, fetchUsers, pagination } = useUsers();
   const { schools, loading: schoolsLoading } = useSchools();
+  const { courses, loading: coursesLoading } = useCourses();
   
   const [filters, setFilters] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  
+  // Estados para selección múltiple y asignación de cursos
+  // IMPORTANTE: Las selecciones persisten al cambiar de página
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [showCourseDialog, setShowCourseDialog] = useState(false);
+  const [courseDialogMode, setCourseDialogMode] = useState<'enroll' | 'unenroll'>('enroll');
+  const [selectedCourseIds, setSelectedCourseIds] = useState<Set<string>>(new Set());
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // Filtrar usuarios por rol de estudiante
-  const students = users?.filter(user => user.role === 'student') || [];
+  // Cargar usuarios al montar el componente y cuando cambien los filtros/página
+  useEffect(() => {
+    if (session?.user) {
+      const loadUsers = async () => {
+        const apiFilters: any = {
+          page: currentPage,
+          limit: 10, // 10 estudiantes por página
+          role: 'student', // Filtrar solo estudiantes en el backend
+          schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
+            ? session.user.schoolId 
+            : (filters.schoolId || ''),
+          search: searchTerm || undefined,
+        };
+        
+        await fetchUsers(apiFilters);
+      };
+      
+      loadUsers();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }
+  }, [session?.user?.role, session?.user?.schoolId, currentPage, searchTerm, filters.schoolId]);
 
-  // Aplicar filtros
+  // Resetear a página 1 cuando cambian los filtros de búsqueda
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filters.schoolId]);
+
+  // Filtrar usuarios por rol de estudiante (ya viene filtrado del backend, pero por si acaso)
+  const students = users?.filter(user => {
+    // Solo mostrar estudiantes
+    if (user.role !== 'student') return false;
+    
+    // Si es school_admin, solo mostrar estudiantes de su colegio
+    if (session?.user?.role === 'school_admin' && session?.user?.schoolId) {
+      return user.schoolId === session.user.schoolId;
+    }
+    
+    return true;
+  }) || [];
+
+  // Aplicar filtros adicionales (academicGrade, status)
   const filteredStudents = students.filter(student => {
-    if (searchTerm && !student.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) && 
-        !student.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !student.email?.toLowerCase().includes(searchTerm.toLowerCase())) {
+    if (filters.academicGrade && (student as any).academicGrade !== filters.academicGrade) {
       return false;
     }
     
-    if (filters.schoolId && student.schoolId !== filters.schoolId) {
-      return false;
-    }
-    
-    if (filters.academicGrade && student.academicGrade !== filters.academicGrade) {
-      return false;
-    }
-    
-    if (filters.status && student.status !== filters.status) {
+    if (filters.status && (student as any).status !== filters.status) {
       return false;
     }
     
     return true;
   });
 
-  const handleUserCreated = () => {
+  // Calcular total de estudiantes seleccionados (de todas las páginas)
+  const totalSelectedCount = selectedStudentIds.size;
+
+  const handleUserCreated = async () => {
     setShowAddUser(false);
-    refetchUsers();
+    setCurrentPage(1); // Volver a la primera página
+    const apiFilters: any = {
+      page: 1,
+      limit: 10,
+      role: 'student',
+      schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
+        ? session.user.schoolId 
+        : (filters.schoolId || ''),
+      search: searchTerm || undefined,
+    };
+    await fetchUsers(apiFilters);
     toast({
       title: "Estudiante creado",
       description: "El estudiante ha sido creado exitosamente.",
     });
   };
 
-  const handleUserUpdated = () => {
+  const handleUserUpdated = async () => {
     setEditingUser(null);
-    refetchUsers();
+    const apiFilters: any = {
+      page: currentPage,
+      limit: 10,
+      role: 'student',
+      schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
+        ? session.user.schoolId 
+        : (filters.schoolId || ''),
+      search: searchTerm || undefined,
+    };
+    await fetchUsers(apiFilters);
     toast({
       title: "Estudiante actualizado",
       description: "El estudiante ha sido actualizado exitosamente.",
@@ -105,7 +173,16 @@ export function StudentsManagement() {
         throw new Error('Error al eliminar el estudiante');
       }
 
-      refetchUsers();
+      const apiFilters: any = {
+        page: currentPage,
+        limit: 10,
+        role: 'student',
+        schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
+          ? session.user.schoolId 
+          : (filters.schoolId || ''),
+        search: searchTerm || undefined,
+      };
+      await fetchUsers(apiFilters);
       toast({
         title: "Estudiante eliminado",
         description: "El estudiante ha sido eliminado exitosamente.",
@@ -119,7 +196,7 @@ export function StudentsManagement() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string) => {
     switch (status) {
       case 'active':
         return <Badge className="bg-green-100 text-green-800">Activo</Badge>;
@@ -132,7 +209,9 @@ export function StudentsManagement() {
     }
   };
 
-  const getGradeBadge = (grade: string) => {
+  const getGradeBadge = (grade?: string) => {
+    if (!grade) return <Badge className="bg-gray-100 text-gray-800">Sin grado</Badge>;
+    const normalized = grade.toString();
     const gradeColors: { [key: string]: string } = {
       '6': 'bg-blue-100 text-blue-800',
       '7': 'bg-indigo-100 text-indigo-800',
@@ -140,13 +219,204 @@ export function StudentsManagement() {
       '9': 'bg-pink-100 text-pink-800',
       '10': 'bg-red-100 text-red-800',
       '11': 'bg-orange-100 text-orange-800',
+      'sexto': 'bg-blue-100 text-blue-800',
+      'septimo': 'bg-indigo-100 text-indigo-800',
+      'octavo': 'bg-purple-100 text-purple-800',
+      'noveno': 'bg-pink-100 text-pink-800',
+      'decimo': 'bg-red-100 text-red-800',
+      'once': 'bg-orange-100 text-orange-800',
     };
     
     return (
-      <Badge className={gradeColors[grade] || 'bg-gray-100 text-gray-800'}>
-        Grado {grade}
+      <Badge className={gradeColors[normalized] || 'bg-gray-100 text-gray-800'}>
+        Grado {normalized}
       </Badge>
     );
+  };
+
+  // Funciones para selección múltiple
+  const toggleStudentSelection = (studentId: string) => {
+    setSelectedStudentIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(studentId)) {
+        newSet.delete(studentId);
+      } else {
+        newSet.add(studentId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllStudents = () => {
+    // Agregar todos los estudiantes de la página actual a la selección
+    const newSelection = new Set(selectedStudentIds);
+    filteredStudents.forEach(student => {
+      newSelection.add(student.id);
+    });
+    setSelectedStudentIds(newSelection);
+  };
+
+  const deselectAllStudents = () => {
+    // Remover solo los estudiantes de la página actual
+    const newSelection = new Set(selectedStudentIds);
+    filteredStudents.forEach(student => {
+      newSelection.delete(student.id);
+    });
+    setSelectedStudentIds(newSelection);
+  };
+
+  // Verificar si todos los estudiantes de la página actual están seleccionados
+  const currentPageStudentIds = new Set(filteredStudents.map(s => s.id));
+  const allCurrentPageSelected = filteredStudents.length > 0 && 
+    filteredStudents.every(student => selectedStudentIds.has(student.id));
+  const someCurrentPageSelected = filteredStudents.some(student => selectedStudentIds.has(student.id)) && 
+    !allCurrentPageSelected;
+
+  // Funciones para asignación de cursos
+  const handleOpenCourseDialog = (mode: 'enroll' | 'unenroll') => {
+    if (selectedStudentIds.size === 0) {
+      toast({
+        title: "No hay estudiantes seleccionados",
+        description: "Por favor selecciona al menos un estudiante.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setCourseDialogMode(mode);
+    setSelectedCourseIds(new Set());
+    setShowCourseDialog(true);
+  };
+
+  const handleBulkEnroll = async () => {
+    if (selectedStudentIds.size === 0 || selectedCourseIds.size === 0) {
+      toast({
+        title: "Datos incompletos",
+        description: "Por favor selecciona estudiantes y cursos.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const response = await fetch('/api/admin/students/bulk-enroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentIds: Array.from(selectedStudentIds),
+          courseIds: Array.from(selectedCourseIds),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al asignar cursos');
+      }
+
+      toast({
+        title: "Cursos asignados",
+        description: data.message || `Se asignaron ${data.enrollments} inscripciones exitosamente.`,
+      });
+
+      setShowCourseDialog(false);
+      setSelectedStudentIds(new Set());
+      setSelectedCourseIds(new Set());
+      const apiFilters: any = {
+        page: currentPage,
+        limit: 10,
+        role: 'student',
+        schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
+          ? session.user.schoolId 
+          : (filters.schoolId || ''),
+        search: searchTerm || undefined,
+      };
+      await fetchUsers(apiFilters);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudieron asignar los cursos.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleBulkUnenroll = async () => {
+    if (selectedStudentIds.size === 0 || selectedCourseIds.size === 0) {
+      toast({
+        title: "Datos incompletos",
+        description: "Por favor selecciona estudiantes y cursos.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const response = await fetch('/api/admin/students/bulk-unenroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentIds: Array.from(selectedStudentIds),
+          courseIds: Array.from(selectedCourseIds),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al desasignar cursos');
+      }
+
+      toast({
+        title: "Cursos desasignados",
+        description: data.message || `Se desasignaron ${data.unenrollments} inscripciones exitosamente.`,
+      });
+
+      setShowCourseDialog(false);
+      setSelectedStudentIds(new Set());
+      setSelectedCourseIds(new Set());
+      const apiFilters: any = {
+        page: currentPage,
+        limit: 10,
+        role: 'student',
+        schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
+          ? session.user.schoolId 
+          : (filters.schoolId || ''),
+        search: searchTerm || undefined,
+      };
+      await fetchUsers(apiFilters);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "No se pudieron desasignar los cursos.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const toggleCourseSelection = (courseId: string) => {
+    setSelectedCourseIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(courseId)) {
+        newSet.delete(courseId);
+      } else {
+        newSet.add(courseId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllCourses = () => {
+    setSelectedCourseIds(new Set(courses.map(c => c.id)));
+  };
+
+  const deselectAllCourses = () => {
+    setSelectedCourseIds(new Set());
   };
 
   if (usersLoading) {
@@ -164,7 +434,20 @@ export function StudentsManagement() {
     return (
       <div className="text-center p-8">
         <p className="text-red-600">Error al cargar los estudiantes: {usersError}</p>
-        <Button onClick={refetchUsers} className="mt-4">
+        <Button 
+          onClick={async () => {
+            const apiFilters: any = {
+              page: 1,
+              limit: 100,
+              role: '',
+              schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
+                ? session.user.schoolId 
+                : '',
+            };
+            await fetchUsers(apiFilters);
+          }} 
+          className="mt-4"
+        >
           Reintentar
         </Button>
       </div>
@@ -201,7 +484,9 @@ export function StudentsManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-2xl font-bold text-[#73A2D3]">{students.length}</div>
+                <div className="text-2xl font-bold text-[#73A2D3]">
+                  {pagination?.total || students.length}
+                </div>
                 <div className="text-sm text-gray-600">Total Estudiantes</div>
               </div>
               <Users className="h-8 w-8 text-[#73A2D3]" />
@@ -214,7 +499,7 @@ export function StudentsManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-2xl font-bold text-[#C00102]">
-                  {students.filter(s => s.status === 'active').length}
+                  {students.filter(s => (s as any).status === 'active' || !(s as any).status).length}
                 </div>
                 <div className="text-sm text-gray-600">Activos</div>
               </div>
@@ -228,7 +513,7 @@ export function StudentsManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-2xl font-bold text-[#73A2D3]">
-                  {new Set(students.map(s => s.academicGrade)).size}
+                  {new Set(students.map(s => (s as any).academicGrade).filter(Boolean)).size}
                 </div>
                 <div className="text-sm text-gray-600">Grados</div>
               </div>
@@ -350,22 +635,110 @@ export function StudentsManagement() {
         </CardContent>
       </Card>
 
+      {/* Bulk Actions Bar */}
+      {totalSelectedCount > 0 && (session?.user?.role === 'teacher_admin' || session?.user?.role === 'school_admin') && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium text-blue-900">
+                  {totalSelectedCount} estudiante{totalSelectedCount !== 1 ? 's' : ''} seleccionado{totalSelectedCount !== 1 ? 's' : ''} 
+                  {totalSelectedCount > filteredStudents.length && (
+                    <span className="text-blue-600 ml-1">
+                      (incluyendo de otras páginas)
+                    </span>
+                  )}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedStudentIds(new Set())}
+                >
+                  Deseleccionar todos
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => handleOpenCourseDialog('enroll')}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <BookCheck className="h-4 w-4 mr-2" />
+                  Asignar Cursos
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => handleOpenCourseDialog('unenroll')}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  <BookX className="h-4 w-4 mr-2" />
+                  Desasignar Cursos
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Students Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Estudiantes ({filteredStudents.length})</CardTitle>
-          <CardDescription>
-            {session?.user?.role === 'teacher_admin' 
-              ? 'Lista de todos los estudiantes registrados en el sistema'
-              : 'Lista de estudiantes de tu institución (solo consulta)'
-            }
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>
+                Estudiantes {pagination ? `(${pagination.total} total)` : `(${filteredStudents.length})`}
+              </CardTitle>
+              <CardDescription>
+                {session?.user?.role === 'teacher_admin' 
+                  ? 'Lista de todos los estudiantes registrados en el sistema'
+                  : 'Lista de estudiantes de tu institución (solo consulta)'
+                }
+              </CardDescription>
+            </div>
+            {(session?.user?.role === 'teacher_admin' || session?.user?.role === 'school_admin') && filteredStudents.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={allCurrentPageSelected ? deselectAllStudents : selectAllStudents}
+                >
+                  {allCurrentPageSelected ? (
+                    <>
+                      <CheckSquare className="h-4 w-4 mr-2" />
+                      Deseleccionar página
+                    </>
+                  ) : (
+                    <>
+                      <Square className="h-4 w-4 mr-2" />
+                      Seleccionar página
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  {(session?.user?.role === 'teacher_admin' || session?.user?.role === 'school_admin') && (
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={allCurrentPageSelected}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            selectAllStudents();
+                          } else {
+                            deselectAllStudents();
+                          }
+                        }}
+                      />
+                    </TableHead>
+                  )}
                   <TableHead>Estudiante</TableHead>
                   <TableHead>Institución</TableHead>
                   <TableHead>Grado</TableHead>
@@ -378,6 +751,14 @@ export function StudentsManagement() {
               <TableBody>
                 {filteredStudents.map((student) => (
                   <TableRow key={student.id}>
+                    {(session?.user?.role === 'teacher_admin' || session?.user?.role === 'school_admin') && (
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedStudentIds.has(student.id)}
+                          onCheckedChange={() => toggleStudentSelection(student.id)}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 rounded-full bg-[#73A2D3] flex items-center justify-center">
@@ -402,10 +783,10 @@ export function StudentsManagement() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {getGradeBadge(student.academicGrade || 'N/A')}
+                      {getGradeBadge((student as any).academicGrade || 'N/A')}
                     </TableCell>
                     <TableCell>
-                      {getStatusBadge(student.status || 'active')}
+                      {getStatusBadge((student as any).status || 'active')}
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
@@ -413,10 +794,10 @@ export function StudentsManagement() {
                           <Mail className="h-3 w-3 text-gray-400" />
                           <span>{student.email}</span>
                         </div>
-                        {student.phone && (
+                        {(student as any).phone && (
                           <div className="flex items-center space-x-2 text-sm">
                             <Phone className="h-3 w-3 text-gray-400" />
-                            <span>{student.phone}</span>
+                            <span>{(student as any).phone}</span>
                           </div>
                         )}
                       </div>
@@ -441,7 +822,10 @@ export function StudentsManagement() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setEditingUser(student)}
+                              onClick={() => {
+                                console.log('🔧 Editando estudiante:', student);
+                                setEditingUser(student);
+                              }}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -463,10 +847,68 @@ export function StudentsManagement() {
             </Table>
           </div>
           
-          {filteredStudents.length === 0 && (
+          {filteredStudents.length === 0 && !usersLoading && (
             <div className="text-center py-8">
               <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">No se encontraron estudiantes</p>
+            </div>
+          )}
+
+          {/* Paginación */}
+          {pagination && pagination.pages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <div className="text-sm text-gray-600">
+                Mostrando {((pagination.page - 1) * pagination.limit) + 1} a{' '}
+                {Math.min(pagination.page * pagination.limit, pagination.total)} de{' '}
+                {pagination.total} estudiantes
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1 || usersLoading}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Anterior
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                    let pageNum: number;
+                    if (pagination.pages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= pagination.pages - 2) {
+                      pageNum = pagination.pages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        disabled={usersLoading}
+                        className="min-w-[40px]"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(pagination.pages, prev + 1))}
+                  disabled={currentPage === pagination.pages || usersLoading}
+                >
+                  Siguiente
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
@@ -495,11 +937,11 @@ export function StudentsManagement() {
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Teléfono</Label>
-                  <p className="text-sm">{selectedUser.phone || 'No registrado'}</p>
+                  <p className="text-sm">{(selectedUser as any).phone || 'No registrado'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Grado</Label>
-                  <p className="text-sm">Grado {selectedUser.academicGrade || 'No asignado'}</p>
+                  <p className="text-sm">Grado {(selectedUser as any).academicGrade || 'No asignado'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Institución</Label>
@@ -510,7 +952,7 @@ export function StudentsManagement() {
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Estado</Label>
                   <div className="mt-1">
-                    {getStatusBadge(selectedUser.status || 'active')}
+                    {getStatusBadge((selectedUser as any).status || 'active')}
                   </div>
                 </div>
                 <div>
@@ -554,8 +996,10 @@ export function StudentsManagement() {
 
       {/* Edit Student Form Modal - Only for Teacher Admins */}
       {session?.user?.role === 'teacher_admin' && editingUser && (
-        <StudentForm 
-          student={editingUser}
+        <>
+          {console.log('🔧 Renderizando modal de edición para:', editingUser)}
+          <StudentForm 
+            student={editingUser}
           onSubmit={async (data) => {
             // Actualizar estudiante (mantener el colegio asignado)
             const response = await fetch(`/api/users/${editingUser.id}`, {
@@ -575,7 +1019,130 @@ export function StudentsManagement() {
           }}
           onCancel={() => setEditingUser(null)}
         />
+        </>
       )}
+
+      {/* Course Assignment Dialog */}
+      <Dialog open={showCourseDialog} onOpenChange={setShowCourseDialog}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>
+              {courseDialogMode === 'enroll' ? 'Asignar Cursos' : 'Desasignar Cursos'}
+            </DialogTitle>
+            <DialogDescription>
+              {courseDialogMode === 'enroll' 
+                ? `Selecciona los cursos que deseas asignar a ${selectedStudentIds.size} estudiante${selectedStudentIds.size !== 1 ? 's' : ''} seleccionado${selectedStudentIds.size !== 1 ? 's' : ''}.`
+                : `Selecciona los cursos que deseas desasignar de ${selectedStudentIds.size} estudiante${selectedStudentIds.size !== 1 ? 's' : ''} seleccionado${selectedStudentIds.size !== 1 ? 's' : ''}.`
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Course Selection Controls */}
+            <div className="flex items-center justify-between border-b pb-2">
+              <span className="text-sm text-gray-600">
+                {selectedCourseIds.size} curso{selectedCourseIds.size !== 1 ? 's' : ''} seleccionado{selectedCourseIds.size !== 1 ? 's' : ''}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAllCourses}
+                >
+                  Seleccionar todos
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={deselectAllCourses}
+                >
+                  Deseleccionar todos
+                </Button>
+              </div>
+            </div>
+
+            {/* Courses List */}
+            <ScrollArea className="h-[400px] border rounded-md p-4">
+              {coursesLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#73A2D3] mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Cargando cursos...</p>
+                </div>
+              ) : courses.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No hay cursos disponibles
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {courses.map((course) => (
+                    <div
+                      key={course.id}
+                      className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-gray-50 cursor-pointer"
+                      onClick={() => toggleCourseSelection(course.id)}
+                    >
+                      <Checkbox
+                        checked={selectedCourseIds.has(course.id)}
+                        onCheckedChange={() => toggleCourseSelection(course.id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">{course.title}</div>
+                        <div className="text-sm text-gray-500">
+                          {course.competency?.displayName || 'Sin competencia'}
+                          {(course as any).academicGrade && ` • ${(course as any).academicGrade}`}
+                        </div>
+                      </div>
+                      <Badge variant={course.isIcfesCourse ? 'default' : 'secondary'}>
+                        {course.isIcfesCourse ? 'ICFES' : 'General'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCourseDialog(false);
+                  setSelectedCourseIds(new Set());
+                }}
+                disabled={isProcessing}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={courseDialogMode === 'enroll' ? handleBulkEnroll : handleBulkUnenroll}
+                disabled={isProcessing || selectedCourseIds.size === 0}
+                className={courseDialogMode === 'enroll' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Procesando...
+                  </>
+                ) : (
+                  <>
+                    {courseDialogMode === 'enroll' ? (
+                      <>
+                        <BookCheck className="h-4 w-4 mr-2" />
+                        Asignar Cursos
+                      </>
+                    ) : (
+                      <>
+                        <BookX className="h-4 w-4 mr-2" />
+                        Desasignar Cursos
+                      </>
+                    )}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

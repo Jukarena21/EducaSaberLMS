@@ -107,7 +107,7 @@ export const config = {
   matcher: [
     '/admin/:path*',
     '/estudiante/:path*',
-    '/api/:path*',
+    '/api/((?!schools/branding-simple).)*',
   ],
 }
 

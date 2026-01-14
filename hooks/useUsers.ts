@@ -12,6 +12,29 @@ interface User {
     id: string
     name: string
   }
+  academicGrade?: string
+  dateOfBirth?: string
+  gender?: string
+  documentType?: string
+  documentNumber?: string
+  address?: string
+  neighborhood?: string
+  city?: string
+  contactPhone?: string
+  socioeconomicStratum?: number
+  housingType?: string
+  schoolEntryYear?: number
+  academicAverage?: number
+  areasOfDifficulty?: any
+  areasOfStrength?: any
+  repetitionHistory?: boolean
+  schoolSchedule?: string
+  disabilities?: any
+  specialEducationalNeeds?: string
+  medicalConditions?: string
+  homeTechnologyAccess?: boolean
+  homeInternetAccess?: boolean
+  status?: string
   totalPlatformTimeMinutes: number
   sessionsStarted: number
   lastSessionAt?: string
@@ -54,6 +77,9 @@ interface UserFormData {
   medicalConditions?: string
   homeTechnologyAccess?: boolean
   homeInternetAccess?: boolean
+  academicGrade?: string
+  contactPhone?: string
+  status?: string
 }
 
 interface UsersResponse {

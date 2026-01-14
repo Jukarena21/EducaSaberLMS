@@ -31,7 +31,11 @@ export async function GET(
           include: {
             course: {
               include: {
-                school: true
+                courseSchools: {
+                  select: {
+                    schoolId: true
+                  }
+                }
               }
             }
           }
@@ -43,11 +47,18 @@ export async function GET(
       return NextResponse.json({ error: 'Módulo no encontrado' }, { status: 404 });
     }
 
-    // Si es admin de colegio, verificar que el módulo pertenece a su colegio
+    // Si es admin de colegio, verificar que el módulo pertenece a su colegio o es general
     if (session.user.role === 'school_admin') {
-      const belongsToSchool = module.courseModules.some(cm => 
-        cm.course.schoolId === session.user.schoolId
-      );
+      if (!session.user.schoolId) {
+        return NextResponse.json(
+          { error: 'Usuario sin colegio asignado' },
+          { status: 400 }
+        );
+      }
+      const belongsToSchool = module.courseModules.some(cm => {
+        const courseSchoolIds = cm.course.courseSchools.map(cs => cs.schoolId);
+        return courseSchoolIds.length === 0 || courseSchoolIds.includes(session.user.schoolId!);
+      });
       if (!belongsToSchool) {
         return NextResponse.json({ error: 'No tienes permisos para ver este módulo' }, { status: 403 });
       }

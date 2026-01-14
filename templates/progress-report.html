@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe de Progreso Académico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @page {
+            size: A4;
+            margin: 0.5in;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: white;
+            color: #1f2937;
+        }
+        
+        .kpi-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .competency-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            border-left: 6px solid #3b82f6;
+        }
+        
+        .progress-bar {
+            background: #e5e7eb;
+            border-radius: 6px;
+            height: 8px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 6px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-fill.high { background: #22c55e; }
+        .progress-fill.medium { background: #f97316; }
+        .progress-fill.low { background: #ef4444; }
+        
+        .icon-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .icon-blue { background: #3b82f6; }
+        .icon-green { background: #22c55e; }
+        .icon-orange { background: #f97316; }
+        .icon-purple { background: #8b5cf6; }
+        
+        .header-gradient {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+        }
+        
+        @media print {
+            body { -webkit-print-color-adjust: exact; }
+            .kpi-card, .competency-card { 
+                break-inside: avoid;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <div class="header-gradient p-6 mb-8 rounded-lg">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-white">EducaSaber</h1>
+                <p class="text-blue-100 mt-1">Sistema de Gestión de Aprendizaje</p>
+            </div>
+            <div class="text-right text-white">
+                <h2 class="text-xl font-semibold">{{studentName}}</h2>
+                <p class="text-blue-100">{{schoolName}}</p>
+                <p class="text-sm text-blue-200">{{generationDate}}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Título Principal -->
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Informe de Progreso Académico</h1>
+        <div class="w-24 h-1 bg-blue-500 mx-auto rounded"></div>
+    </div>
+
+    <!-- Resumen Ejecutivo -->
+    <div class="mb-12">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Resumen Ejecutivo</h2>
+        <div class="grid grid-cols-2 gap-6">
+            <!-- Cursos Activos -->
+            <div class="kpi-card">
+                <div class="flex items-center">
+                    <div class="icon-circle icon-blue mr-4">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-900">{{totalCourses}}</div>
+                        <div class="text-gray-600 font-medium">Cursos Activos</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lecciones Completadas -->
+            <div class="kpi-card">
+                <div class="flex items-center">
+                    <div class="icon-circle icon-green mr-4">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-900">{{totalLessonsCompleted}}</div>
+                        <div class="text-gray-600 font-medium">Lecciones Completadas</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tiempo Invertido -->
+            <div class="kpi-card">
+                <div class="flex items-center">
+                    <div class="icon-circle icon-orange mr-4">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-900">{{totalTimeSpent}}h</div>
+                        <div class="text-gray-600 font-medium">Tiempo Invertido</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progreso Promedio -->
+            <div class="kpi-card">
+                <div class="flex items-center">
+                    <div class="icon-circle icon-purple mr-4">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-900">{{averageProgress}}%</div>
+                        <div class="text-gray-600 font-medium">Progreso Promedio</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progreso por Competencias -->
+    <div class="mb-8">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Progreso por Competencias</h2>
+        <div class="space-y-4">
+            {{#each competencies}}
+            <div class="competency-card">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-semibold text-gray-900">{{this.displayName}}</h3>
+                    <span class="text-lg font-bold text-gray-900">{{this.progressPercentage}}%</span>
+                </div>
+                <p class="text-gray-600 mb-3">{{this.completedLessons}} de {{this.totalLessons}} lecciones</p>
+                <div class="progress-bar">
+                    <div class="progress-fill {{#if (gte this.progressPercentage 80)}}high{{else if (gte this.progressPercentage 50)}}medium{{else}}low{{/if}}" 
+                         style="width: {{this.progressPercentage}}%"></div>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-12 pt-6 border-t border-gray-200 text-center">
+        <p class="text-gray-500 text-sm">Generado por EducaSaber LMS - Sistema de Gestión de Aprendizaje</p>
+    </div>
+</body>
+</html>

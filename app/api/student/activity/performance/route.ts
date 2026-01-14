@@ -19,11 +19,14 @@ export async function GET(request: NextRequest) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - parseInt(period));
 
-    // Obtener rendimiento por competencia
+    // Obtener rendimiento por competencia (solo exámenes completados)
     const competencyPerformance = await prisma.examResult.findMany({
       where: {
         userId,
-        completedAt: { gte: startDate },
+        completedAt: { 
+          not: null,
+          gte: startDate 
+        },
         ...(competencyId && {
           exam: {
             competencyId,
@@ -69,7 +72,7 @@ export async function GET(request: NextRequest) {
     const performanceMetrics = Object.entries(performanceByCompetency).map(([competencyName, data]) => ({
       competency: data.competency,
       competencyName,
-      averageScore: data.totalQuestions > 0 ? Math.round((data.totalScore / data.totalQuestions) * 100) : 0,
+      averageScore: data.examCount > 0 ? Math.round(data.totalScore / data.examCount) : 0,
       examCount: data.examCount,
       passedCount: data.passedCount,
       passRate: data.examCount > 0 ? Math.round((data.passedCount / data.examCount) * 100) : 0,
@@ -139,7 +142,7 @@ export async function GET(request: NextRequest) {
     const overallStats = {
       totalExams: competencyPerformance.length,
       averageScore: competencyPerformance.length > 0 
-        ? Math.round(competencyPerformance.reduce((sum, exam) => sum + (exam.score / exam.totalQuestions) * 100, 0) / competencyPerformance.length)
+        ? Math.round(competencyPerformance.reduce((sum, exam) => sum + exam.score, 0) / competencyPerformance.length)
         : 0,
       totalLessonsCompleted: lessonProgress.filter(l => l.status === 'completed').length,
       totalStudyTime: lessonProgress.reduce((sum, lesson) => sum + (lesson.totalTimeMinutes || 0), 0),
@@ -167,8 +170,9 @@ function calculateTrend(exams: any[]): 'improving' | 'declining' | 'stable' {
   const recent = exams.slice(0, Math.ceil(exams.length / 2));
   const older = exams.slice(Math.ceil(exams.length / 2));
   
-  const recentAvg = recent.reduce((sum, exam) => sum + (exam.score / exam.totalQuestions) * 100, 0) / recent.length;
-  const olderAvg = older.reduce((sum, exam) => sum + (exam.score / exam.totalQuestions) * 100, 0) / older.length;
+  // score ya es un porcentaje (0-100), no necesita conversión
+  const recentAvg = recent.reduce((sum, exam) => sum + exam.score, 0) / recent.length;
+  const olderAvg = older.reduce((sum, exam) => sum + exam.score, 0) / older.length;
   
   const difference = recentAvg - olderAvg;
   

@@ -1,38 +1,74 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  BookOpen, 
-  TrendingUp,
-  ArrowLeft,
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { StudentHeader } from "@/components/StudentHeader"
+import {
+  CheckCircle,
+  XCircle,
   Download,
-  Share2,
-  Eye,
-  ChevronDown,
-  ChevronUp
+  Target,
+  Clock,
+  ArrowRight,
 } from "lucide-react"
 
-interface ExamResultPageProps {
-  params: Promise<{ resultId: string }>
+interface ExamResult {
+  id: string
+  score: number
+  correctAnswers: number
+  incorrectAnswers: number
+  totalQuestions: number
+  isPassed: boolean
+  timeTakenMinutes: number
+  exam: {
+    id: string
+    title: string
+    description: string
+    competency: {
+      id: string
+      name: string
+      displayName: string
+    }
+  }
+  questions?: Array<{
+    id: string
+    text: string
+    questionImage?: string
+    optionA: string
+    optionB: string
+    optionC: string
+    optionD: string
+    optionAImage?: string
+    optionBImage?: string
+    optionCImage?: string
+    optionDImage?: string
+    userAnswer: string
+    correctAnswer: string
+    isCorrect: boolean
+    explanation: string
+    explanationImage?: string
+    lesson?: {
+      id: string
+      title: string
+      courseId: string
+      courseTitle: string
+    } | null
+  }>
 }
 
-export default function ExamResultPage({ params }: ExamResultPageProps) {
-  const router = useRouter()
+export default function ExamResultPage({ params }: { params: Promise<{ resultId: string }> }) {
   const { data: session, status } = useSession()
-  const [resultData, setResultData] = useState<any>(null)
+  const router = useRouter()
+  const [result, setResult] = useState<ExamResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showDetailedAnswers, setShowDetailedAnswers] = useState(false)
-  const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set())
+  const [activeTab, setActiveTab] = useState("resumen")
 
   useEffect(() => {
     if (status === "loading") return
@@ -48,14 +84,18 @@ export default function ExamResultPage({ params }: ExamResultPageProps) {
   const loadResult = async () => {
     try {
       const resolvedParams = await params
+      console.log('Loading result for:', resolvedParams.resultId)
       const response = await fetch(`/api/student/exams/result/${resolvedParams.resultId}`)
       
       if (!response.ok) {
-        throw new Error('Error al cargar el resultado')
+        const errorData = await response.json()
+        console.error('API error:', errorData)
+        throw new Error(errorData.error || 'Error al cargar el resultado')
       }
       
       const data = await response.json()
-      setResultData(data)
+      console.log('Result data:', data)
+      setResult(data)
     } catch (err) {
       setError('Error al cargar el resultado del examen')
       console.error('Error loading result:', err)
@@ -64,61 +104,33 @@ export default function ExamResultPage({ params }: ExamResultPageProps) {
     }
   }
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600'
-    if (score >= 60) return 'text-yellow-600'
-    return 'text-red-600'
-  }
-
-  const getScoreBadgeColor = (score: number) => {
-    if (score >= 80) return 'bg-green-100 text-green-800'
-    if (score >= 60) return 'bg-yellow-100 text-yellow-800'
-    return 'bg-red-100 text-red-800'
-  }
-
-  const toggleQuestionExpansion = (questionIndex: number) => {
-    const newExpanded = new Set(expandedQuestions)
-    if (newExpanded.has(questionIndex)) {
-      newExpanded.delete(questionIndex)
-    } else {
-      newExpanded.add(questionIndex)
-    }
-    setExpandedQuestions(newExpanded)
-  }
-
-  const getOptionLabel = (option: string) => {
-    const labels = { A: 'A', B: 'B', C: 'C', D: 'D' }
-    return labels[option as keyof typeof labels] || option
-  }
-
-  const getDifficultyColor = (level: string) => {
-    const colors = {
-      'facil': 'bg-green-100 text-green-800',
-      'intermedio': 'bg-yellow-100 text-yellow-800',
-      'dificil': 'bg-red-100 text-red-800',
-      'variable': 'bg-purple-100 text-purple-800'
-    }
-    return colors[level as keyof typeof colors] || 'bg-gray-100 text-gray-800'
+  const getNivelRendimiento = (puntaje: number) => {
+    if (puntaje >= 90) return { nivel: "Excelente", color: "text-green-600", bg: "bg-green-100" }
+    if (puntaje >= 80) return { nivel: "Bueno", color: "text-blue-600", bg: "bg-blue-100" }
+    if (puntaje >= 70) return { nivel: "Aceptable", color: "text-yellow-600", bg: "bg-yellow-100" }
+    return { nivel: "Necesita Mejora", color: "text-red-600", bg: "bg-red-100" }
   }
 
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando resultado...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando resultado...</p>
         </div>
       </div>
     )
   }
 
-  if (error || !resultData) {
+  if (error || !result) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="w-full max-w-md mx-4">
-          <CardContent className="pt-6">
-            <p className="text-center text-gray-600">{error || 'Resultado no encontrado'}</p>
-            <Button onClick={() => router.push('/estudiante')} className="w-full mt-4">
+          <CardContent className="p-6 text-center">
+            <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Error</h2>
+            <p className="text-gray-600 mb-4">{error || 'No se pudo cargar el resultado'}</p>
+            <Button onClick={() => router.push('/estudiante')} className="w-full">
               Volver al Dashboard
             </Button>
           </CardContent>
@@ -127,352 +139,278 @@ export default function ExamResultPage({ params }: ExamResultPageProps) {
     )
   }
 
+  // Preparar datos para la vista
+  // Como todos los exámenes actuales son por competencia única, usamos la competencia del examen
+  const examCompetency = result.exam.competency?.displayName || 'General'
+  const preguntasFiltradas = result.questions || []
+  
+  // Función para obtener el texto de una opción
+  const getOptionText = (pregunta: ExamResult['questions'][0], option: string) => {
+    switch(option) {
+      case 'A': return pregunta.optionA
+      case 'B': return pregunta.optionB
+      case 'C': return pregunta.optionC
+      case 'D': return pregunta.optionD
+      default: return option
+    }
+  }
+  
+  // Función para obtener la imagen de una opción
+  const getOptionImage = (pregunta: ExamResult['questions'][0], option: string) => {
+    switch(option) {
+      case 'A': return pregunta.optionAImage
+      case 'B': return pregunta.optionBImage
+      case 'C': return pregunta.optionCImage
+      case 'D': return pregunta.optionDImage
+      default: return null
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <StudentHeader 
+        title={`Resultado: ${result.exam.title}`}
+        subtitle={result.exam.competency?.displayName || 'General'}
+        showBackButton={true}
+        backUrl="/estudiante"
+      />
+
+      {/* Header de resultados */}
+      <div className="bg-gradient-to-r from-[#73A2D3] to-[#C00102] text-white py-8">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">Resultados del Examen</h1>
+              <p className="text-lg opacity-90">{result.exam.title}</p>
+              <div className="flex items-center space-x-6 mt-4 text-sm opacity-90">
+                <span>Estudiante: {session?.user?.firstName} {session?.user?.lastName}</span>
+                <span>Fecha: {new Date().toLocaleDateString()}</span>
+                <span>Duración: {result.timeTakenMinutes} min</span>
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-5xl font-bold mb-2">{result.score}%</div>
+              <div className="text-lg">Puntaje General</div>
+              <Badge
+                className={`mt-2 ${getNivelRendimiento(result.score).bg} ${getNivelRendimiento(result.score).color}`}
+              >
+                {getNivelRendimiento(result.score).nivel}
+              </Badge>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto space-y-6">
-          
-          {/* Header */}
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Resultado del Examen</h1>
-            <p className="text-gray-600">{resultData.exam.title}</p>
-          </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className={`grid w-full ${false ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            <TabsTrigger value="resumen">Resumen</TabsTrigger>
+            {/* Solo mostrar "Por Materia" si hay más de una competencia (futuro: simulacros completos) */}
+            {false && <TabsTrigger value="por-materia">Por Materia</TabsTrigger>}
+            <TabsTrigger value="preguntas">Preguntas</TabsTrigger>
+          </TabsList>
 
-          {/* Main Result Card */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl">Resumen del Resultado</CardTitle>
-                <Badge className={getScoreBadgeColor(resultData.score)}>
-                  {resultData.passed ? 'Aprobado' : 'No Aprobado'}
-                </Badge>
-              </div>
-            </CardHeader>
-            
-            <CardContent className="space-y-6">
-              {/* Score Display */}
-              <div className="text-center">
-                <div className={`text-6xl font-bold ${getScoreColor(resultData.score)} mb-2`}>
-                  {resultData.score}%
-                </div>
-                <Progress value={resultData.score} className="h-3 mb-4" />
-                <p className="text-sm text-gray-600">
-                  {resultData.correctAnswers} de {resultData.totalQuestions} preguntas correctas
-                </p>
-              </div>
+          <TabsContent value="resumen" className="space-y-6">
+            {/* Stats Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-green-600">{result.correctAnswers}</div>
+                  <div className="text-sm text-gray-600">Respuestas Correctas</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-red-600">{result.incorrectAnswers}</div>
+                  <div className="text-sm text-gray-600">Respuestas Incorrectas</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <Target className="h-8 w-8 text-blue-500 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-blue-600">{result.totalQuestions}</div>
+                  <div className="text-sm text-gray-600">Total Preguntas</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6 text-center">
+                  <Clock className="h-8 w-8 text-purple-500 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-purple-600">{result.timeTakenMinutes} min</div>
+                  <div className="text-sm text-gray-600">Tiempo Total</div>
+                </CardContent>
+              </Card>
+            </div>
 
-              {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <CheckCircle className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-blue-600">{resultData.correctAnswers}</p>
-                  <p className="text-sm text-gray-600">Correctas</p>
-                </div>
-                
-                <div className="text-center p-4 bg-red-50 rounded-lg">
-                  <XCircle className="h-8 w-8 text-red-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-red-600">
-                    {resultData.totalQuestions - resultData.correctAnswers}
-                  </p>
-                  <p className="text-sm text-gray-600">Incorrectas</p>
-                </div>
-                
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <Clock className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-green-600">{resultData.timeSpentMinutes}</p>
-                  <p className="text-sm text-gray-600">Minutos</p>
-                </div>
-              </div>
-
-              {/* Performance Message */}
-              <div className={`p-4 rounded-lg ${
-                resultData.passed 
-                  ? 'bg-green-50 border border-green-200' 
-                  : 'bg-red-50 border border-red-200'
-              }`}>
-                <div className="flex items-center space-x-2">
-                  {resultData.passed ? (
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-600" />
-                  )}
-                  <p className={`font-semibold ${
-                    resultData.passed ? 'text-green-800' : 'text-red-800'
-                  }`}>
-                    {resultData.passed 
-                      ? '¡Felicitaciones! Has aprobado el examen.'
-                      : 'No has alcanzado el puntaje mínimo requerido.'
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button 
+                className="bg-[#73A2D3] hover:bg-[#5a8bc4]"
+                onClick={async () => {
+                  try {
+                    const response = await fetch(`/api/student/exams/result/${result.id}/certificate`, {
+                      method: 'POST'
+                    })
+                    
+                    if (!response.ok) {
+                      throw new Error('Error al generar el certificado')
                     }
-                  </p>
-                </div>
-                <p className={`text-sm mt-2 ${
-                  resultData.passed ? 'text-green-700' : 'text-red-700'
-                }`}>
-                  {resultData.passed 
-                    ? `Tu puntaje de ${resultData.score}% supera el mínimo requerido de ${resultData.exam.passingScore}%.`
-                    : `Necesitas al menos ${resultData.exam.passingScore}% para aprobar. Tu puntaje fue ${resultData.score}%.`
+                    
+                    const blob = await response.blob()
+                    const url = window.URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `certificado-examen-${result.exam.title.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`
+                    document.body.appendChild(a)
+                    a.click()
+                    window.URL.revokeObjectURL(url)
+                    document.body.removeChild(a)
+                  } catch (error) {
+                    console.error('Error descargando certificado:', error)
+                    alert('Error al descargar el certificado. Por favor, intenta nuevamente.')
                   }
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Descargar Certificado
+              </Button>
+            </div>
+          </TabsContent>
 
-          {/* Exam Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Detalles del Examen</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-600">Competencia</p>
-                  <p className="font-semibold">{resultData.exam.competency || 'General'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Tipo de Examen</p>
-                  <p className="font-semibold">{resultData.exam.examType}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Completado</p>
-                  <p className="font-semibold">
-                    {new Date(resultData.completedAt).toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Tiempo Límite</p>
-                  <p className="font-semibold">{resultData.exam.timeLimitMinutes} minutos</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Competency Breakdown */}
-          {resultData.competencyBreakdown && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Rendimiento por Competencia</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {resultData.competencyBreakdown.map((comp: any, index: number) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">{comp.competency}</p>
-                        <p className="text-sm text-gray-600">
-                          {comp.correct} de {comp.total} preguntas
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold">{comp.percentage}%</p>
-                        <Progress value={comp.percentage} className="w-24 h-2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button
-              onClick={() => router.push('/estudiante')}
-              variant="outline"
-              className="flex items-center space-x-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Volver al Dashboard</span>
-            </Button>
-            
-            <Button
-              onClick={() => router.push('/estudiante/examenes')}
-              className="flex items-center space-x-2"
-            >
-              <BookOpen className="h-4 w-4" />
-              <span>Ver Más Exámenes</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              className="flex items-center space-x-2"
-            >
-              <Download className="h-4 w-4" />
-              <span>Descargar Resultado</span>
-            </Button>
-          </div>
-
-          {/* Recommendations */}
-          {!resultData.passed && (
-            <Card className="border-yellow-200 bg-yellow-50">
-              <CardHeader>
-                <CardTitle className="text-yellow-800">Recomendaciones</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-yellow-700">
-                  <p>• Revisa las lecciones relacionadas con este tema</p>
-                  <p>• Practica con más ejercicios de la misma competencia</p>
-                  <p>• Considera tomar un examen de diagnóstico para identificar áreas de mejora</p>
-                  <p>• Puedes volver a intentar este examen cuando te sientas preparado</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Detailed Answers Section */}
-          {resultData.detailedAnswers && resultData.detailedAnswers.length > 0 && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Eye className="h-5 w-5" />
-                    Revisión Detallada de Respuestas
-                  </CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowDetailedAnswers(!showDetailedAnswers)}
-                  >
-                    {showDetailedAnswers ? (
-                      <>
-                        <ChevronUp className="h-4 w-4 mr-2" />
-                        Ocultar Detalles
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="h-4 w-4 mr-2" />
-                        Ver Detalles
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-              
-              {showDetailedAnswers && (
-                <CardContent>
-                  <div className="space-y-4">
-                    {resultData.detailedAnswers.map((answer: any, index: number) => (
-                      <Card 
-                        key={answer.id} 
-                        className={`border-l-4 ${
-                          answer.isCorrect 
-                            ? 'border-l-green-500 bg-green-50/30' 
-                            : 'border-l-red-500 bg-red-50/30'
-                        }`}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-lg">Pregunta {index + 1}</span>
-                              <Badge className={getDifficultyColor(answer.difficultyLevel)}>
-                                {answer.difficultyLevel}
-                              </Badge>
-                              <Badge variant="outline">
-                                {answer.competency}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {answer.isCorrect ? (
-                                <CheckCircle className="h-5 w-5 text-green-600" />
+          <TabsContent value="preguntas" className="space-y-6">
+            {result.questions && result.questions.length > 0 && (
+              <div className="space-y-4">
+                {preguntasFiltradas.map((pregunta, index) => {
+                  const userAnswerText = getOptionText(pregunta, pregunta.userAnswer)
+                  const correctAnswerText = getOptionText(pregunta, pregunta.correctAnswer)
+                  const userAnswerImage = getOptionImage(pregunta, pregunta.userAnswer)
+                  const correctAnswerImage = getOptionImage(pregunta, pregunta.correctAnswer)
+                  
+                  return (
+                    <Card
+                      key={pregunta.id}
+                      className={`border-l-4 ${pregunta.isCorrect ? "border-l-green-500" : "border-l-red-500"}`}
+                    >
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <Badge variant="outline">{examCompetency}</Badge>
+                              {pregunta.isCorrect ? (
+                                <CheckCircle className="h-5 w-5 text-green-500" />
                               ) : (
-                                <XCircle className="h-5 w-5 text-red-600" />
+                                <XCircle className="h-5 w-5 text-red-500" />
                               )}
-                              <span className={`font-semibold ${
-                                answer.isCorrect ? 'text-green-600' : 'text-red-600'
-                              }`}>
-                                {answer.isCorrect ? 'Correcta' : 'Incorrecta'}
-                              </span>
+                            </div>
+                            <CardTitle className="text-lg">Pregunta {index + 1}</CardTitle>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {pregunta.questionImage && (
+                          <div className="mb-4">
+                            <Image
+                              src={pregunta.questionImage}
+                              alt="Imagen de la pregunta"
+                              width={600}
+                              height={300}
+                              className="rounded-lg w-full h-auto"
+                            />
+                          </div>
+                        )}
+                        <p className="text-gray-700">{pregunta.text}</p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <span className="text-sm font-medium text-gray-600">Tu respuesta:</span>
+                            <div
+                              className={`mt-1 p-3 rounded ${pregunta.isCorrect ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}
+                            >
+                              <div className="font-semibold mb-1">Opción {pregunta.userAnswer}</div>
+                              <div>{userAnswerText}</div>
+                              {userAnswerImage && (
+                                <div className="mt-2">
+                                  <Image
+                                    src={userAnswerImage}
+                                    alt="Imagen de tu respuesta"
+                                    width={200}
+                                    height={150}
+                                    className="rounded"
+                                  />
+                                </div>
+                              )}
                             </div>
                           </div>
-
-                          <div className="mb-4">
-                            <p className="font-medium mb-2">{answer.questionText}</p>
-                            {answer.questionImage && (
-                              <img 
-                                src={answer.questionImage} 
-                                alt="Imagen de la pregunta" 
-                                className="max-w-full h-auto rounded-lg mb-3"
-                              />
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            {['A', 'B', 'C', 'D'].map(option => (
-                              <div 
-                                key={option}
-                                className={`p-3 rounded-lg border-2 ${
-                                  answer.selectedOption === option
-                                    ? answer.isCorrect
-                                      ? 'border-green-500 bg-green-100'
-                                      : 'border-red-500 bg-red-100'
-                                    : answer.correctOption === option
-                                      ? 'border-green-300 bg-green-50'
-                                      : 'border-gray-200 bg-gray-50'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-semibold">{option}.</span>
-                                  {answer.selectedOption === option && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      Tu respuesta
-                                    </Badge>
-                                  )}
-                                  {answer.correctOption === option && (
-                                    <Badge className="bg-green-100 text-green-800 text-xs">
-                                      Correcta
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-sm">{answer.options[option]}</p>
-                                {answer.options[`${option}Image`] && (
-                                  <img 
-                                    src={answer.options[`${option}Image`]} 
-                                    alt={`Opción ${option}`}
-                                    className="max-w-full h-auto rounded mt-2"
+                          <div>
+                            <span className="text-sm font-medium text-gray-600">Respuesta correcta:</span>
+                            <div className="mt-1 p-3 rounded bg-green-50 text-green-800">
+                              <div className="font-semibold mb-1">Opción {pregunta.correctAnswer}</div>
+                              <div>{correctAnswerText}</div>
+                              {correctAnswerImage && (
+                                <div className="mt-2">
+                                  <Image
+                                    src={correctAnswerImage}
+                                    alt="Imagen de la respuesta correcta"
+                                    width={200}
+                                    height={150}
+                                    className="rounded"
                                   />
-                                )}
-                              </div>
-                            ))}
-                          </div>
-
-                          {answer.explanation && (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                              <h4 className="font-semibold text-blue-800 mb-2">Explicación:</h4>
-                              <p className="text-blue-700">{answer.explanation}</p>
-                              {answer.explanationImage && (
-                                <img 
-                                  src={answer.explanationImage} 
-                                  alt="Imagen de explicación" 
-                                  className="max-w-full h-auto rounded-lg mt-3"
-                                />
+                                </div>
                               )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <h4 className="font-semibold text-blue-800 mb-2">Explicación:</h4>
+                          <p className="text-blue-700 text-sm">{pregunta.explanation}</p>
+                          {pregunta.explanationImage && (
+                            <div className="mt-2">
+                              <Image
+                                src={pregunta.explanationImage}
+                                alt="Imagen de explicación"
+                                width={400}
+                                height={250}
+                                className="rounded"
+                              />
                             </div>
                           )}
+                        </div>
 
-                          <div className="flex items-center justify-between mt-4 pt-3 border-t">
-                            <div className="text-sm text-gray-600">
-                              <p>Tiempo empleado: {answer.timeSpentSeconds || 0} segundos</p>
-                              <p>Lección relacionada: {answer.lessonTitle}</p>
-                            </div>
-                            {answer.lessonUrl && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => window.open(answer.lessonUrl, '_blank')}
+                        {!pregunta.isCorrect && pregunta.lesson && (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-semibold text-yellow-800 mb-1">¿Necesitas repasar este tema?</h4>
+                                <p className="text-yellow-700 text-sm">Accede al material de estudio relacionado</p>
+                                {pregunta.lesson.courseTitle && (
+                                  <p className="text-yellow-600 text-xs mt-1">{pregunta.lesson.courseTitle} - {pregunta.lesson.title}</p>
+                                )}
+                              </div>
+                              <Button 
+                                size="sm" 
+                                className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                                onClick={() => {
+                                  if (pregunta.lesson?.courseId && pregunta.lesson?.id) {
+                                    router.push(`/estudiante/cursos/${pregunta.lesson.courseId}/leccion/${pregunta.lesson.id}`)
+                                  }
+                                }}
                               >
-                                <BookOpen className="h-4 w-4 mr-2" />
-                                Ver Lección
+                                Estudiar Tema
+                                <ArrowRight className="h-4 w-4 ml-2" />
                               </Button>
-                            )}
+                            </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-          )}
-        </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

@@ -7,7 +7,9 @@ import { ExamInterface } from "@/components/ExamInterface"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, AlertCircle } from "lucide-react"
+import { StudentHeader } from "@/components/StudentHeader"
+import { AlertCircle } from "lucide-react"
+import { BrandLoading } from "@/components/BrandLoading"
 
 interface ExamTakingPageProps {
   params: Promise<{ attemptId: string }>
@@ -39,13 +41,20 @@ export default function ExamTakingPage({ params }: ExamTakingPageProps) {
       const response = await fetch(`/api/student/exams/attempt/${resolvedParams.attemptId}`)
       
       if (!response.ok) {
-        throw new Error('Error al cargar los datos del examen')
+        const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }))
+        throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`)
       }
       
       const data = await response.json()
+      
+      if (!data.exam || !data.questions) {
+        throw new Error('Datos del examen incompletos')
+      }
+      
       setExamData(data)
     } catch (err) {
-      setError('Error al cargar el examen')
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar el examen'
+      setError(errorMessage)
       console.error('Error loading exam data:', err)
     } finally {
       setLoading(false)
@@ -53,14 +62,7 @@ export default function ExamTakingPage({ params }: ExamTakingPageProps) {
   }
 
   if (status === "loading" || loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Cargando examen...</p>
-        </div>
-      </div>
-    )
+    return <BrandLoading message="Cargando examen..." />
   }
 
   if (error) {
@@ -108,6 +110,7 @@ export default function ExamTakingPage({ params }: ExamTakingPageProps) {
       questions={examData.questions}
       attemptId={examData.attemptId}
       startedAt={examData.startedAt}
+      existingAnswers={examData.existingAnswers}
     />
   )
 }

@@ -7,9 +7,11 @@ import { requireRole } from '@/lib/rbac'
 
 const schoolSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido'),
+  type: z.enum(['school', 'company', 'government_entity', 'other']).optional().default('school'),
   city: z.string().min(1, 'La ciudad es requerida'),
   neighborhood: z.string().min(1, 'El barrio es requerido'),
   address: z.string().optional(),
+  daneCode: z.string().optional(),
   institutionType: z.enum(['publica', 'privada', 'otro']),
   academicCalendar: z.enum(['diurno', 'nocturno', 'ambos']),
   totalStudents: z.number().min(0, 'El total de estudiantes debe ser mayor o igual a 0'),
@@ -21,17 +23,14 @@ const schoolSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const gate = await requireRole(['teacher_admin', 'school_admin'])
-    if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
-
-    // Only teacher admins can see all schools
-    if (gate.session.user.role !== 'teacher_admin') {
-      return NextResponse.json(
-        { error: 'Acceso denegado' },
-        { status: 403 }
-      )
+    console.log('Schools API called')
+    
+    // Verificar autenticación básica
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
-
+    
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
@@ -66,10 +65,35 @@ export async function GET(request: NextRequest) {
         skip,
         take: limit,
         orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          city: true,
+          neighborhood: true,
+          address: true,
+          institutionType: true,
+          academicCalendar: true,
+          totalStudents: true,
+          numberOfCampuses: true,
+          yearsOfOperation: true,
+          contactEmail: true,
+          contactPhone: true,
+          activeStudentsCount: true,
+          averageStudentUsageMinutes: true,
+          createdAt: true,
+          updatedAt: true,
+          // Incluir campos de branding
+          logoUrl: true,
+          themePrimary: true,
+          themeSecondary: true,
+          themeAccent: true,
+        },
       }),
       prisma.school.count({ where: whereClause }),
     ])
 
+    console.log('Schools found:', schools.length)
     return NextResponse.json({
       schools,
       pagination: {
@@ -113,8 +137,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if daneCode is unique (if provided)
+    if (validatedData.daneCode && validatedData.daneCode.trim()) {
+      const existingDaneCode = await prisma.school.findUnique({
+        where: {
+          daneCode: validatedData.daneCode.trim(),
+        },
+      })
+
+      if (existingDaneCode) {
+        return NextResponse.json(
+          { error: 'Ya existe un colegio con ese código DANE' },
+          { status: 400 }
+        )
+      }
+    }
+
     const school = await prisma.school.create({
-      data: validatedData,
+      data: {
+        ...validatedData,
+        type: validatedData.type || 'school',
+        daneCode: validatedData.daneCode?.trim() || null,
+      },
     })
 
     return NextResponse.json(school, { status: 201 })

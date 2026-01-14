@@ -7,7 +7,9 @@ import { ExamInterface } from "@/components/ExamInterface"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, AlertCircle, Clock, BookOpen } from "lucide-react"
+import { StudentHeader } from "@/components/StudentHeader"
+import { AlertCircle, Clock, BookOpen, Loader2 } from "lucide-react"
+import { BrandLoading } from "@/components/BrandLoading"
 
 interface ExamPageProps {
   params: Promise<{ examId: string }>
@@ -59,7 +61,7 @@ export default function ExamPage({ params }: ExamPageProps) {
   }
 
   const startExam = async () => {
-    if (!examData) return
+    if (!examData || starting) return
     
     setStarting(true)
     try {
@@ -87,14 +89,7 @@ export default function ExamPage({ params }: ExamPageProps) {
   }
 
   if (status === "loading" || loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Cargando examen...</p>
-        </div>
-      </div>
-    )
+    return <BrandLoading message="Cargando examen..." />
   }
 
   if (error) {
@@ -162,6 +157,12 @@ export default function ExamPage({ params }: ExamPageProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <StudentHeader 
+        title={examData.title}
+        subtitle={examData.description}
+        showBackButton={true}
+        backUrl="/estudiante"
+      />
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <Card>
@@ -211,7 +212,7 @@ export default function ExamPage({ params }: ExamPageProps) {
               </div>
 
               {/* Last Attempt Info */}
-              {examData.lastAttempt && (
+              {examData.lastAttempt && examData.lastAttempt.completedAt && (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
@@ -247,6 +248,8 @@ export default function ExamPage({ params }: ExamPageProps) {
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       Iniciando...
                     </>
+                  ) : examData.status === 'in_progress' ? (
+                    'Continuar Examen'
                   ) : (
                     'Comenzar Examen'
                   )}

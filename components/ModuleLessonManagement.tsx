@@ -3,8 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
@@ -12,17 +10,11 @@ import { ModuleLessonData, LessonData } from '@/types/lesson';
 import { ModuleData } from '@/types/module';
 import { formatDate } from '@/lib/utils';
 import { 
-  Plus, 
   Search, 
-  Filter, 
-  Edit, 
-  Trash2, 
-  Eye,
   Clock,
   BookOpen,
   Video,
-  X,
-  Check
+  X
 } from 'lucide-react';
 
 interface ModuleLessonManagementProps {
@@ -34,14 +26,8 @@ interface ModuleLessonManagementProps {
 export function ModuleLessonManagement({ module, userRole, onClose }: ModuleLessonManagementProps) {
   const { toast } = useToast();
   const [moduleLessons, setModuleLessons] = useState<ModuleLessonData[]>([]);
-  const [availableLessons, setAvailableLessons] = useState<LessonData[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showAddLesson, setShowAddLesson] = useState(false);
-  const [selectedLessonId, setSelectedLessonId] = useState('');
-  const [selectedOrderIndex, setSelectedOrderIndex] = useState(1);
-
-  const canModify = userRole === 'teacher_admin';
 
   // Cargar lecciones del módulo
   const fetchModuleLessons = async () => {
@@ -65,111 +51,9 @@ export function ModuleLessonManagement({ module, userRole, onClose }: ModuleLess
     }
   };
 
-  // Cargar lecciones disponibles para agregar
-  const fetchAvailableLessons = async () => {
-    try {
-      const response = await fetch('/api/lessons');
-      if (response.ok) {
-        const allLessons: LessonData[] = await response.json();
-        // Filtrar lecciones que no están ya en este módulo
-        const moduleLessonIds = moduleLessons.map(ml => ml.id);
-        const available = allLessons.filter(lesson => !moduleLessonIds.includes(lesson.id));
-        setAvailableLessons(available);
-      }
-    } catch (error) {
-      console.error('Error fetching available lessons:', error);
-    }
-  };
-
   useEffect(() => {
     fetchModuleLessons();
   }, [module.id]);
-
-  useEffect(() => {
-    if (showAddLesson) {
-      fetchAvailableLessons();
-    }
-  }, [showAddLesson, moduleLessons]);
-
-  const handleAddLesson = async () => {
-    if (!selectedLessonId) {
-      toast({
-        title: 'Error',
-        description: 'Debes seleccionar una lección',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/modules/${module.id}/lessons`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          lessonId: selectedLessonId,
-          orderIndex: selectedOrderIndex,
-        }),
-      });
-
-      if (response.ok) {
-        const newLesson = await response.json();
-        setModuleLessons(prev => [...prev, newLesson]);
-        setShowAddLesson(false);
-        setSelectedLessonId('');
-        setSelectedOrderIndex(1);
-        toast({
-          title: 'Lección agregada',
-          description: 'La lección se ha agregado al módulo correctamente.',
-        });
-      } else {
-        const error = await response.json();
-        throw new Error(error.error || 'Error al agregar lección');
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Error desconocido',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemoveLesson = async (lessonId: string) => {
-    if (!confirm('¿Estás seguro de que quieres remover esta lección del módulo?')) {
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/modules/${module.id}/lessons?lessonId=${lessonId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setModuleLessons(prev => prev.filter(lesson => lesson.id !== lessonId));
-        toast({
-          title: 'Lección removida',
-          description: 'La lección se ha removido del módulo correctamente.',
-        });
-      } else {
-        const error = await response.json();
-        throw new Error(error.error || 'Error al remover lección');
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Error desconocido',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const filteredLessons = moduleLessons.filter(lesson =>
     lesson.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -187,69 +71,12 @@ export function ModuleLessonManagement({ module, userRole, onClose }: ModuleLess
           </p>
         </div>
         <div className="flex space-x-2">
-          {canModify && (
-            <Button onClick={() => setShowAddLesson(true)} className="bg-[#73A2D3]">
-              <Plus className="h-4 w-4 mr-2" />
-              Agregar Lección
-            </Button>
-          )}
           <Button variant="outline" onClick={onClose}>
             <X className="h-4 w-4 mr-2" />
             Cerrar
           </Button>
         </div>
       </div>
-
-      {/* Modal para agregar lección */}
-      {showAddLesson && (
-        <Card className="border-2 border-blue-200">
-          <CardHeader>
-            <CardTitle>Agregar Lección al Módulo</CardTitle>
-            <CardDescription>
-              Selecciona una lección existente para agregar a este módulo
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="lesson-select">Lección</Label>
-              <Select value={selectedLessonId} onValueChange={setSelectedLessonId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona una lección" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableLessons.map(lesson => (
-                    <SelectItem key={lesson.id} value={lesson.id}>
-                      {lesson.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="order-index">Orden en el módulo</Label>
-              <Input
-                id="order-index"
-                type="number"
-                min="1"
-                value={selectedOrderIndex}
-                onChange={(e) => setSelectedOrderIndex(parseInt(e.target.value) || 1)}
-                placeholder="1"
-              />
-            </div>
-
-            <div className="flex space-x-2">
-              <Button onClick={handleAddLesson} disabled={loading || !selectedLessonId}>
-                <Check className="h-4 w-4 mr-2" />
-                Agregar
-              </Button>
-              <Button variant="outline" onClick={() => setShowAddLesson(false)}>
-                Cancelar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Filtros */}
       <div className="flex items-center space-x-4">
@@ -281,9 +108,7 @@ export function ModuleLessonManagement({ module, userRole, onClose }: ModuleLess
             <p className="text-gray-500">
               {searchTerm 
                 ? 'Intenta con otros términos de búsqueda'
-                : canModify 
-                  ? 'Agrega lecciones para comenzar'
-                  : 'Este módulo aún no tiene lecciones asignadas'
+                : 'Este módulo aún no tiene lecciones asignadas'
               }
             </p>
           </CardContent>
@@ -328,18 +153,6 @@ export function ModuleLessonManagement({ module, userRole, onClose }: ModuleLess
                       </span>
                     </div>
                   </div>
-                  {canModify && (
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleRemoveLesson(lesson.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 
 interface KPIData {
@@ -33,6 +33,48 @@ interface AnalyticsData {
   error: string | null
 }
 
+interface AnalyticsFilters {
+  schoolId?: string
+  courseId?: string
+  grade?: string
+  competencyId?: string
+  minAge?: string
+  maxAge?: string
+  gender?: string
+  socioeconomicStratum?: string
+}
+
+const ANALYTICS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const analyticsCache = new Map<string, { data: AnalyticsData; timestamp: number }>()
+
+const getAnalyticsCacheKey = (filters: AnalyticsFilters): string => {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value && value !== 'all') {
+      params.append(key, value)
+    }
+  })
+  return params.toString() || 'default'
+}
+
+const getAnalyticsCacheEntry = (key: string) => {
+  const entry = analyticsCache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.timestamp > ANALYTICS_CACHE_TTL) {
+    analyticsCache.delete(key)
+    return null
+  }
+  return entry.data
+}
+
+const setAnalyticsCacheEntry = (key: string, data: AnalyticsData) => {
+  analyticsCache.set(key, { data, timestamp: Date.now() })
+}
+
+const invalidateAnalyticsCache = () => {
+  analyticsCache.clear()
+}
+
 export function useAnalytics() {
   const { data: session } = useSession()
   const [data, setData] = useState<AnalyticsData>({
@@ -49,16 +91,23 @@ export function useAnalytics() {
     loading: true,
     error: null
   })
+  
+  // Use ref to track if we've already fetched on mount
+  const hasFetchedRef = useRef(false)
 
-  const fetchAnalytics = useCallback(async (filters: {
-    schoolId?: string
-    courseId?: string
-    grade?: string
-    competencyId?: string
-    minAge?: string
-    maxAge?: string
-  } = {}) => {
+  const fetchAnalytics = useCallback(async (filters: AnalyticsFilters = {}, options: { skipCache?: boolean } = {}) => {
     if (!session?.user) return
+
+    const cacheKey = getAnalyticsCacheKey(filters)
+    
+    // Try cache first if not skipping
+    if (!options.skipCache) {
+      const cached = getAnalyticsCacheEntry(cacheKey)
+      if (cached) {
+        setData(cached)
+        return
+      }
+    }
 
     setData(prev => ({ ...prev, loading: true, error: null }))
 
@@ -71,6 +120,8 @@ export function useAnalytics() {
       if (filters.competencyId && filters.competencyId !== 'all') params.set('competencyId', filters.competencyId)
       if (filters.minAge) params.set('minAge', filters.minAge)
       if (filters.maxAge) params.set('maxAge', filters.maxAge)
+      if (filters.gender && filters.gender !== 'all') params.set('gender', filters.gender)
+      if (filters.socioeconomicStratum && filters.socioeconomicStratum !== 'all') params.set('socioeconomicStratum', filters.socioeconomicStratum)
 
       // Para school_admin, forzar el filtro por su colegio
       if (session.user.role === 'school_admin' && session.user.schoolId) {
@@ -93,20 +144,29 @@ export function useAnalytics() {
       const competencyResponse = await fetch(`/api/reports/competencies?${params.toString()}`)
       const competencyData = competencyResponse.ok ? await competencyResponse.json() : null
 
-      setData({
+      // Transformar hourly para que coincida con el formato esperado por el componente
+      const transformedHourly = (gradesData?.hourly || []).map((h: any) => ({
+        hora: h.hour,
+        estudiantes: h.count
+      }))
+
+      const newData: AnalyticsData = {
         kpis: kpisData || null,
         engagementMetrics: engagementData || null,
-        gradeSeries: gradesData?.gradeSeries || [],
-        gradeDistribution: gradesData?.gradeDistribution || [],
-        hourlyActivity: gradesData?.hourlyActivity || [],
-        schoolRanking: gradesData?.schoolRanking || [],
+        gradeSeries: gradesData?.series || [],
+        gradeDistribution: gradesData?.distribution || [],
+        hourlyActivity: transformedHourly,
+        schoolRanking: gradesData?.ranking || [],
         reportRows: competencyData?.rows || [],
         compReportRows: competencyData?.compRows || [],
-        reportSeries: gradesData?.reportSeries || [],
-        reportDistribution: gradesData?.reportDistribution || [],
+        reportSeries: gradesData?.series || [],
+        reportDistribution: gradesData?.distribution || [],
         loading: false,
         error: null
-      })
+      }
+      
+      setData(newData)
+      setAnalyticsCacheEntry(cacheKey, newData)
     } catch (error) {
       console.error('Error fetching analytics:', error)
       setData(prev => ({
@@ -118,13 +178,15 @@ export function useAnalytics() {
   }, [session?.user])
 
   useEffect(() => {
-    if (session?.user) {
-      fetchAnalytics()
+    // Only fetch once on mount if we haven't fetched yet
+    if (session?.user && !hasFetchedRef.current) {
+      hasFetchedRef.current = true
+      fetchAnalytics({}, { skipCache: false })
     }
-  }, [session?.user?.id, fetchAnalytics]) // Solo cuando cambia el ID del usuario
+  }, [session?.user?.id, fetchAnalytics]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     ...data,
-    refetch: fetchAnalytics
+    refetch: (filters?: AnalyticsFilters) => fetchAnalytics(filters || {}, { skipCache: true })
   }
 }

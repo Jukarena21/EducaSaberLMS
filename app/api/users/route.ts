@@ -73,6 +73,29 @@ export async function GET(request: NextRequest) {
               name: true,
             }
           },
+          // Datos personales y académicos
+          academicGrade: true,
+          dateOfBirth: true,
+          gender: true,
+          documentType: true,
+          documentNumber: true,
+          address: true,
+          neighborhood: true,
+          city: true,
+          contactPhone: true,
+          socioeconomicStratum: true,
+          housingType: true,
+          schoolEntryYear: true,
+          academicAverage: true,
+          repetitionHistory: true,
+          schoolSchedule: true,
+          disabilities: true,
+          specialEducationalNeeds: true,
+          medicalConditions: true,
+          homeTechnologyAccess: true,
+          homeInternetAccess: true,
+          status: true,
+          // Métricas
           totalPlatformTimeMinutes: true,
           sessionsStarted: true,
           lastSessionAt: true,
@@ -148,10 +171,12 @@ export async function POST(request: NextRequest) {
       address,
       neighborhood,
       city,
+      contactPhone,
       socioeconomicStratum,
       housingType,
       schoolEntryYear,
       academicAverage,
+      academicGrade, // Grado académico del estudiante
       areasOfDifficulty,
       areasOfStrength,
       repetitionHistory,
@@ -220,6 +245,7 @@ export async function POST(request: NextRequest) {
         lastName,
         role,
         schoolId: schoolId || null,
+        academicGrade: academicGrade || null,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         gender,
         documentType,
@@ -227,6 +253,7 @@ export async function POST(request: NextRequest) {
         address,
         neighborhood,
         city,
+        contactPhone,
         socioeconomicStratum: socioeconomicStratum ? parseInt(socioeconomicStratum) : null,
         housingType,
         schoolEntryYear: schoolEntryYear ? parseInt(schoolEntryYear) : null,
@@ -240,6 +267,7 @@ export async function POST(request: NextRequest) {
         medicalConditions,
         homeTechnologyAccess: homeTechnologyAccess || false,
         homeInternetAccess: homeInternetAccess || false,
+        status: 'active',
       },
       select: {
         id: true,
@@ -254,9 +282,84 @@ export async function POST(request: NextRequest) {
             name: true,
           }
         },
+        academicGrade: true,
+        dateOfBirth: true,
+        gender: true,
+        documentType: true,
+        documentNumber: true,
+        address: true,
+        neighborhood: true,
+        city: true,
+        contactPhone: true,
+        socioeconomicStratum: true,
+        housingType: true,
+        schoolEntryYear: true,
+        academicAverage: true,
+        areasOfDifficulty: true,
+        areasOfStrength: true,
+        repetitionHistory: true,
+        schoolSchedule: true,
+        disabilities: true,
+        specialEducationalNeeds: true,
+        medicalConditions: true,
+        homeTechnologyAccess: true,
+        homeInternetAccess: true,
+        status: true,
         createdAt: true,
       },
     })
+
+    // Si es un estudiante y tiene academicGrade, asignar automáticamente todos los cursos ICFES de ese grado
+    if (role === 'student' && academicGrade) {
+      try {
+        // Buscar todos los cursos ICFES activos del grado especificado
+        const coursesToEnroll = await prisma.course.findMany({
+          where: {
+            isIcfesCourse: true,
+            isPublished: true,
+            academicGrade: academicGrade,
+            // Si el estudiante tiene schoolId, solo asignar cursos de ese colegio (si aplica)
+            // Nota: Los cursos pueden estar asociados a múltiples colegios o ser globales
+          },
+          select: {
+            id: true,
+            title: true,
+          },
+        })
+
+        // Crear las inscripciones automáticamente
+        if (coursesToEnroll.length > 0) {
+          const enrollments = await Promise.all(
+            coursesToEnroll.map(course =>
+              prisma.courseEnrollment.upsert({
+                where: {
+                  userId_courseId: {
+                    userId: user.id,
+                    courseId: course.id,
+                  },
+                },
+                update: {
+                  isActive: true, // Reactivar si ya existía
+                },
+                create: {
+                  userId: user.id,
+                  courseId: course.id,
+                  isActive: true,
+                  enrolledAt: new Date(),
+                },
+              })
+            )
+          )
+
+          console.log(`✅ Asignados automáticamente ${enrollments.length} cursos al estudiante ${user.id} (grado ${academicGrade})`)
+        } else {
+          console.log(`ℹ️ No se encontraron cursos ICFES para el grado ${academicGrade}. El estudiante ${user.id} no tiene cursos asignados automáticamente.`)
+        }
+      } catch (enrollmentError) {
+        // No fallar la creación del usuario si hay error en la asignación de cursos
+        console.error('Error al asignar cursos automáticamente:', enrollmentError)
+      }
+    }
 
     return NextResponse.json({
       message: 'Usuario creado exitosamente',

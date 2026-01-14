@@ -126,7 +126,7 @@ export function ImageUpload({
                 <img 
                   src={preview} 
                   alt="Preview" 
-                  className="w-full h-48 object-cover rounded-lg border"
+                  className="w-full h-32 object-cover rounded-lg border"
                 />
                 <Button
                   type="button"

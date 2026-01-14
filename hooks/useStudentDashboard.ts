@@ -6,7 +6,8 @@ export interface StudentKpis {
   activeCourses: number
   examCompleted: number
   studyTimeMinutes: number
-  averageScore: number
+  averageScore: number // Promedio de puntajes (0-100%)
+  icfesScore?: number // Puntaje ICFES (0-500)
 }
 
 export interface UpcomingExamItem {
@@ -14,6 +15,8 @@ export interface UpcomingExamItem {
   title?: string
   startAt?: string
   durationMinutes?: number
+  competency?: string
+  inProgress?: boolean
 }
 
 export interface ActivityItem {

@@ -16,7 +16,9 @@ export async function GET(
     const { resultId } = await params
     const userId = session.user.id
 
-    // Obtener el resultado del examen con respuestas detalladas
+    console.log('Fetching result for:', resultId, 'user:', userId)
+    
+    // Obtener el resultado del examen con preguntas y respuestas
     const result = await prisma.examResult.findFirst({
       where: {
         id: resultId,
@@ -26,12 +28,23 @@ export async function GET(
         exam: {
           include: {
             competency: true,
-            course: true,
             examQuestions: {
               include: {
                 lesson: {
                   include: {
-                    competency: true
+                    moduleLessons: {
+                      include: {
+                        module: {
+                          include: {
+                            courseModules: {
+                              include: {
+                                course: true
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               },
@@ -42,118 +55,79 @@ export async function GET(
           }
         },
         examQuestionAnswers: {
-          include: {
-            question: {
-              include: {
-                lesson: {
-                  include: {
-                    competency: true
-                  }
-                }
-              }
-            }
-          },
-          orderBy: {
-            question: {
-              orderIndex: 'asc'
-            }
+          select: {
+            questionId: true,
+            selectedOption: true,
+            isCorrect: true
           }
         }
       }
     })
 
+    console.log('Found result:', result)
+
     if (!result) {
       return NextResponse.json({ error: 'Resultado no encontrado' }, { status: 404 })
     }
 
-    // Obtener desglose por competencia si es posible
-    let competencyBreakdown = null
-    try {
-      const competencyStats = await prisma.$queryRaw`
-        SELECT 
-          c.name as competency,
-          COUNT(eq.id) as total,
-          SUM(CASE WHEN ea.selectedOptionId = qo.id AND qo.isCorrect = 1 THEN 1 ELSE 0 END) as correct
-        FROM ExamResult er
-        JOIN Exam e ON er.examId = e.id
-        JOIN ExamQuestion eq ON e.id = eq.examId
-        JOIN Question q ON eq.questionId = q.id
-        JOIN Lesson l ON q.lessonId = l.id
-        JOIN ModuleLesson ml ON l.id = ml.lessonId
-        JOIN Module m ON ml.moduleId = m.id
-        JOIN Competency c ON m.competencyId = c.id
-        LEFT JOIN ExamAnswer ea ON er.id = ea.attemptId AND q.id = ea.questionId
-        LEFT JOIN QuestionOption qo ON ea.selectedOptionId = qo.id
-        WHERE er.id = ${resultId}
-        GROUP BY c.id, c.name
-        HAVING total > 0
-      ` as Array<{ competency: string; total: number; correct: number }>
-
-      competencyBreakdown = competencyStats.map(stat => ({
-        competency: stat.competency,
-        total: Number(stat.total),
-        correct: Number(stat.correct),
-        percentage: Math.round((Number(stat.correct) / Number(stat.total)) * 100)
-      }))
-    } catch (error) {
-      console.error('Error calculating competency breakdown:', error)
-      // Si hay error, simplemente no incluir el desglose
-    }
-
-    // Preparar respuestas detalladas con retroalimentación
-    const detailedAnswers = result.examQuestionAnswers.map(answer => {
-      const question = result.exam.examQuestions.find(q => q.id === answer.questionId)
-      if (!question) return null
-
+    // Procesar preguntas con respuestas del estudiante
+    const questions = result.exam.examQuestions.map(examQuestion => {
+      const studentAnswer = result.examQuestionAnswers.find(
+        answer => answer.questionId === examQuestion.id
+      )
+      
+      // Obtener información de la lección relacionada
+      const lesson = examQuestion.lesson
+      const moduleLesson = lesson?.moduleLessons?.[0]
+      const courseModule = moduleLesson?.module?.courseModules?.[0]
+      const course = courseModule?.course
+      
       return {
-        id: answer.id,
-        questionId: answer.questionId,
-        questionText: question.questionText,
-        questionImage: question.questionImage,
-        questionType: question.questionType,
-        options: {
-          A: question.optionA,
-          B: question.optionB,
-          C: question.optionC,
-          D: question.optionD,
-          AImage: question.optionAImage,
-          BImage: question.optionBImage,
-          CImage: question.optionCImage,
-          DImage: question.optionDImage,
-        },
-        correctOption: question.correctOption,
-        explanation: question.explanation,
-        explanationImage: question.explanationImage,
-        selectedOption: answer.selectedOption,
-        isCorrect: answer.isCorrect,
-        timeSpentSeconds: answer.timeSpentSeconds,
-        difficultyLevel: question.difficultyLevel,
-        competency: question.lesson?.competency?.displayName || 'General',
-        lessonTitle: question.lesson?.title || 'Sin lección asociada',
-        lessonUrl: question.lessonUrl
+        id: examQuestion.id,
+        text: examQuestion.questionText,
+        questionImage: examQuestion.questionImage,
+        optionA: examQuestion.optionA,
+        optionB: examQuestion.optionB,
+        optionC: examQuestion.optionC,
+        optionD: examQuestion.optionD,
+        optionAImage: examQuestion.optionAImage,
+        optionBImage: examQuestion.optionBImage,
+        optionCImage: examQuestion.optionCImage,
+        optionDImage: examQuestion.optionDImage,
+        userAnswer: studentAnswer?.selectedOption || 'No respondida',
+        correctAnswer: examQuestion.correctOption,
+        isCorrect: studentAnswer?.isCorrect || false,
+        explanation: examQuestion.explanation || 'Sin explicación disponible',
+        explanationImage: examQuestion.explanationImage,
+        lesson: lesson ? {
+          id: lesson.id,
+          title: lesson.title,
+          courseId: course?.id,
+          courseTitle: course?.title
+        } : null
       }
-    }).filter(Boolean)
+    })
 
     return NextResponse.json({
       id: result.id,
       score: result.score,
-      passed: result.passed,
       correctAnswers: result.correctAnswers,
+      incorrectAnswers: result.incorrectAnswers,
       totalQuestions: result.totalQuestions,
-      timeSpentMinutes: result.timeSpentMinutes,
+      isPassed: result.isPassed,
+      timeTakenMinutes: result.timeTakenMinutes,
       completedAt: result.completedAt,
       exam: {
         id: result.exam.id,
         title: result.exam.title,
         description: result.exam.description,
-        examType: result.exam.examType,
-        passingScore: result.exam.passingScore,
-        timeLimitMinutes: result.exam.timeLimitMinutes,
-        competency: result.exam.competency?.name || 'General',
-        course: result.exam.course?.title || 'General'
+        competency: {
+          id: result.exam.competency?.id,
+          name: result.exam.competency?.name,
+          displayName: result.exam.competency?.displayName
+        }
       },
-      competencyBreakdown,
-      detailedAnswers
+      questions: questions
     })
 
   } catch (error) {

@@ -1,6 +1,27 @@
 import { useState, useEffect } from 'react';
 import { CourseData, CourseFormData, CourseFilters } from '@/types/course';
 
+const COURSE_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+const courseCache = new Map<string, { data: CourseData[]; timestamp: number }>();
+
+const getCacheEntry = (key: string) => {
+  const entry = courseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > COURSE_CACHE_TTL) {
+    courseCache.delete(key);
+    return null;
+  }
+  return entry;
+};
+
+const setCacheEntry = (key: string, data: CourseData[]) => {
+  courseCache.set(key, { data, timestamp: Date.now() });
+};
+
+const invalidateCourseCache = () => {
+  courseCache.clear();
+};
+
 export function useCourses() {
   const [courses, setCourses] = useState<CourseData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -14,18 +35,30 @@ export function useCourses() {
     if (filters.schoolId) params.append('schoolId', filters.schoolId);
     if (filters.competencyId) params.append('competencyId', filters.competencyId);
     if (filters.year) params.append('year', filters.year.toString());
+    if (filters.isIcfesCourse !== undefined) params.append('isIcfesCourse', filters.isIcfesCourse.toString());
     
     const queryString = params.toString();
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   };
 
   // Obtener cursos
-  const fetchCourses = async (newFilters?: CourseFilters) => {
+  const fetchCourses = async (newFilters?: CourseFilters, options: { skipCache?: boolean } = {}) => {
+    const activeFilters = newFilters ?? filters;
+    const url = buildUrl('/api/courses', activeFilters);
+    const cacheKey = url;
+
+    if (!options.skipCache) {
+      const cacheEntry = getCacheEntry(cacheKey);
+      if (cacheEntry) {
+        setCourses(cacheEntry.data);
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
     
     try {
-      const url = buildUrl('/api/courses', newFilters || filters);
       const response = await fetch(url);
       
       if (!response.ok) {
@@ -35,6 +68,7 @@ export function useCourses() {
       
       const data = await response.json();
       setCourses(data);
+      setCacheEntry(cacheKey, data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -63,6 +97,7 @@ export function useCourses() {
       
       const newCourse = await response.json();
       setCourses(prev => [...prev, newCourse]);
+      invalidateCourseCache();
       return newCourse;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -95,6 +130,7 @@ export function useCourses() {
       setCourses(prev => prev.map(course => 
         course.id === id ? updatedCourse : course
       ));
+      invalidateCourseCache();
       return updatedCourse;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -120,6 +156,7 @@ export function useCourses() {
       }
       
       setCourses(prev => prev.filter(course => course.id !== id));
+      invalidateCourseCache();
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -155,18 +192,19 @@ export function useCourses() {
   // Aplicar filtros
   const applyFilters = (newFilters: CourseFilters) => {
     setFilters(newFilters);
-    fetchCourses(newFilters);
+    fetchCourses(newFilters, { skipCache: true });
   };
 
   // Limpiar filtros
   const clearFilters = () => {
     setFilters({});
-    fetchCourses({});
+    fetchCourses({}, { skipCache: true });
   };
 
   // Cargar cursos al montar el hook
   useEffect(() => {
-    fetchCourses();
+    // Try cache first, only fetch if no cached data
+    fetchCourses({}, { skipCache: false });
   }, []);
 
   return {

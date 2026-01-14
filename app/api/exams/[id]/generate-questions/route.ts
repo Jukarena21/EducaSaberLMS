@@ -54,6 +54,7 @@ export async function POST(
 
     let totalQuestions = 0
     const questionsPerModule = exam.questionsPerModule
+    const isIcfesExam = exam.isIcfesExam || exam.course?.isIcfesCourse
 
     // Obtener módulos incluidos
     const includedModules = exam.includedModules ? JSON.parse(exam.includedModules) : []
@@ -77,13 +78,26 @@ export async function POST(
       const module = courseModule.module
       
       // Obtener todas las preguntas de las lecciones del módulo
-      const allQuestions = []
+      const allQuestions: any[] = []
       for (const moduleLesson of module.moduleLessons) {
         allQuestions.push(...moduleLesson.lesson.lessonQuestions)
       }
 
-      // Seleccionar preguntas aleatorias
-      const shuffled = allQuestions.sort(() => 0.5 - Math.random())
+      // Seleccionar preguntas elegibles según usage y tipo
+      const eligibleQuestions = allQuestions.filter(question => {
+        // Solo preguntas marcadas para examen o ambos (o sin usage por compatibilidad hacia atrás)
+        const usage = (question as any).usage || 'lesson'
+        const allowedForExam = usage === 'exam' || usage === 'both'
+        if (!allowedForExam) return false
+
+        // Si es examen ICFES, solo opción múltiple
+        if (isIcfesExam) {
+          return question.questionType === 'multiple_choice'
+        }
+        return true
+      })
+
+      const shuffled = eligibleQuestions.sort(() => 0.5 - Math.random())
       const selectedQuestions = shuffled.slice(0, questionsPerModule)
 
       // Crear preguntas del examen

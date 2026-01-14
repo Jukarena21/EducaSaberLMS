@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reporte Detallado de Estudiantes</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @page {
+      size: A4;
+      margin: 0.2in;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      font-size: 10px;
+      color: #333;
+      background: white;
+      padding: 20px;
+    }
+
+    .student-page {
+      width: 100%;
+      min-height: 100vh;
+      page-break-after: always;
+      padding: 15px;
+      background: white;
+    }
+
+    .student-page:last-child {
+      page-break-after: auto;
+    }
+
+    .kpi-card {
+      background: linear-gradient(135deg, var(--grad-start), var(--grad-end));
+      border-radius: 8px;
+      padding: 12px;
+      color: white;
+      page-break-inside: avoid;
+    }
+
+    .section {
+      margin-bottom: 20px;
+      page-break-inside: avoid;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #1f2937;
+      margin-bottom: 10px;
+      padding-bottom: 5px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      page-break-inside: avoid;
+    }
+
+    table th, table td {
+      padding: 6px;
+      text-align: left;
+      border: 1px solid #e5e7eb;
+      font-size: 9px;
+    }
+
+    table th {
+      background: #f3f4f6;
+      font-weight: bold;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 20px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      transition: width 0.3s;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 8px;
+      font-weight: bold;
+    }
+
+    .badge-excelente { background: #10b981; color: white; }
+    .badge-bueno { background: #3b82f6; color: white; }
+    .badge-mejorable { background: #f59e0b; color: white; }
+    .badge-requiere_atencion { background: #ef4444; color: white; }
+
+    .risk-factor {
+      color: #dc2626;
+      font-size: 9px;
+      margin: 3px 0;
+    }
+
+    svg {
+      page-break-inside: avoid;
+    }
+  </style>
+</head>
+<body>
+  {{#each reports}}
+  <div class="student-page">
+    <!-- Header -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #C00102;">
+      <div>
+        <h1 style="font-size: 18px; font-weight: bold; color: #1f2937; margin-bottom: 5px;">{{student.name}}</h1>
+        <p style="font-size: 10px; color: #6b7280;">{{student.email}} | {{student.group}} | {{student.school}}</p>
+      </div>
+      <div>
+        {{#if (eq status 'excelente')}}
+        <span class="badge badge-excelente">Excelente</span>
+        {{else if (eq status 'bueno')}}
+        <span class="badge badge-bueno">Bueno</span>
+        {{else if (eq status 'mejorable')}}
+        <span class="badge badge-mejorable">Mejorable</span>
+        {{else}}
+        <span class="badge badge-requiere_atencion">Requiere Atención</span>
+        {{/if}}
+      </div>
+    </div>
+
+    <!-- KPIs Principales -->
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
+      <div class="kpi-card" style="--grad-start: #dbeafe; --grad-end: #bfdbfe;">
+        <div style="font-size: 24px; font-weight: bold; color: #1e40af;">{{averageScore}}</div>
+        <div style="font-size: 10px; color: #1e40af; margin-top: 5px;">Promedio General</div>
+        <div style="font-size: 8px; color: #3b82f6; margin-top: 2px;">Rendimiento académico</div>
+      </div>
+      <div class="kpi-card" style="--grad-start: #dcfce7; --grad-end: #bbf7d0;">
+        <div style="font-size: 24px; font-weight: bold; color: #166534;">{{totalExams}}</div>
+        <div style="font-size: 10px; color: #166534; margin-top: 5px;">Exámenes Realizados</div>
+        <div style="font-size: 8px; color: #22c55e; margin-top: 2px;">Total de evaluaciones</div>
+      </div>
+      <div class="kpi-card" style="--grad-start: #f3e8ff; --grad-end: #e9d5ff;">
+        <div style="font-size: 24px; font-weight: bold; color: #6b21a8;">{{totalStudyTimeHours}}h</div>
+        <div style="font-size: 10px; color: #6b21a8; margin-top: 5px;">Tiempo de Estudio</div>
+        <div style="font-size: 8px; color: #a855f7; margin-top: 2px;">Horas totales</div>
+      </div>
+      <div class="kpi-card" style="--grad-start: #fed7aa; --grad-end: #fdba74;">
+        <div style="font-size: 24px; font-weight: bold; color: #9a3412;">{{averageCourseProgress}}%</div>
+        <div style="font-size: 10px; color: #9a3412; margin-top: 5px;">Progreso Promedio</div>
+        <div style="font-size: 8px; color: #f97316; margin-top: 2px;">En cursos activos</div>
+      </div>
+    </div>
+
+    <!-- Métricas de Rendimiento y Factores de Riesgo -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+      <div class="section" style="background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
+        <div class="section-title">Métricas de Rendimiento</div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+          <span style="font-size: 9px; color: #6b7280;">Tasa de Aprobación</span>
+          <span class="badge {{#if (gte passRate 70)}}badge-excelente{{else if (gte passRate 50)}}badge-mejorable{{else}}badge-requiere_atencion{{/if}}">{{passRate}}%</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+          <span style="font-size: 9px; color: #6b7280;">Cursos Completados</span>
+          <span style="font-weight: bold;">{{completedCourses}}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+          <span style="font-size: 9px; color: #6b7280;">Cursos Activos</span>
+          <span style="font-weight: bold;">{{activeCourses}}</span>
+        </div>
+        {{#if lastActivity}}
+        <div style="display: flex; justify-content: space-between;">
+          <span style="font-size: 9px; color: #6b7280;">Última Actividad</span>
+          <span style="font-size: 8px; color: #9ca3af;">{{formatDate lastActivity}}</span>
+        </div>
+        {{/if}}
+      </div>
+
+      {{#if riskFactors.length}}
+      <div class="section" style="background: #fef2f2; padding: 12px; border-radius: 8px; border: 2px solid #fecaca;">
+        <div class="section-title" style="color: #dc2626;">Factores de Riesgo</div>
+        <ul style="list-style: none; padding: 0;">
+          {{#each riskFactors}}
+          <li class="risk-factor">• {{this}}</li>
+          {{/each}}
+        </ul>
+      </div>
+      {{/if}}
+    </div>
+
+    <!-- Competencias -->
+    {{#if competencyPerformance.length}}
+    <div class="section" style="margin-bottom: 20px;">
+      <div class="section-title">Rendimiento por Competencia</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div>
+          {{{radarChart competencyPerformance}}}
+        </div>
+        <div>
+          <table>
+            <thead>
+              <tr>
+                <th>Competencia</th>
+                <th>Promedio</th>
+                <th>Exámenes</th>
+                <th>Aprobación</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each competencyPerformance}}
+              <tr>
+                <td style="font-weight: bold;">{{competencyName}}</td>
+                <td>
+                  <span class="badge {{#if (gte averageScore 80)}}badge-excelente{{else if (gte averageScore 70)}}badge-bueno{{else if (gte averageScore 60)}}badge-mejorable{{else}}badge-requiere_atencion{{/if}}">
+                    {{averageScore}}
+                  </span>
+                </td>
+                <td>{{examsCount}}</td>
+                <td>{{passRate}}%</td>
+              </tr>
+              <tr>
+                <td colspan="4" style="padding: 4px;">
+                  <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{averageScore}}%;"></div>
+                  </div>
+                </td>
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {{/if}}
+
+    <!-- Evolución Mensual -->
+    {{#if monthlyEvolution.length}}
+    <div class="section" style="margin-bottom: 20px;">
+      <div class="section-title">Evolución Mensual de Rendimiento</div>
+      {{{lineChart monthlyEvolution}}}
+    </div>
+    {{/if}}
+
+    <!-- Exámenes -->
+    {{#if examHistory.length}}
+    <div class="section" style="margin-bottom: 20px;">
+      <div class="section-title">Historial de Exámenes</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Examen</th>
+            <th>Competencia</th>
+            <th>Calificación</th>
+            <th>Estado</th>
+            <th>Correctas</th>
+            <th>Fecha</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each examHistory}}
+          <tr style="background: {{#if isPassed}}#f0fdf4{{else}}#fef2f2{{/if}};">
+            <td>{{examTitle}}</td>
+            <td>{{competencyName}}</td>
+            <td style="font-weight: bold; color: {{#if (gte score 80)}}#10b981{{else if (gte score 70)}}#3b82f6{{else if (gte score 60)}}#f59e0b{{else}}#ef4444{{/if}};">{{score}}</td>
+            <td>
+              <span class="badge {{#if isPassed}}badge-excelente{{else}}badge-requiere_atencion{{/if}}">
+                {{#if isPassed}}Aprobado{{else}}No Aprobado{{/if}}
+              </span>
+            </td>
+            <td>{{correctAnswers}} / {{totalQuestions}}</td>
+            <td style="font-size: 8px;">{{formatDate completedAt}}</td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+    {{/if}}
+
+    <!-- Cursos -->
+    {{#if coursesDetail.length}}
+    <div class="section" style="margin-bottom: 20px;">
+      <div class="section-title">Cursos Inscritos</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Curso</th>
+            <th>Competencia</th>
+            <th>Progreso</th>
+            <th>Lecciones</th>
+            <th>Tiempo</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each coursesDetail}}
+          <tr>
+            <td style="font-weight: bold;">{{courseTitle}}</td>
+            <td>{{competencyName}}</td>
+            <td>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: {{progressPercentage}}%;"></div>
+              </div>
+              <span style="font-size: 8px; margin-top: 2px; display: block;">{{progressPercentage}}%</span>
+            </td>
+            <td>{{completedLessons}} / {{totalLessons}}</td>
+            <td>{{timeSpentHours}}h</td>
+            <td>
+              <span class="badge {{#if (gte progressPercentage 100)}}badge-excelente{{else}}badge-bueno{{/if}}">
+                {{#if (gte progressPercentage 100)}}Completado{{else}}En progreso{{/if}}
+              </span>
+            </td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+    {{/if}}
+
+    <!-- Footer -->
+    <div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 8px; color: #9ca3af;">
+      Reporte generado el {{../generationDate}} | EducaSaber LMS
+    </div>
+  </div>
+  {{/each}}
+</body>
+</html>

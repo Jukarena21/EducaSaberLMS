@@ -68,13 +68,8 @@ export function useNotifications(): UseNotificationsReturn {
         )
       );
 
-      // Actualizar estadísticas
-      if (stats) {
-        setStats(prev => prev ? {
-          ...prev,
-          unread: Math.max(0, prev.unread - 1),
-        } : null);
-      }
+      // Refrescar estadísticas desde el servidor para asegurar precisión
+      await fetchNotifications();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
@@ -99,13 +94,8 @@ export function useNotifications(): UseNotificationsReturn {
         }))
       );
 
-      // Actualizar estadísticas
-      if (stats) {
-        setStats(prev => prev ? {
-          ...prev,
-          unread: 0,
-        } : null);
-      }
+      // Refrescar estadísticas desde el servidor para asegurar precisión
+      await fetchNotifications();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }
@@ -122,17 +112,10 @@ export function useNotifications(): UseNotificationsReturn {
       }
 
       // Actualizar el estado local
-      const deletedNotification = notifications.find(n => n.id === id);
       setNotifications(prev => prev.filter(notification => notification.id !== id));
 
-      // Actualizar estadísticas
-      if (stats && deletedNotification) {
-        setStats(prev => prev ? {
-          ...prev,
-          total: prev.total - 1,
-          unread: deletedNotification.isRead ? prev.unread : Math.max(0, prev.unread - 1),
-        } : null);
-      }
+      // Refrescar estadísticas desde el servidor para asegurar precisión
+      await fetchNotifications();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     }

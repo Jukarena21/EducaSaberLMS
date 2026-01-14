@@ -31,12 +31,35 @@ export async function GET(request: NextRequest) {
     if (competencyId) whereExam.competencyId = competencyId
     if (courseId) whereExam.id = courseId // not ideal, but allows direct exam selection if needed
     if (academicGrade) whereCourse.academicGrade = academicGrade
-    if (schoolId) whereCourse.schoolId = schoolId
+    if (schoolId) {
+      whereCourse.courseSchools = {
+        some: {
+          schoolId: schoolId
+        }
+      }
+    }
 
     const results = await prisma.examResult.findMany({
       where: whereER,
       include: {
-        exam: { include: { competency: true, course: { where: Object.keys(whereCourse).length ? whereCourse : undefined, select: { id: true, title: true, schoolId: true, academicGrade: true } } } },
+        exam: { 
+          include: { 
+            competency: true, 
+            course: { 
+              where: Object.keys(whereCourse).length ? whereCourse : undefined, 
+              select: { 
+                id: true, 
+                title: true, 
+                academicGrade: true,
+                courseSchools: {
+                  select: {
+                    schoolId: true
+                  }
+                }
+              } 
+            } 
+          } 
+        },
         user: { select: { id: true } }
       }
     })
@@ -45,7 +68,10 @@ export async function GET(request: NextRequest) {
       if (competencyId && r.exam?.competencyId !== competencyId) return false
       if (courseId && r.exam?.courseId !== courseId) return false
       if (academicGrade && r.exam?.course?.academicGrade !== academicGrade) return false
-      if (schoolId && r.exam?.course?.schoolId !== schoolId) return false
+      if (schoolId) {
+        const courseSchoolIds = r.exam?.course?.courseSchools?.map(cs => cs.schoolId) || []
+        if (!courseSchoolIds.includes(schoolId)) return false
+      }
       return true
     })
 
@@ -53,7 +79,11 @@ export async function GET(request: NextRequest) {
     type Agg = { sum: number; count: number; pass: number }
     const passThreshold = 70
     const byKey = new Map<string, Agg>()
-    const keyOf = (r: typeof filtered[number]) => `${r.exam?.course?.schoolId||'NA'}|${r.exam?.course?.id||'NA'}|${r.exam?.competency?.id||'NA'}`
+    const keyOf = (r: typeof filtered[number]) => {
+      const courseSchoolIds = r.exam?.course?.courseSchools?.map(cs => cs.schoolId) || []
+      const primarySchoolId = courseSchoolIds.length > 0 ? courseSchoolIds[0] : 'NA'
+      return `${primarySchoolId}|${r.exam?.course?.id||'NA'}|${r.exam?.competency?.id||'NA'}`
+    }
     filtered.forEach(r => {
       const k = keyOf(r)
       if (!byKey.has(k)) byKey.set(k, { sum: 0, count: 0, pass: 0 })

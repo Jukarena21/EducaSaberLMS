@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { yearToAcademicGrade, academicGradeToYear } from '@/lib/academicGrades';
 
 const questionUpdateSchema = z.object({
   lessonId: z.string().optional().or(z.literal('')),
@@ -11,6 +12,9 @@ const questionUpdateSchema = z.object({
   questionText: z.string().min(1, 'El enunciado es requerido'),
   questionImage: z.string().url().optional().or(z.literal('')),
   questionType: z.enum(['multiple_choice', 'true_false', 'fill_blank', 'matching', 'essay']).default('multiple_choice'),
+
+  // Uso de la pregunta dentro del banco
+  usage: z.enum(['lesson', 'exam', 'both']).default('lesson'),
   
   // Opciones de respuesta
   optionA: z.string().min(1, 'La opción A es requerida'),
@@ -30,6 +34,7 @@ const questionUpdateSchema = z.object({
   orderIndex: z.number().int().min(0),
   difficultyLevel: z.enum(['facil', 'medio', 'dificil']).default('medio'),
   timeLimit: z.number().int().min(1).optional(),
+  year: z.number().min(1).max(11).optional(), // Año escolar (1-11) solo para preguntas ICFES
 });
 
 // GET - Obtener pregunta específica
@@ -70,6 +75,11 @@ export async function GET(
                                 name: true,
                                 displayName: true,
                               }
+                            },
+                            courseSchools: {
+                              select: {
+                                schoolId: true
+                              }
                             }
                           }
                         }
@@ -91,12 +101,19 @@ export async function GET(
       );
     }
 
-    // Si es admin de colegio, verificar que la pregunta pertenece a su colegio
+    // Si es admin de colegio, verificar que la pregunta pertenece a su colegio o es general
     if (session.user.role === 'school_admin') {
+      if (!session.user.schoolId) {
+        return NextResponse.json(
+          { error: 'Usuario sin colegio asignado' },
+          { status: 400 }
+        );
+      }
       const hasAccess = question.lesson.moduleLessons.some(ml => 
-        ml.module.courseModules.some(cm => 
-          cm.course.schoolId === session.user.schoolId
-        )
+        ml.module.courseModules.some(cm => {
+          const courseSchoolIds = cm.course.courseSchools?.map(cs => cs.schoolId) || [];
+          return courseSchoolIds.length === 0 || courseSchoolIds.includes(session.user.schoolId!);
+        })
       );
       if (!hasAccess) {
         return NextResponse.json(
@@ -112,6 +129,13 @@ export async function GET(
     const firstCourseModule = module?.courseModules[0];
     const course = firstCourseModule?.course;
     const competency = course?.competency;
+
+    // Convertir academicGrade a year si existe (usar any temporalmente hasta que se regenere Prisma)
+    const questionWithGrade = question as any;
+    let year: number | undefined = undefined;
+    if (questionWithGrade.academicGrade) {
+      year = academicGradeToYear(questionWithGrade.academicGrade) || undefined;
+    }
 
     const transformedQuestion = {
       id: question.id,
@@ -140,14 +164,16 @@ export async function GET(
       orderIndex: question.orderIndex,
       difficultyLevel: question.difficultyLevel,
       timeLimit: question.timeLimit,
+      academicGrade: questionWithGrade.academicGrade,
+      year: year,
       
-      lesson: {
+      lesson: question.lesson ? {
         id: question.lesson.id,
         title: question.lesson.title,
         modules: module ? [{
           moduleId: module.id,
           moduleTitle: module.title,
-          orderIndex: firstModuleLesson.orderIndex,
+          orderIndex: 0, // orderIndex no está disponible en el select actual
           course: course ? {
             id: course.id,
             title: course.title,
@@ -161,7 +187,7 @@ export async function GET(
             name: competency.name
           } : undefined
         }] : []
-      },
+      } : null,
       createdAt: question.createdAt,
       updatedAt: question.updatedAt
     };
@@ -211,12 +237,52 @@ export async function PUT(
       );
     }
 
-    // Validate if provided
-    if (validatedData.lessonId) {
-      const lesson = await prisma.lesson.findUnique({ where: { id: validatedData.lessonId } });
-      if (!lesson) {
-        return NextResponse.json({ error: 'La lección especificada no existe' }, { status: 400 });
+    const targetLessonId = validatedData.lessonId || existingQuestion.lessonId
+    let lessonContext: any = null
+    if (targetLessonId) {
+      lessonContext = await prisma.lesson.findUnique({
+        where: { id: targetLessonId },
+        include: {
+          moduleLessons: {
+            include: {
+              module: {
+                include: {
+                  courseModules: {
+                    include: {
+                      course: {
+                        select: {
+                          id: true,
+                          isIcfesCourse: true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
+      if (!lessonContext) {
+        return NextResponse.json({ error: 'La lección especificada no existe' }, { status: 400 })
       }
+    }
+
+    const belongsToIcfesCourse = lessonContext?.moduleLessons?.some((ml: any) =>
+      ml.module.courseModules.some((cm: any) => cm.course?.isIcfesCourse)
+    )
+
+    if (belongsToIcfesCourse && validatedData.questionType !== 'multiple_choice') {
+      return NextResponse.json(
+        { error: 'Las lecciones ICFES solo permiten preguntas de opción múltiple' },
+        { status: 400 }
+      )
+    }
+
+    // Convertir year a academicGrade si se proporciona
+    let academicGrade: string | null = null;
+    if (validatedData.year) {
+      academicGrade = yearToAcademicGrade(validatedData.year) || null;
     }
 
     const question = await prisma.lessonQuestion.update({
@@ -228,6 +294,7 @@ export async function PUT(
         questionText: validatedData.questionText,
         questionImage: validatedData.questionImage || null,
         questionType: validatedData.questionType,
+        usage: validatedData.usage,
         
         // Opciones de respuesta
         optionA: validatedData.optionA,
@@ -247,6 +314,8 @@ export async function PUT(
         orderIndex: validatedData.orderIndex,
         difficultyLevel: validatedData.difficultyLevel,
         timeLimit: validatedData.timeLimit || null,
+        // @ts-ignore - academicGrade será agregado después de regenerar Prisma
+        academicGrade: academicGrade !== null ? academicGrade : undefined, // Solo actualizar si se proporciona
       },
       include: {
         lesson: {
@@ -271,6 +340,11 @@ export async function PUT(
                                 name: true,
                                 displayName: true,
                               }
+                            },
+                            courseSchools: {
+                              select: {
+                                schoolId: true
+                              }
                             }
                           }
                         }
@@ -286,11 +360,18 @@ export async function PUT(
     });
 
     // Transformar respuesta
-    const firstModuleLesson = question.lesson.moduleLessons[0];
+    const firstModuleLesson = question.lesson?.moduleLessons?.[0];
     const module = firstModuleLesson?.module;
-    const firstCourseModule = module?.courseModules[0];
+    const firstCourseModule = module?.courseModules?.[0];
     const course = firstCourseModule?.course;
     const competency = course?.competency;
+
+    // Convertir academicGrade a year si existe (usar any temporalmente hasta que se regenere Prisma)
+    const questionWithGrade3 = question as any;
+    let year3: number | undefined = undefined;
+    if (questionWithGrade3.academicGrade) {
+      year3 = academicGradeToYear(questionWithGrade3.academicGrade) || undefined;
+    }
 
     const transformedQuestion = {
       id: question.id,
@@ -319,14 +400,16 @@ export async function PUT(
       orderIndex: question.orderIndex,
       difficultyLevel: question.difficultyLevel,
       timeLimit: question.timeLimit,
+      academicGrade: questionWithGrade3.academicGrade,
+      year: year3,
       
-      lesson: {
+      lesson: question.lesson ? {
         id: question.lesson.id,
         title: question.lesson.title,
         modules: module ? [{
           moduleId: module.id,
           moduleTitle: module.title,
-          orderIndex: firstModuleLesson.orderIndex,
+          orderIndex: 0, // orderIndex no está disponible en el select actual
           course: course ? {
             id: course.id,
             title: course.title,
@@ -340,7 +423,7 @@ export async function PUT(
             name: competency.name
           } : undefined
         }] : []
-      },
+      } : null,
       createdAt: question.createdAt,
       updatedAt: question.updatedAt
     };

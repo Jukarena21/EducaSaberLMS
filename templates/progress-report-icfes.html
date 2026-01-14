@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe de Progreso Académico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @page {
+            size: A4;
+            margin: 0.3in;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: white;
+            color: #1f2937;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+        
+        .score-card-uniform {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 8px 12px;
+            text-align: center;
+            font-weight: bold;
+            width: 80px;
+            height: 70px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            margin: 0 auto;
+        }
+        
+        .score-card-uniform.general { 
+            border-color: #1e40af; 
+            background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+        }
+        
+        .score-card-uniform.icfes { 
+            border-color: #dc2626; 
+            background: linear-gradient(135deg, #fecaca, #fca5a5);
+            color: #dc2626;
+        }
+        
+        .score-card-icfes {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);
+            color: white;
+            border-radius: 12px;
+            padding: 16px 24px;
+            text-align: center;
+            font-weight: bold;
+            min-width: 200px;
+            display: inline-flex;
+            flex-direction: column;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(220, 38, 38, 0.3);
+        }
+        
+        .progress-bar-horizontal {
+            background: #e5e7eb;
+            border-radius: 4px;
+            height: 8px;
+            overflow: hidden;
+            margin: 4px 0;
+        }
+        
+        .progress-bar-icfes {
+            background: #e5e7eb;
+            border-radius: 6px;
+            height: 12px;
+            overflow: hidden;
+            margin: 8px auto;
+            max-width: 300px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-fill.composite { background: #1e40af; }
+        .progress-fill.stem { background: #16a34a; }
+        .progress-fill.icfes { background: linear-gradient(90deg, #dc2626, #f87171); }
+        .progress-fill.default { background: #6b7280; }
+        
+        .score-card.composite { background: #1e40af; color: white; }
+        .score-card.stem { background: #16a34a; color: white; }
+        .score-card.ela { background: #2563eb; color: white; }
+        .score-card.icfes { background: #dc2626; color: white; }
+        .score-card.default { background: #6b7280; color: white; }
+        
+        .competency-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        
+        .progress-chart {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+        }
+        
+        .chart-bar-vertical {
+            background: #e5e7eb;
+            border-radius: 4px;
+            width: 80px;
+            height: 50px;
+            overflow: hidden;
+            margin: 4px auto;
+            position: relative;
+            display: flex;
+            align-items: flex-end;
+        }
+        
+        .chart-fill {
+            width: 100%;
+            border-radius: 2px;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            transition: height 0.3s ease;
+            min-height: 2px;
+        }
+        
+        .chart-fill.general { background: #1e40af; }
+        .chart-fill.icfes { background: #dc2626; }
+        .chart-fill.default { background: #6b7280; }
+        
+        .chart-benchmark {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #8b5cf6;
+            border-radius: 1px;
+        }
+        
+        .chart-benchmark-text {
+            position: absolute;
+            right: -35px;
+            top: -10px;
+            font-size: 7px;
+            font-weight: bold;
+            color: #8b5cf6;
+            background: white;
+            padding: 2px 4px;
+            border-radius: 3px;
+            border: 1px solid #8b5cf6;
+            white-space: nowrap;
+            z-index: 10;
+        }
+        
+        .competency-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 6px;
+        }
+        
+        .score-large {
+            font-size: 24px;
+            font-weight: bold;
+            line-height: 1;
+            color: #1f2937;
+        }
+        
+        .score-label {
+            font-size: 8px;
+            margin-top: 2px;
+            line-height: 1;
+            font-weight: bold;
+            color: #1f2937;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: center;
+            word-wrap: break-word;
+            hyphens: auto;
+        }
+        
+        .benchmark-card {
+            background: #f3f4f6;
+            border: 1px solid #8b5cf6;
+            border-radius: 4px;
+            padding: 4px 6px;
+            text-align: center;
+            font-size: 7px;
+            font-weight: bold;
+            color: #8b5cf6;
+            margin-top: 2px;
+            width: 80px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .achievement-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            margin: 4px;
+        }
+        
+        .achievement-unlocked {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+        }
+        
+        .achievement-locked {
+            background: #e5e7eb;
+            color: #9ca3af;
+        }
+        
+        .header-gradient {
+            background: linear-gradient(135deg, #3b82f6 0%, #ef4444 100%);
+            color: white;
+        }
+        
+        .progress-line {
+            height: 2px;
+            background: #e5e7eb;
+            border-radius: 1px;
+            margin: 4px 0;
+            position: relative;
+        }
+        
+        .progress-line-fill {
+            height: 100%;
+            background: #3b82f6;
+            border-radius: 1px;
+        }
+        
+        @media print {
+            body { -webkit-print-color-adjust: exact; }
+            .score-card, .competency-card, .progress-chart { 
+                break-inside: avoid;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header con logos -->
+    <div class="header-gradient p-4 mb-4 rounded-lg">
+        <div class="flex justify-between items-center">
+            <div class="flex items-center">
+                <div class="mr-4">
+                    <img src="{{companyLogo}}" alt="EducaSaber" class="h-12 w-auto" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-white">EducaSaber</h1>
+                    <p class="text-blue-100 text-sm">Sistema de Gestión de Aprendizaje</p>
+                </div>
+            </div>
+            <div class="flex items-center">
+                <div class="text-right text-white mr-4">
+                    <h2 class="text-lg font-semibold">{{studentName}}</h2>
+                    <p class="text-blue-100 text-sm">{{schoolName}}</p>
+                    <p class="text-xs text-blue-200">{{generationDate}}</p>
+                </div>
+                <div>
+                    <img src="{{schoolLogo}}" alt="{{schoolName}}" class="h-12 w-auto" onerror="this.style.display='none'">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Título Principal -->
+    <div class="text-center mb-4">
+        <h1 class="text-xl font-bold text-gray-900 mb-1">Informe de Progreso Académico</h1>
+        <div class="w-16 h-1 bg-gradient-to-r from-blue-500 to-red-500 mx-auto rounded"></div>
+    </div>
+
+    <!-- Resumen de Puntuaciones -->
+    <div class="mb-4">
+        <h2 class="text-lg font-bold text-gray-900 mb-3">Resumen</h2>
+        
+
+        <!-- Puntuaciones Principales - Diseño que Funcionaba -->
+        <div class="mb-4">
+            <div class="grid grid-cols-7 gap-4">
+                <!-- General -->
+                <div class="text-center">
+                    <div class="score-card-uniform general mb-2">
+                        <div class="score-large">{{generalScore}}</div>
+                        <div class="score-label">GENERAL</div>
+                    </div>
+                    <div class="chart-bar-vertical mb-2">
+                        <div class="chart-fill general" style="height: {{generalScore}}%"></div>
+                        <div class="chart-benchmark" style="bottom: {{generalBenchmark}}%"></div>
+                    </div>
+                    <div class="benchmark-card">
+                        <div>Promedio</div>
+                        <div>{{generalBenchmark}}%</div>
+                    </div>
+                </div>
+                
+                <!-- Matemáticas -->
+                <div class="text-center">
+                    <div class="score-card-uniform default mb-2">
+                        <div class="score-large">{{mathScore}}</div>
+                        <div class="score-label">MATEMÁTICAS</div>
+                    </div>
+                    <div class="chart-bar-vertical mb-2">
+                        <div class="chart-fill default" style="height: {{mathScore}}%"></div>
+                        <div class="chart-benchmark" style="bottom: {{mathBenchmark}}%"></div>
+                    </div>
+                    <div class="benchmark-card">
+                        <div>Promedio</div>
+                        <div>{{mathBenchmark}}%</div>
+                    </div>
+                </div>
+                
+                <!-- Ciencias -->
+                <div class="text-center">
+                    <div class="score-card-uniform default mb-2">
+                        <div class="score-large">{{scienceScore}}</div>
+                        <div class="score-label">CIENCIAS</div>
+                    </div>
+                    <div class="chart-bar-vertical mb-2">
+                        <div class="chart-fill default" style="height: {{scienceScore}}%"></div>
+                        <div class="chart-benchmark" style="bottom: {{scienceBenchmark}}%"></div>
+                    </div>
+                    <div class="benchmark-card">
+                        <div>Promedio</div>
+                        <div>{{scienceBenchmark}}%</div>
+                    </div>
+                </div>
+                
+                <!-- Inglés -->
+                <div class="text-center">
+                    <div class="score-card-uniform default mb-2">
+                        <div class="score-large">{{englishScore}}</div>
+                        <div class="score-label">INGLÉS</div>
+                    </div>
+                    <div class="chart-bar-vertical mb-2">
+                        <div class="chart-fill default" style="height: {{englishScore}}%"></div>
+                        <div class="chart-benchmark" style="bottom: {{englishBenchmark}}%"></div>
+                    </div>
+                    <div class="benchmark-card">
+                        <div>Promedio</div>
+                        <div>{{englishBenchmark}}%</div>
+                    </div>
+                </div>
+                
+                <!-- Lectura -->
+                <div class="text-center">
+                    <div class="score-card-uniform default mb-2">
+                        <div class="score-large">{{readingScore}}</div>
+                        <div class="score-label">LECTURA</div>
+                    </div>
+                    <div class="chart-bar-vertical mb-2">
+                        <div class="chart-fill default" style="height: {{readingScore}}%"></div>
+                        <div class="chart-benchmark" style="bottom: {{readingBenchmark}}%"></div>
+                    </div>
+                    <div class="benchmark-card">
+                        <div>Promedio</div>
+                        <div>{{readingBenchmark}}%</div>
+                    </div>
+                </div>
+                
+                <!-- Sociales -->
+                <div class="text-center">
+                    <div class="score-card-uniform default mb-2">
+                        <div class="score-large">{{socialScore}}</div>
+                        <div class="score-label">SOCIALES</div>
+                    </div>
+                    <div class="chart-bar-vertical mb-2">
+                        <div class="chart-fill default" style="height: {{socialScore}}%"></div>
+                        <div class="chart-benchmark" style="bottom: {{socialBenchmark}}%"></div>
+                    </div>
+                    <div class="benchmark-card">
+                        <div>Promedio</div>
+                        <div>{{socialBenchmark}}%</div>
+                    </div>
+                </div>
+                
+                <!-- ICFES -->
+                <div class="text-center">
+                    <div class="score-card-uniform icfes mb-2">
+                        <div class="score-large">{{icfesScore}}</div>
+                        <div class="score-label">ICFES</div>
+                    </div>
+                    <div class="chart-bar-vertical mb-2">
+                        <div class="chart-fill icfes" style="height: {{icfesPercentage}}%"></div>
+                        <div class="chart-benchmark" style="bottom: {{icfesBenchmark}}%"></div>
+                    </div>
+                    <div class="benchmark-card">
+                        <div>Promedio</div>
+                        <div>{{icfesBenchmark}}%</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Interpretación General -->
+            <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                <h4 class="font-bold text-sm mb-2 text-blue-800 text-left">Cómo Interpretar las Gráficas</h4>
+                <div class="text-xs text-gray-600 text-left">
+                    <p class="mb-1"><strong>Línea púrpura:</strong> Promedio histórico de resultados ICFES (año pasado)</p>
+                    <p class="mb-1"><strong>Cajas "Promedio":</strong> Valores de referencia mostrados debajo de cada barra</p>
+                    <p class="mb-1"><strong>Colores de barras:</strong> Azul (General), Gris (Competencias), Rojo (ICFES) - Representan tu puntuación</p>
+                    <p><strong>Rangos:</strong> Competencias y General: 0% - 100% | ICFES: 0 - 500 puntos</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clasificaciones Colegio y Plataforma -->
+    <div class="mb-4">
+        <h2 class="text-lg font-bold text-gray-900 mb-3">Clasificaciones</h2>
+        
+        <div class="grid grid-cols-2 gap-4 mb-3">
+            <!-- Clasificación Colegio -->
+            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="font-bold text-sm text-gray-900 mb-2">Clasificación Colegio</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">General</span>
+                        <span class="font-bold text-blue-600">{{schoolRankGeneral}}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Matemáticas</span>
+                        <span class="font-bold text-blue-600">{{schoolRankMath}}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Ciencias Naturales</span>
+                        <span class="font-bold text-blue-600">{{schoolRankScience}}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Lectura Crítica</span>
+                        <span class="font-bold text-blue-600">{{schoolRankReading}}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Ciencias Sociales y Ciudadanas</span>
+                        <span class="font-bold text-blue-600">{{schoolRankSocial}}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Inglés</span>
+                        <span class="font-bold text-blue-600">{{schoolRankEnglish}}%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Clasificación Plataforma -->
+            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 class="font-bold text-sm text-gray-900 mb-2">Clasificación Plataforma</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">General</span>
+                        <span class="font-bold text-green-600">{{platformRankGeneral}}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Matemáticas</span>
+                        <span class="font-bold text-green-600">{{platformRankMath}}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Ciencias Naturales</span>
+                        <span class="font-bold text-green-600">{{platformRankScience}}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Lectura Crítica</span>
+                        <span class="font-bold text-green-600">{{platformRankReading}}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Ciencias Sociales y Ciudadanas</span>
+                        <span class="font-bold text-green-600">{{platformRankSocial}}%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600">Inglés</span>
+                        <span class="font-bold text-green-600">{{platformRankEnglish}}%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Interpretación de Clasificaciones -->
+        <div class="p-3 bg-blue-50 rounded-lg">
+            <h4 class="font-bold text-sm mb-2 text-blue-800">Interpretación de Clasificaciones</h4>
+            <div class="text-xs text-blue-700 text-left">
+                <p class="mb-1"><strong>Clasificación Colegio:</strong> Tu posición respecto al promedio de tu institución educativa</p>
+                <p class="mb-1"><strong>Clasificación Plataforma:</strong> Tu posición respecto al promedio de todos los estudiantes en EducaSaber</p>
+                <p class="mb-1"><strong>Interpretación de porcentajes:</strong></p>
+                <ul class="ml-4 list-disc">
+                    <li><strong>90-100%:</strong> Rendimiento excepcional (top 10%)</li>
+                    <li><strong>75-89%:</strong> Rendimiento superior (top 25%)</li>
+                    <li><strong>50-74%:</strong> Rendimiento promedio (mitad superior)</li>
+                    <li><strong>25-49%:</strong> Rendimiento por debajo del promedio</li>
+                    <li><strong>0-24%:</strong> Requiere refuerzo significativo</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Comparación ICFES -->
+        <div class="competency-card">
+            <h3 class="competency-title">Comparación ICFES Año Anterior</h3>
+            <div class="text-center">
+                <div class="text-sm text-gray-600 mb-2">Estimación de Puntaje ICFES basado en rendimiento actual</div>
+                <div class="text-2xl font-bold text-blue-600">{{estimatedIcfesScore}}</div>
+                <div class="text-xs text-gray-500 mt-1">{{icfesComparison}}</div>
+            </div>
+        </div>
+    </div>
+
+        
+        <div class="grid grid-cols-2 gap-3">
+            {{#each competencies}}
+            <div class="competency-card">
+                <div class="competency-title">{{this.displayName}}</div>
+                
+                <!-- Puntuación Actual -->
+                <div class="text-center mb-3">
+                    <div class="score-large">{{this.score}}</div>
+                    <div class="score-label">Puntuación Actual</div>
+                </div>
+                
+                <!-- Gráfica de Progreso Temporal -->
+                <div class="mb-3">
+                    <div class="text-xs font-semibold mb-2">Evolución de Exámenes:</div>
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4" style="height: 160px;">
+                        <div class="flex items-end justify-between h-full">
+                            {{#each this.examHistory}}
+                            <div class="flex flex-col items-center justify-end">
+                                <div class="bg-blue-400 w-4 rounded-t mb-1" style="height: {{this.height}}px"></div>
+                                <div class="text-xs text-gray-600">Ex {{@index}}</div>
+                                <div class="text-xs font-bold text-blue-600">{{this.score}}</div>
+                            </div>
+                            {{/each}}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Estadísticas de la Herramienta -->
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                        <div class="text-gray-600">Lecciones:</div>
+                        <div class="font-bold">{{this.completedLessons}}/{{this.totalLessons}}</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-600">Tiempo:</div>
+                        <div class="font-bold">{{this.timeSpent}}h</div>
+                    </div>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+
+    <!-- Análisis y Recomendaciones -->
+    <div class="mb-4">
+        <h2 class="text-lg font-bold text-gray-900 mb-3">Análisis y Recomendaciones</h2>
+        
+        <div class="competency-card">
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Fortalezas -->
+                <div>
+                    <h3 class="competency-title text-green-700">Fortalezas Identificadas</h3>
+                    {{#each strengths}}
+                    <div class="flex items-start mb-2">
+                        <div class="w-2 h-2 bg-green-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                        <p class="text-xs text-gray-700">{{this}}</p>
+                    </div>
+                    {{/each}}
+                </div>
+                
+                <!-- Áreas de Mejora -->
+                <div>
+                    <h3 class="competency-title text-orange-700">Áreas de Enfoque</h3>
+                    {{#each improvementAreas}}
+                    <div class="flex items-start mb-2">
+                        <div class="w-2 h-2 bg-orange-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                        <p class="text-xs text-gray-700">{{this}}</p>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+            
+            <!-- Recomendaciones para Padres -->
+            <div class="mt-4 pt-3 border-t border-gray-200">
+                <h3 class="competency-title text-blue-700">Recomendaciones para Padres</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    {{#each parentRecommendations}}
+                    <div class="flex items-start">
+                        <div class="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                        <p class="text-xs text-gray-700">{{this}}</p>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logros Desbloqueados -->
+    <div class="mb-4">
+        <h2 class="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="text-2xl">🏆</span>
+            Logros y Reconocimientos
+        </h2>
+        
+        <div class="competency-card">
+            <div class="mb-3">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-semibold text-gray-700">Progreso de Logros</span>
+                    <span class="text-sm text-gray-600">
+                        {{achievementsUnlocked}} de {{achievementsTotal}} desbloqueados
+                    </span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-gradient-to-r from-yellow-400 to-yellow-600 h-2 rounded-full transition-all duration-300" 
+                         style="width: {{achievementsProgress}}%"></div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-8 gap-2">
+                {{#each achievements}}
+                <div class="text-center p-2 {{#if this.unlocked}}bg-yellow-50 border border-yellow-200 rounded-lg{{else}}bg-gray-50 border border-gray-200 rounded-lg{{/if}}">
+                    <div class="text-2xl mb-1 {{#if this.unlocked}}opacity-100{{else}}opacity-30{{/if}}">
+                        {{this.icon}}
+                    </div>
+                    <div class="text-xs {{#if this.unlocked}}text-gray-700 font-medium{{else}}text-gray-400{{/if}}">
+                        {{this.name}}
+                    </div>
+                    <div class="text-xs {{#if this.unlocked}}text-yellow-600{{else}}text-gray-400{{/if}}">
+                        {{this.points}} pts
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+            
+            {{#if achievementsUnlocked}}
+            <div class="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-green-600">🎉</span>
+                    <span class="text-sm font-semibold text-green-800">¡Felicitaciones!</span>
+                </div>
+                <p class="text-xs text-green-700">
+                    Has desbloqueado {{achievementsUnlocked}} logro{{#if achievementsMultiple}}s{{/if}} 
+                    y ganado {{totalPoints}} puntos de experiencia.
+                </p>
+            </div>
+            {{/if}}
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-3 pt-2 border-t border-gray-200 text-center">
+        <p class="text-gray-500 text-xs">Generado por EducaSaber LMS - Sistema de Gestión de Aprendizaje</p>
+    </div>
+</body>
+</html>

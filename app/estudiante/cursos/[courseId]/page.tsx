@@ -2,24 +2,28 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
+import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { StudentHeader } from "@/components/StudentHeader"
 import { 
-  ArrowLeft, 
   BookOpen, 
   Clock, 
   Users, 
   Target,
   Play,
   CheckCircle,
-  Lock,
   TrendingUp,
   Award,
-  Calendar
+  Calendar,
+  ChevronRight,
+  FileText,
+  Lock,
+  Unlock
 } from "lucide-react"
 
 interface CourseDetailPageProps {
@@ -32,6 +36,9 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   const [courseData, setCourseData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeModule, setActiveModule] = useState(0)
+  const [moduleQuizzes, setModuleQuizzes] = useState<any[]>([])
+  const [loadingQuizzes, setLoadingQuizzes] = useState(false)
 
   useEffect(() => {
     if (status === "loading") return
@@ -55,41 +62,77 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
       
       const data = await response.json()
       setCourseData(data)
+      
+      // Cargar quices del módulo activo si existe
+      if (data.modules && data.modules.length > 0) {
+        loadModuleQuizzes(data.modules[activeModule]?.id)
+      }
     } catch (err) {
-      setError('Error al cargar los datos del curso')
+      setError('Error al cargar el curso')
       console.error('Error loading course:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  const getDifficultyColor = (level: string) => {
-    const colors = {
-      'facil': 'bg-green-100 text-green-800',
-      'intermedio': 'bg-yellow-100 text-yellow-800',
-      'dificil': 'bg-red-100 text-red-800',
-      'variable': 'bg-purple-100 text-purple-800'
+  const loadModuleQuizzes = async (moduleId: string) => {
+    if (!moduleId) return
+    
+    try {
+      setLoadingQuizzes(true)
+      const response = await fetch(`/api/student/modules/${moduleId}/quizzes`)
+      
+      if (!response.ok) {
+        throw new Error('Error al cargar los quices')
+      }
+      
+      const data = await response.json()
+      setModuleQuizzes(data.quizzes || [])
+    } catch (err) {
+      console.error('Error loading module quizzes:', err)
+      setModuleQuizzes([])
+    } finally {
+      setLoadingQuizzes(false)
     }
-    return colors[level as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
 
-  const getStatusColor = (status: string) => {
-    const colors = {
-      'completed': 'bg-green-100 text-green-800',
-      'in_progress': 'bg-blue-100 text-blue-800',
-      'not_started': 'bg-gray-100 text-gray-800'
+  const handleModuleChange = (index: number) => {
+    setActiveModule(index)
+    if (courseData?.modules?.[index]?.id) {
+      loadModuleQuizzes(courseData.modules[index].id)
     }
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-4 w-4" />
+        return <CheckCircle className="h-5 w-5 text-green-500" />
       case 'in_progress':
-        return <Play className="h-4 w-4" />
+        return <Play className="h-5 w-5 text-blue-500" />
       default:
-        return <Lock className="h-4 w-4" />
+        return null // Removido el candado, no tiene funcionalidad
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-100 text-green-800'
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'Completado'
+      case 'in_progress':
+        return 'En Progreso'
+      default:
+        return 'No Iniciado'
     }
   }
 
@@ -97,8 +140,8 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando curso...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando curso...</p>
         </div>
       </div>
     )
@@ -108,9 +151,10 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="w-full max-w-md mx-4">
-          <CardContent className="pt-6">
-            <p className="text-center text-gray-600">{error || 'Curso no encontrado'}</p>
-            <Button onClick={() => router.push('/estudiante')} className="w-full mt-4">
+          <CardContent className="p-6 text-center">
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Error</h2>
+            <p className="text-gray-600 mb-4">{error || 'No se pudo cargar el curso'}</p>
+            <Button onClick={() => router.push('/estudiante')} className="w-full">
               Volver al Dashboard
             </Button>
           </CardContent>
@@ -119,306 +163,284 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
     )
   }
 
+  const currentModule = courseData.modules[activeModule]
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <StudentHeader 
+        title={courseData.course.title}
+        subtitle={courseData.course.description}
+        showBackButton={true}
+        backUrl="/estudiante"
+        rightContent={
+          <div className="flex items-center space-x-4">
+            <Badge className="bg-blue-100 text-blue-800">
+              {courseData.course.competency}
+            </Badge>
+            <Badge variant="outline">
+              {courseData.course.academicGrade}
+            </Badge>
+          </div>
+        }
+      />
+
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-6xl mx-auto space-y-6">
-          
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-6">
-            <Button
-              variant="outline"
-              onClick={() => router.push('/estudiante')}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Volver
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">{courseData.course.title}</h1>
-              <p className="text-gray-600">{courseData.course.description}</p>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Module Navigation - Left Side */}
+          <div className="lg:col-span-1">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <BookOpen className="h-5 w-5" />
+                  <span>Módulos del Curso</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {courseData.modules.map((module: any, index: number) => (
+                  <button
+                    key={module.id}
+                    onClick={() => handleModuleChange(index)}
+                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                      activeModule === index
+                        ? "bg-blue-50 border-2 border-blue-200"
+                        : "hover:bg-gray-50 border border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-medium text-sm">Módulo {module.orderIndex}</div>
+                      <div className="text-xs text-gray-500">
+                        {module.completedLessonsCount}/{module.totalLessons}
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-600 mb-2">{module.title}</div>
+                    <Progress 
+                      value={module.progressPercentage} 
+                      className="h-1" 
+                    />
+                    <div className="flex items-center justify-between mt-2">
+                      <Badge className={getStatusColor(module.status)}>
+                        {getStatusText(module.status)}
+                      </Badge>
+                      <span className="text-xs text-gray-500">
+                        {Math.round(module.progressPercentage)}%
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Course Overview */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main Course Info */}
-            <div className="lg:col-span-2 space-y-6">
+          {/* Module Detail - Right Side */}
+          <div className="lg:col-span-3">
+            {currentModule ? (
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle>Información del Curso</CardTitle>
-                    <Badge className={getDifficultyColor(courseData.course.difficultyLevel)}>
-                      {courseData.course.difficultyLevel}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center p-3 bg-blue-50 rounded-lg">
-                      <BookOpen className="h-6 w-6 text-blue-600 mx-auto mb-2" />
-                      <p className="text-lg font-semibold text-blue-600">{courseData.course.totalModules}</p>
-                      <p className="text-sm text-gray-600">Módulos</p>
-                    </div>
-                    <div className="text-center p-3 bg-green-50 rounded-lg">
-                      <Target className="h-6 w-6 text-green-600 mx-auto mb-2" />
-                      <p className="text-lg font-semibold text-green-600">{courseData.course.totalLessons}</p>
-                      <p className="text-sm text-gray-600">Lecciones</p>
-                    </div>
-                    <div className="text-center p-3 bg-purple-50 rounded-lg">
-                      <Clock className="h-6 w-6 text-purple-600 mx-auto mb-2" />
-                      <p className="text-lg font-semibold text-purple-600">{courseData.course.durationHours || 0}h</p>
-                      <p className="text-sm text-gray-600">Duración</p>
-                    </div>
-                    <div className="text-center p-3 bg-orange-50 rounded-lg">
-                      <Users className="h-6 w-6 text-orange-600 mx-auto mb-2" />
-                      <p className="text-lg font-semibold text-orange-600">{courseData.course.competency}</p>
-                      <p className="text-sm text-gray-600">Competencia</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Progress Overview */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5" />
-                    Progreso General
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
                     <div>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span>Progreso del Curso</span>
-                        <span>{Math.round(courseData.enrollment.progressPercentage || 0)}%</span>
-                      </div>
-                      <Progress value={courseData.enrollment.progressPercentage || 0} className="h-3" />
+                      <CardTitle className="text-xl flex items-center space-x-2">
+                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
+                          Módulo {currentModule.orderIndex}
+                        </span>
+                        <span>{currentModule.title}</span>
+                      </CardTitle>
+                      <p className="text-gray-600 mt-2">{currentModule.description}</p>
                     </div>
-                    
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <p className="text-2xl font-bold text-green-600">
-                          {courseData.enrollment.completedModulesCount || 0}
-                        </p>
-                        <p className="text-sm text-gray-600">Módulos Completados</p>
+                    <div className="text-right">
+                      <div className="flex items-center space-x-2 mb-2">
+                        {getStatusIcon(currentModule.status) && (
+                          <span className="mr-1">{getStatusIcon(currentModule.status)}</span>
+                        )}
+                        <Badge className={getStatusColor(currentModule.status)}>
+                          {getStatusText(currentModule.status)}
+                        </Badge>
                       </div>
-                      <div>
-                        <p className="text-2xl font-bold text-blue-600">
-                          {Math.round(courseData.enrollment.totalTimeMinutes / 60) || 0}
-                        </p>
-                        <p className="text-sm text-gray-600">Horas Estudiadas</p>
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-purple-600">
-                          {courseData.enrollment.enrolledAt ? 
-                            Math.ceil((Date.now() - new Date(courseData.enrollment.enrolledAt).getTime()) / (1000 * 60 * 60 * 24)) : 0
-                          }
-                        </p>
-                        <p className="text-sm text-gray-600">Días Inscrito</p>
+                      <div className="text-sm text-gray-600">
+                        {currentModule.completedLessonsCount}/{currentModule.totalLessons} lecciones
                       </div>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Enrollment Status */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Estado de Inscripción
-                  </CardTitle>
+                  <Progress value={currentModule.progressPercentage} className="mt-4" />
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Inscrito desde:</span>
-                      <span className="text-sm font-medium">
-                        {new Date(courseData.enrollment.enrolledAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Estado:</span>
-                      <Badge className={getStatusColor(courseData.enrollment.status)}>
-                        {courseData.enrollment.status}
-                      </Badge>
-                    </div>
-                    {courseData.enrollment.completedAt && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Completado:</span>
-                        <span className="text-sm font-medium">
-                          {new Date(courseData.enrollment.completedAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Quick Actions */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Acciones Rápidas</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Button className="w-full" onClick={() => router.push('/estudiante/examenes')}>
-                    <Target className="h-4 w-4 mr-2" />
-                    Ver Exámenes
-                  </Button>
-                  <Button variant="outline" className="w-full" onClick={() => router.push('/estudiante/progreso')}>
-                    <TrendingUp className="h-4 w-4 mr-2" />
-                    Ver Progreso
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Course Content */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Contenido del Curso</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="modules" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="modules">Módulos</TabsTrigger>
-                  <TabsTrigger value="lessons">Todas las Lecciones</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="modules" className="space-y-4">
-                  {courseData.modules.map((module: any, moduleIndex: number) => (
-                    <Card key={module.id} className="border-l-4 border-l-blue-500">
-                      <CardHeader>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <CardTitle className="text-lg flex items-center gap-2">
-                              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
-                                Módulo {moduleIndex + 1}
-                              </span>
-                              {module.title}
-                            </CardTitle>
-                            <p className="text-sm text-gray-600 mt-1">{module.description}</p>
-                          </div>
-                          <div className="text-right">
-                            <div className="flex items-center gap-2 mb-2">
-                              {getStatusIcon(module.status)}
-                              <Badge className={getStatusColor(module.status)}>
-                                {module.status === 'completed' ? 'Completado' : 
-                                 module.status === 'in_progress' ? 'En Progreso' : 'No Iniciado'}
-                              </Badge>
-                            </div>
-                            <div className="text-sm text-gray-600">
-                              {module.completedLessonsCount}/{module.totalLessons} lecciones
-                            </div>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          <div>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span>Progreso del Módulo</span>
-                              <span>{Math.round(module.progressPercentage || 0)}%</span>
-                            </div>
-                            <Progress value={module.progressPercentage || 0} className="h-2" />
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            {module.lessons.map((lesson: any, lessonIndex: number) => (
-                              <div 
-                                key={lesson.id}
-                                className={`p-3 rounded-lg border ${
-                                  lesson.status === 'completed' 
-                                    ? 'border-green-200 bg-green-50' 
-                                    : lesson.status === 'in_progress'
-                                      ? 'border-blue-200 bg-blue-50'
-                                      : 'border-gray-200 bg-gray-50'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between mb-2">
-                                  <div className="flex items-center gap-2">
-                                    {getStatusIcon(lesson.status)}
-                                    <span className="font-medium text-sm">
-                                      Lección {lessonIndex + 1}: {lesson.title}
-                                    </span>
-                                  </div>
-                                  <Badge variant="outline" className="text-xs">
-                                    {lesson.estimatedTimeMinutes || 0} min
-                                  </Badge>
-                                </div>
-                                
-                                <div className="flex justify-between text-xs text-gray-600 mb-2">
-                                  <span>Progreso: {Math.round(lesson.progressPercentage || 0)}%</span>
-                                  <span>Tiempo: {Math.round(lesson.totalTimeMinutes / 60) || 0}h</span>
-                                </div>
-                                
-                                <Progress value={lesson.progressPercentage || 0} className="h-1 mb-2" />
-                                
-                                <Button
-                                  size="sm"
-                                  variant={lesson.status === 'completed' ? 'outline' : 'default'}
-                                  className="w-full"
-                                  onClick={() => router.push(`/leccion/${lesson.id}`)}
-                                >
-                                  {lesson.status === 'completed' ? 'Revisar' : 
-                                   lesson.status === 'in_progress' ? 'Continuar' : 'Comenzar'}
-                                </Button>
+                  <Tabs defaultValue="lessons" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="lessons">Lecciones del Módulo</TabsTrigger>
+                      <TabsTrigger value="quizzes">
+                        Quices
+                        {moduleQuizzes.length > 0 && (
+                          <Badge className="ml-2 bg-blue-500 text-white">
+                            {moduleQuizzes.length}
+                          </Badge>
+                        )}
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="lessons" className="space-y-3">
+                      {currentModule.lessons.map((lesson: any, index: number) => (
+                        <div 
+                          key={lesson.id}
+                          className={`p-4 rounded-lg border cursor-pointer transition-colors ${
+                            lesson.status === 'completed' 
+                              ? 'border-green-200 bg-green-50 hover:bg-green-100' 
+                              : lesson.status === 'in_progress'
+                                ? 'border-blue-200 bg-blue-50 hover:bg-blue-100'
+                                : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                          }`}
+                          onClick={() => router.push(`/estudiante/cursos/${courseData.course.id}/leccion/${lesson.id}`)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {getStatusIcon(lesson.status) && (
+                                <span>{getStatusIcon(lesson.status)}</span>
+                              )}
+                              <div>
+                                <h4 className="font-medium">{lesson.title}</h4>
+                                <p className="text-sm text-gray-600">
+                                  {lesson.estimatedTimeMinutes || 0} min
+                                </p>
                               </div>
-                            ))}
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <Badge className={getStatusColor(lesson.status)}>
+                                  {getStatusText(lesson.status)}
+                                </Badge>
+                                {lesson.progressPercentage > 0 && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {Math.round(lesson.progressPercentage)}% completado
+                                  </div>
+                                )}
+                              </div>
+                              <Button size="sm" variant="outline">
+                                {lesson.status === 'completed' ? 'Revisar' : 'Comenzar'}
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </TabsContent>
+                      ))}
+                    </TabsContent>
 
-                <TabsContent value="lessons" className="space-y-3">
-                  {courseData.allLessons.map((lesson: any, index: number) => (
-                    <div 
-                      key={lesson.id}
-                      className={`p-4 rounded-lg border ${
-                        lesson.status === 'completed' 
-                          ? 'border-green-200 bg-green-50' 
-                          : lesson.status === 'in_progress'
-                            ? 'border-blue-200 bg-blue-50'
-                            : 'border-gray-200 bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          {getStatusIcon(lesson.status)}
-                          <div>
-                            <h4 className="font-medium">{lesson.title}</h4>
-                            <p className="text-sm text-gray-600">{lesson.moduleTitle} • {lesson.estimatedTimeMinutes || 0} min</p>
-                          </div>
+                    <TabsContent value="quizzes" className="space-y-3">
+                      {loadingQuizzes ? (
+                        <div className="text-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                          <p className="text-gray-600">Cargando quices...</p>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <div className="text-sm font-medium">{Math.round(lesson.progressPercentage || 0)}%</div>
-                            <Progress value={lesson.progressPercentage || 0} className="w-20 h-2" />
-                          </div>
-                          <Button
-                            size="sm"
-                            variant={lesson.status === 'completed' ? 'outline' : 'default'}
-                            onClick={() => router.push(`/leccion/${lesson.id}`)}
+                      ) : moduleQuizzes.length === 0 ? (
+                        <div className="text-center py-8">
+                          {currentModule.status === 'completed' ? (
+                            <>
+                              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay quices disponibles</h3>
+                              <p className="text-gray-600 mb-4">
+                                El quiz se generará automáticamente cuando completes todas las lecciones del módulo.
+                              </p>
+                              <Button 
+                                onClick={() => loadModuleQuizzes(currentModule.id)}
+                                variant="outline"
+                              >
+                                Recargar
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                              <h3 className="text-lg font-medium text-gray-900 mb-2">Quiz bloqueado</h3>
+                              <p className="text-gray-600">
+                                Completa todas las lecciones del módulo para desbloquear el quiz.
+                              </p>
+                              <div className="mt-4">
+                                <Progress value={currentModule.progressPercentage} className="h-2" />
+                                <p className="text-sm text-gray-500 mt-2">
+                                  {currentModule.completedLessonsCount}/{currentModule.totalLessons} lecciones completadas
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        moduleQuizzes.map((quiz: any) => (
+                          <div
+                            key={quiz.id}
+                            className={`p-4 rounded-lg border transition-colors ${
+                              quiz.status === 'available' || quiz.status === 'in_progress'
+                                ? 'border-green-200 bg-green-50 hover:bg-green-100 cursor-pointer'
+                                : quiz.status === 'completed'
+                                  ? 'border-blue-200 bg-blue-50'
+                                  : 'border-gray-200 bg-gray-50 opacity-60'
+                            }`}
+                            onClick={() => {
+                              if (quiz.canTake) {
+                                router.push(`/estudiante/examen/${quiz.id}`)
+                              }
+                            }}
                           >
-                            {lesson.status === 'completed' ? 'Revisar' : 
-                             lesson.status === 'in_progress' ? 'Continuar' : 'Comenzar'}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                {quiz.status === 'available' || quiz.status === 'in_progress' ? (
+                                  <Unlock className="h-5 w-5 text-green-600" />
+                                ) : quiz.status === 'completed' ? (
+                                  <CheckCircle className="h-5 w-5 text-blue-600" />
+                                ) : (
+                                  <Lock className="h-5 w-5 text-gray-400" />
+                                )}
+                                <div>
+                                  <h4 className="font-medium">{quiz.title}</h4>
+                                  <p className="text-sm text-gray-600">
+                                    {quiz.totalQuestions} preguntas • {quiz.timeLimitMinutes || 15} min
+                                  </p>
+                                  {quiz.description && (
+                                    <p className="text-xs text-gray-500 mt-1">{quiz.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <div className="text-right">
+                                  {quiz.status === 'available' && (
+                                    <Badge className="bg-green-100 text-green-800">Disponible</Badge>
+                                  )}
+                                  {quiz.status === 'in_progress' && (
+                                    <Badge className="bg-blue-100 text-blue-800">En Progreso</Badge>
+                                  )}
+                                  {quiz.status === 'completed' && quiz.lastAttempt && (
+                                    <div>
+                                      <Badge className="bg-blue-100 text-blue-800 mb-1">
+                                        Completado
+                                      </Badge>
+                                      <div className="text-xs text-gray-600">
+                                        Puntaje: {quiz.lastAttempt.score}%
+                                      </div>
+                                    </div>
+                                  )}
+                                  {quiz.status === 'locked' && (
+                                    <Badge variant="outline">Bloqueado</Badge>
+                                  )}
+                                </div>
+                                {quiz.canTake && (
+                                  <Button size="sm" variant="outline">
+                                    {quiz.status === 'in_progress' ? 'Continuar' : 'Tomar Quiz'}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay módulos disponibles</h3>
+                  <p className="text-gray-600">Este curso no tiene módulos configurados.</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
     </div>

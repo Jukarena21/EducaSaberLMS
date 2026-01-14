@@ -18,20 +18,38 @@ export async function GET(request: NextRequest) {
     // Obtener información del estudiante
     const student = await prisma.user.findUnique({
       where: { id: userId },
-      include: { school: true }
+      include: { 
+        school: true,
+        courseEnrollments: {
+          include: {
+            course: {
+              select: {
+                academicGrade: true
+              }
+            }
+          },
+          take: 1,
+          orderBy: {
+            enrolledAt: 'desc'
+          }
+        }
+      }
     })
 
     if (!student) {
       return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 })
     }
 
+    // Obtener el grado académico del estudiante desde sus cursos inscritos
+    const studentAcademicGrade = student.courseEnrollments?.[0]?.course?.academicGrade || null
+
     // Construir filtros para cursos disponibles
     let whereClause: any = {
-      isActive: true
+      isPublished: true
     }
 
     // Filtrar por grado académico del estudiante o parámetro
-    const targetGrade = academicGrade || student.academicGrade
+    const targetGrade = academicGrade || studentAcademicGrade
     if (targetGrade) {
       whereClause.academicGrade = targetGrade
     }
@@ -39,6 +57,29 @@ export async function GET(request: NextRequest) {
     // Filtrar por competencia si se especifica
     if (competencyId) {
       whereClause.competencyId = competencyId
+    }
+
+    // Filtrar por visibilidad: cursos generales (sin colegio) O cursos del colegio del estudiante
+    if (student.schoolId) {
+      whereClause.OR = [
+        {
+          courseSchools: {
+            none: {} // Cursos generales (sin asignar)
+          }
+        },
+        {
+          courseSchools: {
+            some: {
+              schoolId: student.schoolId
+            }
+          }
+        }
+      ]
+    } else {
+      // Si el estudiante no tiene colegio, solo puede ver cursos generales
+      whereClause.courseSchools = {
+        none: {}
+      }
     }
 
     // Obtener cursos disponibles
@@ -137,7 +178,7 @@ export async function GET(request: NextRequest) {
       available: catalogCourses,
       enrolled: courses.filter(course => course.isEnrolled),
       student: {
-        academicGrade: student.academicGrade,
+        academicGrade: studentAcademicGrade,
         school: student.school?.name || 'Sin asignar'
       }
     })

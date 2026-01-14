@@ -28,11 +28,19 @@ export interface NotificationFormData {
 export type NotificationType = 
   | 'exam_available'
   | 'exam_reminder'
+  | 'exam_scheduled'
+  | 'exam_closed'
+  | 'exam_failed'
+  | 'exam_missed'
   | 'lesson_completed'
   | 'achievement_unlocked'
   | 'course_enrolled'
   | 'exam_result'
-  | 'system';
+  | 'system'
+  | 'admin_broadcast'
+  | 'exam_published'
+  | 'student_missed_exam'
+  | 'performance_alert';
 
 export interface NotificationStats {
   total: number;

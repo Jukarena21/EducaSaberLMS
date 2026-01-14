@@ -7,6 +7,7 @@ import { Clock, Users, Target, Calendar, BookOpen, Award, AlertCircle } from 'lu
 import { ExamPreviewProps } from '@/types/exam'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { QuestionRenderer } from '@/components/QuestionRenderer'
 
 export function ExamPreview({ exam, mode, onAnswer, answers, isSubmitted, timeRemaining }: ExamPreviewProps) {
   const formatDate = (dateString?: string) => {
@@ -259,73 +260,16 @@ export function ExamPreview({ exam, mode, onAnswer, answers, isSubmitted, timeRe
                       </div>
                     </div>
 
-                    <div className="space-y-2 ml-11">
-                      {['A', 'B', 'C', 'D'].map((option) => {
-                        const optionText = question[`option${option}` as keyof typeof question] as string
-                        const optionImage = question[`option${option}Image` as keyof typeof question] as string
-                        const isSelected = answers?.[question.id] === option
-                        const isCorrect = isSubmitted && question.correctOption === option
-                        const isIncorrect = isSubmitted && isSelected && question.correctOption !== option
-
-                        return (
-                          <div
-                            key={option}
-                            className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                              isCorrect
-                                ? 'border-green-500 bg-green-50'
-                                : isIncorrect
-                                ? 'border-red-500 bg-red-50'
-                                : isSelected
-                                ? 'border-primary bg-primary/5'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                            onClick={() => !isSubmitted && onAnswer?.(question.id, option)}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-medium ${
-                                isCorrect
-                                  ? 'bg-green-500 text-white'
-                                  : isIncorrect
-                                  ? 'bg-red-500 text-white'
-                                  : isSelected
-                                  ? 'bg-primary text-white'
-                                  : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {option}
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-sm">{optionText}</p>
-                                {optionImage && (
-                                  <div className="mt-2">
-                                    <img
-                                      src={optionImage}
-                                      alt={`Opción ${option}`}
-                                      className="max-w-full h-auto rounded"
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
+                    <div className="ml-11">
+                      <QuestionRenderer
+                        question={question}
+                        selectedAnswer={answers?.[question.id]}
+                        onAnswerChange={(answer) => !isSubmitted && onAnswer?.(question.id, answer)}
+                        showCorrectAnswer={isSubmitted}
+                        isSubmitted={isSubmitted}
+                        disabled={isSubmitted}
+                      />
                     </div>
-
-                    {isSubmitted && question.explanation && (
-                      <div className="ml-11 p-3 bg-blue-50 rounded-lg">
-                        <p className="text-sm font-medium text-blue-900">Explicación:</p>
-                        <p className="text-sm text-blue-700 mt-1">{question.explanation}</p>
-                        {question.explanationImage && (
-                          <div className="mt-2">
-                            <img
-                              src={question.explanationImage}
-                              alt="Imagen de explicación"
-                              className="max-w-full h-auto rounded"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </CardContent>
               </Card>

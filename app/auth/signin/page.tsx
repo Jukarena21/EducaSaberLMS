@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { PublicHeader } from "@/components/PublicHeader";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -65,8 +66,10 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen bg-gray-50">
+      <PublicHeader currentPath="/auth/signin" />
+      <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Iniciar Sesión
@@ -134,6 +137,7 @@ export default function SignInPage() {
             </Link>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );

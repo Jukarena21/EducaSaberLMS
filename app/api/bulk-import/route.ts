@@ -2,19 +2,65 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import * as XLSX from 'xlsx'
 
 type ImportType = 'students' | 'schools' | 'lessons' | 'questions'
 
 function parseCSV(content: string): Array<Record<string, string>> {
   const lines = content.replace(/\r\n?/g, '\n').split('\n').filter(l => l.trim().length > 0)
   if (lines.length === 0) return []
-  const headers = splitCsvLine(lines[0]).map(h => h.trim())
+  
+  // Encontrar la fila de headers (buscar "=== INICIO DE DATOS ===" o la primera fila que no sea instrucción)
+  let headerIndex = 0
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim().toUpperCase()
+    if (line.includes('=== INICIO DE DATOS ===') || line.includes('INICIO DE DATOS')) {
+      headerIndex = i + 1
+      break
+    }
+    // Si la línea parece ser headers (tiene varias comas y no empieza con "INSTRUCCIONES" o es muy corta)
+    if (!line.startsWith('INSTRUCCIONES') && !line.startsWith('CAMPOS') && !line.startsWith('REQUISITOS') && 
+        line.includes(',') && line.split(',').length > 2) {
+      headerIndex = i
+      break
+    }
+  }
+  
+  if (headerIndex >= lines.length) return []
+  
+  // Extraer headers y limpiar el asterisco (*) si existe
+  const headerLine = splitCsvLine(lines[headerIndex])
+  const headers = headerLine.map(h => h.trim().replace(/\s*\*\s*$/, '').trim())
+  
   const rows: Array<Record<string, string>> = []
-  for (let i = 1; i < lines.length; i++) {
-    const cols = splitCsvLine(lines[i])
+  const esEjemploIndex = headers.indexOf('_ES_EJEMPLO')
+  
+  for (let i = headerIndex + 1; i < lines.length; i++) {
+    const line = lines[i].trim()
+    // Ignorar líneas vacías o que sean instrucciones
+    if (!line || line.startsWith('INSTRUCCIONES') || line.startsWith('CAMPOS') || 
+        line.startsWith('REQUISITOS') || line.startsWith('===') || line.startsWith('1.') || 
+        line.startsWith('2.') || line.startsWith('3.') || line.startsWith('4.') || 
+        line.startsWith('5.') || line.startsWith('6.') || line.startsWith('-')) {
+      continue
+    }
+    
+    const cols = splitCsvLine(line)
+    
+    // Verificar si es fila de ejemplo (columna _ES_EJEMPLO)
+    if (esEjemploIndex >= 0) {
+      const esEjemplo = (cols[esEjemploIndex] || '').trim().toUpperCase()
+      if (esEjemplo === 'SI' || esEjemplo === 'YES' || esEjemplo === 'TRUE' || esEjemplo === '1') {
+        continue // Ignorar fila de ejemplo
+      }
+    }
+    
     const row: Record<string, string> = {}
     headers.forEach((h, idx) => {
-      row[h] = (cols[idx] ?? '').trim()
+      // No incluir _ES_EJEMPLO en los datos finales
+      if (h !== '_ES_EJEMPLO') {
+        row[h] = (cols[idx] ?? '').trim()
+      }
     })
     rows.push(row)
   }
@@ -61,20 +107,102 @@ export async function POST(req: NextRequest) {
     const file = form.get('file') as File | null
     if (!file || !type) return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 })
 
-    const text = await file.text()
-    const rows = parseCSV(text)
+    // Detectar tipo de archivo
+    const fileName = file.name.toLowerCase()
+    const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls')
+    
+    let rows: Array<Record<string, string>> = []
+    
+    if (isExcel) {
+      // Leer archivo Excel
+      const arrayBuffer = await file.arrayBuffer()
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+      
+      // Buscar hoja de datos (puede llamarse 'Datos' o ser la primera hoja)
+      let worksheet = workbook.Sheets['Datos'] || workbook.Sheets[workbook.SheetNames[0]]
+      
+      if (!worksheet) {
+        return NextResponse.json({ error: 'No se encontró hoja de datos en el archivo Excel' }, { status: 400 })
+      }
+      
+      // Convertir a JSON
+      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][]
+      
+      if (data.length === 0) {
+        return NextResponse.json({ error: 'El archivo Excel está vacío' }, { status: 400 })
+      }
+      
+      // Primera fila son los headers
+      const headers = (data[0] || []).map((h: any) => String(h || '').trim()).filter(Boolean)
+      
+      // Filtrar filas de ejemplo y convertir a objetos
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i] || []
+        const rowObj: Record<string, string> = {}
+        
+        // Verificar si es una fila de ejemplo
+        const esEjemploCol = headers.indexOf('_ES_EJEMPLO')
+        if (esEjemploCol >= 0) {
+          const esEjemplo = String(row[esEjemploCol] || '').trim().toUpperCase()
+          if (esEjemplo === 'SI' || esEjemplo === 'YES' || esEjemplo === 'TRUE' || esEjemplo === '1') {
+            continue // Ignorar fila de ejemplo
+          }
+        }
+        
+        // Convertir fila a objeto
+        headers.forEach((header, idx) => {
+          if (header !== '_ES_EJEMPLO') { // No incluir la columna de ejemplo en los datos
+            rowObj[header] = String(row[idx] || '').trim()
+          }
+        })
+        
+        // Solo agregar si la fila tiene al menos un valor no vacío
+        if (Object.values(rowObj).some(v => v.trim() !== '')) {
+          rows.push(rowObj)
+        }
+      }
+    } else {
+      // Leer archivo CSV
+      const text = await file.text()
+      const parsedRows = parseCSV(text)
+      
+      // Filtrar filas de ejemplo
+      rows = parsedRows.filter(row => {
+        const esEjemplo = (row['_ES_EJEMPLO'] || '').trim().toUpperCase()
+        return esEjemplo !== 'SI' && esEjemplo !== 'YES' && esEjemplo !== 'TRUE' && esEjemplo !== '1'
+      }).map(row => {
+        // Remover columna _ES_EJEMPLO de los datos
+        const { _ES_EJEMPLO, ...rest } = row
+        return rest
+      })
+    }
 
     const errors: Array<{ row: number; message: string }>=[]
     let created = 0
 
     if (type === 'students') {
+      // Para school_admin, forzar schoolId del admin
+      const forcedSchoolId = session.user.role === 'school_admin' && session.user.schoolId 
+        ? session.user.schoolId 
+        : undefined
+
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
         try {
           const email = r.email
           const firstName = r.firstName
           const lastName = r.lastName
-          if (!email || !firstName || !lastName) throw new Error('email, firstName y lastName son requeridos')
+          const documentType = r.documentType
+          const documentNumber = r.documentNumber
+          const contactPhone = r.contactPhone
+          
+          if (!email || !firstName || !lastName || !documentType || !documentNumber || !contactPhone) {
+            throw new Error('email, firstName, lastName, documentType, documentNumber y contactPhone son requeridos')
+          }
+          
+          // Usar schoolId forzado si es school_admin, sino usar el del CSV
+          const finalSchoolId = forcedSchoolId || r.schoolId || undefined
+          
           await prisma.user.upsert({
             where: { email },
             update: {
@@ -90,7 +218,7 @@ export async function POST(req: NextRequest) {
               socioeconomicStratum: parseIntOrU(r.socioeconomicStratum) as any,
               housingType: r.housingType || undefined,
               // Educativa
-              schoolId: r.schoolId || undefined,
+              schoolId: finalSchoolId,
               schoolEntryYear: parseIntOrU(r.schoolEntryYear) as any,
               academicAverage: parseFloatOrU(r.academicAverage) as any,
               areasOfDifficulty: r.areasOfDifficulty || undefined,
@@ -115,7 +243,7 @@ export async function POST(req: NextRequest) {
               city: r.city || undefined,
               socioeconomicStratum: parseIntOrU(r.socioeconomicStratum) as any,
               housingType: r.housingType || undefined,
-              schoolId: r.schoolId || undefined,
+              schoolId: finalSchoolId,
               schoolEntryYear: parseIntOrU(r.schoolEntryYear) as any,
               academicAverage: parseFloatOrU(r.academicAverage) as any,
               areasOfDifficulty: r.areasOfDifficulty || undefined,
@@ -138,11 +266,34 @@ export async function POST(req: NextRequest) {
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
         try {
-          if (!r.name || !r.city) throw new Error('name y city son requeridos')
+          if (!r.name || !r.city || !r.address || !r.contactEmail || !r.contactPhone) {
+            throw new Error('name, city, address, contactEmail y contactPhone son requeridos')
+          }
           await prisma.school.upsert({
             where: { daneCode: r.daneCode || `no-code-${r.name}-${r.city}` },
-            update: { name: r.name, city: r.city, neighborhood: r.neighborhood || undefined, address: r.address || undefined, institutionType: r.institutionType || 'otro', academicCalendar: r.academicCalendar || 'diurno', contactEmail: r.contactEmail || undefined, contactPhone: r.contactPhone || undefined, website: r.website || undefined },
-            create: { name: r.name, city: r.city, neighborhood: r.neighborhood || undefined, address: r.address || undefined, institutionType: r.institutionType || 'otro', academicCalendar: r.academicCalendar || 'diurno', daneCode: r.daneCode || undefined, contactEmail: r.contactEmail || undefined, contactPhone: r.contactPhone || undefined, website: r.website || undefined }
+            update: { 
+              name: r.name, 
+              city: r.city, 
+              address: r.address,
+              neighborhood: r.neighborhood || undefined, 
+              institutionType: r.institutionType || 'otro', 
+              academicCalendar: r.academicCalendar || 'diurno', 
+              contactEmail: r.contactEmail, 
+              contactPhone: r.contactPhone, 
+              website: r.website || undefined 
+            },
+            create: { 
+              name: r.name, 
+              city: r.city, 
+              address: r.address,
+              neighborhood: r.neighborhood || undefined, 
+              institutionType: r.institutionType || 'otro', 
+              academicCalendar: r.academicCalendar || 'diurno', 
+              daneCode: r.daneCode || undefined, 
+              contactEmail: r.contactEmail, 
+              contactPhone: r.contactPhone, 
+              website: r.website || undefined 
+            }
           })
           created++
         } catch (e:any) {
@@ -153,14 +304,22 @@ export async function POST(req: NextRequest) {
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
         try {
-          if (!r.title || !r.description || !r.estimatedTimeMinutes || !r.theoryContent) throw new Error('title, description, estimatedTimeMinutes, theoryContent requeridos')
+          if (!r.title || !r.description || !r.estimatedTimeMinutes || !r.videoUrl || !r.videoDescription || !r.theoryContent) {
+            throw new Error('title, description, estimatedTimeMinutes, videoUrl, videoDescription y theoryContent son requeridos')
+          }
+          
+          const estimatedTime = parseIntOrU(r.estimatedTimeMinutes)
+          if (!estimatedTime || estimatedTime <= 0) {
+            throw new Error('estimatedTimeMinutes debe ser un número mayor a 0')
+          }
+          
           await prisma.lesson.create({
             data: {
               title: r.title,
               description: r.description,
-              estimatedTimeMinutes: Number(r.estimatedTimeMinutes) || 0,
-              videoUrl: r.videoUrl || null,
-              videoDescription: r.videoDescription || null,
+              estimatedTimeMinutes: estimatedTime,
+              videoUrl: r.videoUrl,
+              videoDescription: r.videoDescription,
               theoryContent: r.theoryContent,
               competencyId: r.competencyId || null,
             }
@@ -174,29 +333,114 @@ export async function POST(req: NextRequest) {
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
         try {
-          if (!r.questionText || !r.optionA || !r.optionB || !r.optionC || !r.optionD || !r.correctOption) throw new Error('questionText, options A-D y correctOption requeridos')
-          await prisma.lessonQuestion.create({
-            data: {
-              lessonId: r.lessonId || null,
-              questionText: r.questionText,
-              questionImage: r.questionImage || null,
-              questionType: r.questionType || 'multiple_choice',
-              optionA: r.optionA,
-              optionB: r.optionB,
-              optionC: r.optionC,
-              optionD: r.optionD,
-              optionAImage: r.optionAImage || null,
-              optionBImage: r.optionBImage || null,
-              optionCImage: r.optionCImage || null,
-              optionDImage: r.optionDImage || null,
-              correctOption: r.correctOption as any,
-              explanation: r.explanation || null,
-              explanationImage: r.explanationImage || null,
-              orderIndex: Number(r.orderIndex) || 0,
-              difficultyLevel: r.difficultyLevel || 'medio',
-              timeLimit: r.timeLimit ? Number(r.timeLimit) : null,
+          if (!r.questionText || !r.questionType) {
+            throw new Error('questionText y questionType son requeridos')
+          }
+          
+          const questionType = r.questionType.trim().toLowerCase()
+          const validTypes = ['multiple_choice', 'true_false', 'fill_blank', 'matching', 'essay']
+          if (!validTypes.includes(questionType)) {
+            throw new Error(`questionType debe ser uno de: ${validTypes.join(', ')}`)
+          }
+
+          // Normalizar usage (lesson | exam | both)
+          let usage = (r.usage || 'lesson').toString().trim().toLowerCase()
+          const validUsage = ['lesson', 'exam', 'both']
+          if (!validUsage.includes(usage)) {
+            usage = 'lesson'
+          }
+          
+          // orderIndex se asigna automáticamente (las preguntas se muestran aleatoriamente, así que usamos 1)
+          const orderIndex = 1
+          
+          // Validaciones según el tipo de pregunta
+          if (questionType === 'essay') {
+            // Para ensayo, no se requieren opciones
+            await prisma.lessonQuestion.create({
+              data: {
+                lessonId: r.lessonId || null,
+                questionText: r.questionText,
+                questionImage: r.questionImage || null,
+                questionType: questionType as any,
+                usage,
+                optionA: '',
+                optionB: '',
+                optionC: '',
+                optionD: '',
+                correctOption: '',
+                explanation: r.explanation || null,
+                explanationImage: r.explanationImage || null,
+                orderIndex: orderIndex,
+                difficultyLevel: (r.difficultyLevel === 'medio' ? 'intermedio' : r.difficultyLevel) || 'intermedio',
+                timeLimit: parseIntOrU(r.timeLimit) || null,
+              } as any
+            })
+          } else if (questionType === 'true_false') {
+            // Para verdadero/falso, solo se requieren A y B
+            if (!r.optionA || !r.optionB || !r.correctOption) {
+              throw new Error('Para preguntas verdadero/falso se requieren optionA, optionB y correctOption')
             }
-          })
+            const correctOption = r.correctOption.trim().toUpperCase()
+            if (!['A', 'B'].includes(correctOption)) {
+              throw new Error('Para verdadero/falso, correctOption debe ser A o B')
+            }
+            await prisma.lessonQuestion.create({
+              data: {
+                lessonId: r.lessonId || null,
+                questionText: r.questionText,
+                questionImage: r.questionImage || null,
+                questionType: questionType as any,
+                usage,
+                optionA: r.optionA,
+                optionB: r.optionB,
+                optionC: '',
+                optionD: '',
+                optionAImage: r.optionAImage || null,
+                optionBImage: r.optionBImage || null,
+                optionCImage: r.optionCImage || null,
+                optionDImage: r.optionDImage || null,
+                correctOption: correctOption as any,
+                explanation: r.explanation || null,
+                explanationImage: r.explanationImage || null,
+                orderIndex: orderIndex,
+                difficultyLevel: (r.difficultyLevel === 'medio' ? 'intermedio' : r.difficultyLevel) || 'intermedio',
+                timeLimit: parseIntOrU(r.timeLimit) || null,
+              } as any
+            })
+          } else {
+            // Para multiple_choice, fill_blank, matching: se requieren todas las opciones
+            if (!r.optionA || !r.optionB || !r.optionC || !r.optionD || !r.correctOption) {
+              throw new Error('Para este tipo de pregunta se requieren optionA, optionB, optionC, optionD y correctOption')
+            }
+            const correctOption = r.correctOption.trim().toUpperCase()
+            if (!['A', 'B', 'C', 'D'].includes(correctOption)) {
+              throw new Error('correctOption debe ser A, B, C o D')
+            }
+            
+            await prisma.lessonQuestion.create({
+              data: {
+                lessonId: r.lessonId || null,
+                questionText: r.questionText,
+                questionImage: r.questionImage || null,
+                questionType: questionType as any,
+                usage,
+                optionA: r.optionA,
+                optionB: r.optionB,
+                optionC: r.optionC,
+                optionD: r.optionD,
+                optionAImage: r.optionAImage || null,
+                optionBImage: r.optionBImage || null,
+                optionCImage: r.optionCImage || null,
+                optionDImage: r.optionDImage || null,
+                correctOption: correctOption as any,
+                explanation: r.explanation || null,
+                explanationImage: r.explanationImage || null,
+                orderIndex: orderIndex,
+                difficultyLevel: (r.difficultyLevel === 'medio' ? 'intermedio' : r.difficultyLevel) || 'intermedio',
+                timeLimit: parseIntOrU(r.timeLimit) || null,
+              } as any
+            })
+          }
           created++
         } catch (e:any) {
           errors.push({ row: i + 2, message: e.message || 'Error' })

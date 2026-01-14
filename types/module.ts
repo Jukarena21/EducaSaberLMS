@@ -17,6 +17,8 @@ export interface ModuleData {
     displayName: string;
     colorHex?: string;
   };
+  isIcfesModule?: boolean;
+  academicGrade?: string; // 'sexto', 'septimo', etc.
   lessons?: {
     id: string;
     title: string;
@@ -39,6 +41,8 @@ export interface ModuleFormData {
   description: string;
   estimatedTime: number;
   competencyId?: string;
+  isIcfesModule?: boolean;
+  year?: number; // Año escolar (6-11) solo para módulos ICFES
   selectedLessons: Array<{
     lessonId: string;
     orderIndex: number;
@@ -48,4 +52,6 @@ export interface ModuleFormData {
 export interface ModuleFilters {
   search?: string;
   createdById?: string;
+  competencyId?: string;
+  isIcfesModule?: boolean;
 } 

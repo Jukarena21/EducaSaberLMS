@@ -12,7 +12,7 @@ async function ensureDefaults() {
   } catch {
     const defaultData = {
       homepage: {
-        showInstitutionsCarousel: true,
+        showInstitutionsCarousel: false,
         institutions: [] as Array<{ id: string; name: string; logoUrl: string; website?: string }>,
       },
     }
@@ -25,7 +25,7 @@ export async function GET() {
     await ensureDefaults()
     const raw = await fs.readFile(SETTINGS_FILE, 'utf-8')
     const data = JSON.parse(raw)
-    return NextResponse.json(data.homepage || { showInstitutionsCarousel: true, institutions: [] })
+    return NextResponse.json(data.homepage || { showInstitutionsCarousel: false, institutions: [] })
   } catch (e) {
     console.error('GET /api/settings/homepage', e)
     return NextResponse.json({ error: 'Error leyendo configuración' }, { status: 500 })

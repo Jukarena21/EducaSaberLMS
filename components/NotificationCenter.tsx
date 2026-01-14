@@ -14,24 +14,40 @@ import { NotificationData, NotificationType } from '@/types/notification';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-const notificationTypeLabels: Record<NotificationType, string> = {
+const notificationTypeLabels: Record<NotificationType | 'exam_published' | 'student_missed_exam' | 'performance_alert', string> = {
   exam_available: 'Examen Disponible',
   exam_reminder: 'Recordatorio de Examen',
+  exam_scheduled: 'Examen Programado',
+  exam_closed: 'Examen Cerrado',
+  exam_failed: 'Examen No Aprobado',
+  exam_missed: 'Examen No Presentado',
   lesson_completed: 'Lección Completada',
   achievement_unlocked: 'Logro Desbloqueado',
   course_enrolled: 'Curso Inscrito',
   exam_result: 'Resultado de Examen',
   system: 'Sistema',
+  admin_broadcast: 'Anuncio',
+  exam_published: 'Examen Publicado',
+  student_missed_exam: 'Estudiante No Presentó',
+  performance_alert: 'Alerta de Rendimiento',
 };
 
-const notificationTypeColors: Record<NotificationType, string> = {
+const notificationTypeColors: Record<NotificationType | 'exam_published' | 'student_missed_exam' | 'performance_alert', string> = {
   exam_available: 'bg-blue-100 text-blue-800',
   exam_reminder: 'bg-yellow-100 text-yellow-800',
+  exam_scheduled: 'bg-cyan-100 text-cyan-800',
+  exam_closed: 'bg-red-100 text-red-800',
+  exam_failed: 'bg-red-100 text-red-800',
+  exam_missed: 'bg-orange-100 text-orange-800',
   lesson_completed: 'bg-green-100 text-green-800',
   achievement_unlocked: 'bg-purple-100 text-purple-800',
   course_enrolled: 'bg-indigo-100 text-indigo-800',
-  exam_result: 'bg-orange-100 text-orange-800',
+  exam_result: 'bg-green-100 text-green-800',
   system: 'bg-gray-100 text-gray-800',
+  admin_broadcast: 'bg-purple-100 text-purple-800',
+  exam_published: 'bg-green-100 text-green-800',
+  student_missed_exam: 'bg-orange-100 text-orange-800',
+  performance_alert: 'bg-yellow-100 text-yellow-800',
 };
 
 interface NotificationItemProps {
@@ -123,8 +139,21 @@ export function NotificationCenter() {
     markAsRead, 
     markAllAsRead, 
     deleteNotification,
-    fetchNotifications 
+    fetchNotifications,
+    refreshNotifications
   } = useNotifications();
+
+  // Refrescar notificaciones y marcar todas como leídas cuando se abre el diálogo
+  const handleOpenChange = async (open: boolean) => {
+    setIsOpen(open);
+    if (open) {
+      // Refrescar notificaciones primero
+      await refreshNotifications();
+      // Marcar todas como leídas automáticamente al abrir
+      // Esto asegura que el contador se actualice inmediatamente
+      await markAllAsRead();
+    }
+  };
 
   const filteredNotifications = notifications.filter(notification => {
     if (filter === 'all') return true;
@@ -142,7 +171,7 @@ export function NotificationCenter() {
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className="relative">
           <Bell className="h-5 w-5" />

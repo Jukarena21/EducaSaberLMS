@@ -14,62 +14,57 @@ export async function POST(
     }
 
     const { attemptId } = await params
-    const { questionId, selectedOptionId, answerText } = await request.json()
     const userId = session.user.id
-
-    if (!questionId) {
-      return NextResponse.json({ error: 'ID de pregunta requerido' }, { status: 400 })
+    const { questionId, selectedOptionId, answerText } = await request.json()
+    
+    // answerText puede ser string (para fill_blank, essay) o JSON string (para matching)
+    let processedAnswerText = answerText
+    if (answerText && typeof answerText === 'object') {
+      processedAnswerText = JSON.stringify(answerText)
     }
 
-    // Verificar que el intento pertenece al usuario y está en progreso
-    const attempt = await prisma.examAttempt.findFirst({
+    // Verificar que el resultado de examen existe y pertenece al usuario
+    const result = await prisma.examResult.findFirst({
       where: {
         id: attemptId,
-        userId,
-        status: 'in_progress'
+        userId
       }
     })
 
-    if (!attempt) {
-      return NextResponse.json({ error: 'Intento de examen no encontrado' }, { status: 404 })
+    if (!result) {
+      return NextResponse.json({ error: 'Resultado de examen no encontrado' }, { status: 404 })
     }
 
-    // Verificar que no se ha excedido el tiempo límite
-    const now = new Date()
-    const timeElapsed = now.getTime() - attempt.startedAt.getTime()
-    const timeLimitMs = (attempt.timeLimitMinutes || 60) * 60 * 1000
-
-    if (timeElapsed > timeLimitMs) {
-      return NextResponse.json({ error: 'Tiempo límite excedido' }, { status: 400 })
-    }
-
-    // Guardar o actualizar la respuesta
-    const existingAnswer = await prisma.examAnswer.findFirst({
+    // Buscar o crear la respuesta
+    const existingAnswer = await prisma.examQuestionAnswer.findFirst({
       where: {
-        attemptId,
+        examResultId: attemptId,
         questionId
       }
     })
 
     if (existingAnswer) {
       // Actualizar respuesta existente
-      await prisma.examAnswer.update({
+      await prisma.examQuestionAnswer.update({
         where: { id: existingAnswer.id },
         data: {
-          selectedOptionId: selectedOptionId || null,
-          answerText: answerText || null,
-          answeredAt: new Date()
+          selectedOption: selectedOptionId || null,
+          answerText: processedAnswerText || null,
+          isCorrect: false, // Se calculará al final
+          timeSpentSeconds: 0 // Se puede calcular si es necesario
         }
       })
     } else {
       // Crear nueva respuesta
-      await prisma.examAnswer.create({
+      await prisma.examQuestionAnswer.create({
         data: {
-          attemptId,
+          examResultId: attemptId,
           questionId,
-          selectedOptionId: selectedOptionId || null,
-          answerText: answerText || null,
-          answeredAt: new Date()
+          selectedOption: selectedOptionId || null,
+          answerText: processedAnswerText || null,
+          isCorrect: false, // Se calculará al final
+          timeSpentSeconds: 0,
+          userId
         }
       })
     }

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Curso - {{courseTitle}}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @page {
+            size: A4;
+            margin: 0.3in;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: white;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .header-gradient {
+            background: linear-gradient(135deg, #3b82f6 0%, #ef4444 100%);
+        }
+        
+        .course-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .progress-bar {
+            background-color: #e5e7eb;
+            border-radius: 9999px;
+            height: 8px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            background: linear-gradient(90deg, #3b82f6, #ef4444);
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 0.3s ease;
+        }
+        
+        .module-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+        
+        .lesson-row {
+            border-bottom: 1px solid #f1f5f9;
+            padding: 8px 0;
+        }
+        
+        .lesson-row:last-child {
+            border-bottom: none;
+        }
+        
+        .status-badge {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-completed {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        
+        .status-progress {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-not-started {
+            background-color: #f3f4f6;
+            color: #6b7280;
+        }
+        
+        .page-break-avoid {
+            page-break-inside: avoid;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header con logos -->
+    <div class="header-gradient p-4 mb-4 rounded-lg">
+        <div class="flex justify-between items-center">
+            <div class="flex items-center">
+                <div class="mr-4">
+                    <img src="{{companyLogo}}" alt="EducaSaber" class="h-12 w-auto" onerror="this.style.display='none'">
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-white">EducaSaber</h1>
+                    <p class="text-blue-100 text-sm">Sistema de Gestión de Aprendizaje</p>
+                </div>
+            </div>
+            <div class="flex items-center">
+                <div class="text-right text-white mr-4">
+                    <h2 class="text-lg font-semibold">{{studentName}}</h2>
+                    <p class="text-blue-100 text-sm">{{schoolName}}</p>
+                    <p class="text-xs text-blue-200">{{generationDate}}</p>
+                </div>
+                <div>
+                    <img src="{{schoolLogo}}" alt="{{schoolName}}" class="h-12 w-auto" onerror="this.style.display='none'">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Título Principal -->
+    <div class="text-center mb-4">
+        <h1 class="text-xl font-bold text-gray-900 mb-1">Reporte de Progreso - {{courseTitle}}</h1>
+        <div class="w-16 h-1 bg-gradient-to-r from-blue-500 to-red-500 mx-auto rounded"></div>
+        <p class="text-sm text-gray-600 mt-2">{{competencyName}} • {{academicGrade}}</p>
+    </div>
+
+    <!-- Resumen Ejecutivo -->
+    <div class="course-card mb-4">
+        <h2 class="text-lg font-bold text-gray-900 mb-3">Resumen Ejecutivo</h2>
+        
+        <div class="grid grid-cols-4 gap-4 mb-4">
+            <div class="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div class="text-2xl font-bold text-blue-600">{{progressPercentage}}%</div>
+                <div class="text-sm text-blue-700">Progreso General</div>
+            </div>
+            <div class="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+                <div class="text-2xl font-bold text-green-600">{{totalTimeHours}}h</div>
+                <div class="text-sm text-green-700">Tiempo Invertido</div>
+            </div>
+            <div class="text-center p-3 bg-purple-50 rounded-lg border border-purple-200">
+                <div class="text-2xl font-bold text-purple-600">{{completedModules}}/{{totalModules}}</div>
+                <div class="text-sm text-purple-700">Módulos Completados</div>
+            </div>
+            <div class="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
+                <div class="text-2xl font-bold text-orange-600">{{completedLessons}}/{{totalLessons}}</div>
+                <div class="text-sm text-orange-700">Lecciones Completadas</div>
+            </div>
+        </div>
+        
+        <div class="mb-3">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-semibold text-gray-700">Progreso del Curso</span>
+                <span class="text-sm text-gray-600">{{progressPercentage}}%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{progressPercentage}}%"></div>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4 text-sm text-gray-600">
+            <div>
+                <strong>Tasa de Finalización:</strong> {{moduleCompletionRate}}%
+            </div>
+            <div>
+                <strong>Tiempo Promedio por Lección:</strong> {{averageTimePerLesson}}min
+            </div>
+            {{#if daysSinceLastActivity}}
+            <div>
+                <strong>Días sin Actividad:</strong> {{daysSinceLastActivity}}
+            </div>
+            {{/if}}
+            {{#if nextLesson}}
+            <div>
+                <strong>Próxima Lección:</strong> {{nextLesson.title}}
+            </div>
+            {{/if}}
+        </div>
+    </div>
+
+    <!-- Progreso por Módulos -->
+    <div class="course-card mb-4 page-break-avoid">
+        <h2 class="text-lg font-bold text-gray-900 mb-3">Progreso por Módulos</h2>
+        
+        {{#if modules.length}}
+        {{#each modules}}
+        <div class="module-card">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="font-semibold text-gray-800">{{this.title}}</h3>
+                <span class="text-sm text-gray-600">{{this.progressPercentage}}%</span>
+            </div>
+            <div class="progress-bar mb-2">
+                <div class="progress-fill" style="width: {{this.progressPercentage}}%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-gray-600">
+                <span>{{this.completedLessons}}/{{this.totalLessons}} lecciones</span>
+                <span>{{this.timeHours}}h invertidas</span>
+            </div>
+        </div>
+        {{/each}}
+        {{else}}
+        <div class="text-center py-8 text-gray-500">
+            <p>No hay módulos disponibles para este curso.</p>
+        </div>
+        {{/if}}
+    </div>
+
+    <!-- Detalle de Lecciones -->
+    <div class="course-card mb-4 page-break-avoid">
+        <h2 class="text-lg font-bold text-gray-900 mb-3">Detalle de Lecciones</h2>
+        
+        {{#if lessons.length}}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-gray-200">
+                        <th class="text-left py-2 font-semibold text-gray-700">Módulo</th>
+                        <th class="text-left py-2 font-semibold text-gray-700">Lección</th>
+                        <th class="text-center py-2 font-semibold text-gray-700">Estado</th>
+                        <th class="text-center py-2 font-semibold text-gray-700">Progreso</th>
+                        <th class="text-center py-2 font-semibold text-gray-700">Componentes</th>
+                        <th class="text-center py-2 font-semibold text-gray-700">Tiempo</th>
+                        <th class="text-center py-2 font-semibold text-gray-700">Completado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#each lessons}}
+                    <tr class="lesson-row">
+                        <td class="py-2 font-medium text-gray-800">{{this.moduleName}}</td>
+                        <td class="py-2 font-medium text-gray-800">{{this.title}}</td>
+                        <td class="text-center py-2">
+                            <span class="status-badge status-{{this.statusClass}}">{{this.statusText}}</span>
+                        </td>
+                        <td class="text-center py-2">{{this.progress}}%</td>
+                        <td class="text-center py-2">
+                            <div class="flex justify-center gap-1">
+                                {{#if this.videoCompleted}}<span class="text-green-600">✓</span>{{else}}<span class="text-gray-300">○</span>{{/if}}
+                                {{#if this.theoryCompleted}}<span class="text-green-600">✓</span>{{else}}<span class="text-gray-300">○</span>{{/if}}
+                                {{#if this.exercisesCompleted}}<span class="text-green-600">✓</span>{{else}}<span class="text-gray-300">○</span>{{/if}}
+                            </div>
+                        </td>
+                        <td class="text-center py-2">{{this.timeMinutes}}min</td>
+                        <td class="text-center py-2 text-xs text-gray-600">{{this.completedDate}}</td>
+                    </tr>
+                    {{/each}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <div class="text-center py-8 text-gray-500">
+            <p>No hay lecciones disponibles para este curso.</p>
+        </div>
+        {{/if}}
+    </div>
+
+    <!-- Análisis y Recomendaciones -->
+    <div class="course-card mb-4 page-break-avoid">
+        <h2 class="text-lg font-bold text-gray-900 mb-3">Análisis y Recomendaciones</h2>
+        
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <h3 class="font-semibold text-green-700 mb-2">Fortalezas</h3>
+                <ul class="text-sm text-gray-700 space-y-1">
+                    {{#each strengths}}
+                    <li>• {{this}}</li>
+                    {{/each}}
+                </ul>
+            </div>
+            <div>
+                <h3 class="font-semibold text-orange-700 mb-2">Áreas de Mejora</h3>
+                <ul class="text-sm text-gray-700 space-y-1">
+                    {{#each improvements}}
+                    <li>• {{this}}</li>
+                    {{/each}}
+                </ul>
+            </div>
+        </div>
+        
+        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <h3 class="font-semibold text-blue-800 mb-2">Próximos Pasos Recomendados</h3>
+            <ul class="text-sm text-blue-700 space-y-1">
+                {{#each recommendations}}
+                <li>• {{this}}</li>
+                {{/each}}
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
+

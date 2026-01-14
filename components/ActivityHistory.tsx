@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Calendar, BookOpen, Award, Clock, TrendingUp, TrendingDown, Minus, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -119,8 +120,9 @@ function PerformanceCard({ metric }: PerformanceCardProps) {
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="text-xs text-gray-500">Promedio</p>
-            <p className="text-lg font-semibold">{metric.averageScore}%</p>
+            <p className="text-xs text-gray-500">Promedio de Puntajes</p>
+            <p className="text-xs text-gray-400">En exámenes (0-100%)</p>
+            <p className="text-lg font-semibold">{metric.averageScore}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500">Exámenes</p>
@@ -296,32 +298,67 @@ export function ActivityHistory() {
 
           {/* Estadísticas generales de rendimiento */}
           {overallStats && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold text-blue-600">{overallStats.totalExams}</div>
-                  <div className="text-xs text-gray-500">Exámenes Presentados</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold text-green-600">{overallStats.averageScore}%</div>
-                  <div className="text-xs text-gray-500">Promedio General</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold text-purple-600">{overallStats.totalLessonsCompleted}</div>
-                  <div className="text-xs text-gray-500">Lecciones Completadas</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4 text-center">
-                  <div className="text-2xl font-bold text-orange-600">{Math.round(overallStats.totalStudyTime / 60)}h</div>
-                  <div className="text-xs text-gray-500">Tiempo Total</div>
-                </CardContent>
-              </Card>
-            </div>
+            <TooltipProvider delayDuration={200}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Card className="cursor-help">
+                      <CardContent className="p-4 text-center">
+                        <div className="text-2xl font-bold text-blue-600">{overallStats.totalExams}</div>
+                        <div className="text-xs text-gray-500">Exámenes Presentados</div>
+                      </CardContent>
+                    </Card>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs leading-snug">
+                    Cantidad total de exámenes que has presentado en el periodo seleccionado.{" "}
+                    Incluye todos los intentos completados.
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Card className="cursor-help">
+                      <CardContent className="p-4 text-center">
+                        <div className="text-2xl font-bold text-green-600">{overallStats.averageScore}</div>
+                        <div className="text-xs text-gray-500">Promedio de Puntajes</div>
+                        <div className="text-xs text-gray-400">En exámenes (0-100%)</div>
+                      </CardContent>
+                    </Card>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs leading-snug">
+                    Promedio de tus puntajes en exámenes dentro del periodo seleccionado.{" "}
+                    Cada examen se expresa en porcentaje según tus respuestas correctas.
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Card className="cursor-help">
+                      <CardContent className="p-4 text-center">
+                        <div className="text-2xl font-bold text-purple-600">{overallStats.totalLessonsCompleted}</div>
+                        <div className="text-xs text-gray-500">Lecciones Completadas</div>
+                      </CardContent>
+                    </Card>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs leading-snug">
+                    Número de lecciones que terminaste en el periodo seleccionado.{" "}
+                    Solo se cuentan las que quedaron marcadas como completadas.
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Card className="cursor-help">
+                      <CardContent className="p-4 text-center">
+                        <div className="text-2xl font-bold text-orange-600">{Math.round(overallStats.totalStudyTime / 60)}h</div>
+                        <div className="text-xs text-gray-500">Tiempo Total</div>
+                      </CardContent>
+                    </Card>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs leading-snug">
+                    Tiempo total que dedicaste al estudio en la plataforma durante el periodo seleccionado.{" "}
+                    Se calcula sumando los minutos registrados por lección.
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
           )}
 
           {/* Rendimiento por competencia */}

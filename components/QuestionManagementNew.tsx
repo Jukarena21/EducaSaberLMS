@@ -15,6 +15,7 @@ import { useQuestions } from '@/hooks/useQuestions';
 import { useLessons } from '@/hooks/useLessons';
 import { QuestionFormNew } from './QuestionFormNew';
 import { QuestionPreview } from './QuestionPreview';
+import { getAcademicGradeDisplayName } from '@/lib/academicGrades';
 import { 
   Plus, 
   Search, 
@@ -43,56 +44,38 @@ interface QuestionManagementNewProps {
 
 export function QuestionManagementNew({ competencies, userRole }: QuestionManagementNewProps) {
   const { toast } = useToast();
-  const { questions, loading, error, createQuestion, updateQuestion, deleteQuestion, refreshQuestions } = useQuestions();
+  const { 
+    questions, 
+    loading, 
+    error, 
+    pagination,
+    filters,
+    pendingFilters,
+    setPendingFilters,
+    applyFilters,
+    clearFilters,
+    goToPage,
+    createQuestion, 
+    updateQuestion, 
+    deleteQuestion, 
+    refreshQuestions 
+  } = useQuestions();
   const { lessons } = useLessons();
 
   const [showForm, setShowForm] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<QuestionData | null>(null);
   const [previewQuestion, setPreviewQuestion] = useState<QuestionData | null>(null);
   const [previewMode, setPreviewMode] = useState<'exam' | 'lesson' | 'admin'>('admin');
-  
-  const [filters, setFilters] = useState<QuestionFilters>({
-    search: '',
-    competencyId: 'all',
-    lessonId: 'all',
-    difficultyLevel: 'all',
-    questionType: 'all',
-    hasImages: 'all',
-  });
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [questionTypeSelected, setQuestionTypeSelected] = useState(false);
+  const [selectedQuestionType, setSelectedQuestionType] = useState<'multiple_choice' | 'true_false' | 'fill_blank' | 'matching' | 'essay'>('multiple_choice');
 
   // Restricciones de permisos por rol
   const canCreate = userRole === 'teacher_admin';
   const canEdit = userRole === 'teacher_admin';
   const canDelete = userRole === 'teacher_admin';
 
-  // Filtrar preguntas
+  // Client-side filtering for hasImages (not supported by backend yet)
   const filteredQuestions = questions.filter(question => {
-    if (filters.search && !question.questionText.toLowerCase().includes(filters.search.toLowerCase())) {
-      return false;
-    }
-    
-    if (filters.competencyId && filters.competencyId !== 'all') {
-      const hasCompetency = question.lesson.modules.some(module => 
-        module.competency?.id === filters.competencyId
-      );
-      if (!hasCompetency) return false;
-    }
-    
-    if (filters.lessonId && filters.lessonId !== 'all' && question.lessonId !== filters.lessonId) {
-      return false;
-    }
-    
-    if (filters.difficultyLevel && filters.difficultyLevel !== 'all' && question.difficultyLevel !== filters.difficultyLevel) {
-      return false;
-    }
-    
-    if (filters.questionType && filters.questionType !== 'all' && question.questionType !== filters.questionType) {
-      return false;
-    }
-    
     if (filters.hasImages === 'yes' && !question.questionImage && !question.optionAImage && !question.optionBImage && !question.optionCImage && !question.optionDImage && !question.explanationImage) {
       return false;
     }
@@ -103,11 +86,6 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
     
     return true;
   });
-
-  // Paginación
-  const totalPages = Math.ceil(filteredQuestions.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedQuestions = filteredQuestions.slice(startIndex, startIndex + itemsPerPage);
 
   const handleCreateQuestion = async (data: QuestionFormData) => {
     const result = await createQuestion(data);
@@ -123,7 +101,7 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
   const handleUpdateQuestion = async (data: QuestionFormData) => {
     if (!editingQuestion) return;
     
-    const result = await updateQuestion(editingQuestion.id, data);
+    const result = await updateQuestion(editingQuestion.id!, data);
     if (result) {
       setEditingQuestion(null);
       toast({
@@ -138,11 +116,18 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
       return;
     }
 
-    const success = await deleteQuestion(question.id);
+    const success = await deleteQuestion(question.id!);
     if (success) {
       toast({
         title: 'Éxito',
         description: 'Pregunta eliminada correctamente',
+      });
+      // El hook ya refresca automáticamente después de eliminar
+    } else {
+      toast({
+        title: 'Error',
+        description: error || 'No se pudo eliminar la pregunta',
+        variant: 'destructive',
       });
     }
   };
@@ -156,16 +141,27 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
     setPreviewMode(mode);
   };
 
-  const clearFilters = () => {
-    setFilters({
+  const handlePendingFilterChange = (field: keyof QuestionFilters, value: string | 'all' | 'yes' | 'no' | boolean | undefined) => {
+    const updated = { ...pendingFilters, [field]: value };
+    setPendingFilters(updated);
+  };
+
+  const handleApplyFilters = () => {
+    applyFilters(pendingFilters);
+  };
+
+  const handleClearFilters = () => {
+    const defaultFilters: QuestionFilters = {
       search: '',
       competencyId: 'all',
       lessonId: 'all',
       difficultyLevel: 'all',
       questionType: 'all',
       hasImages: 'all',
-    });
-    setCurrentPage(1);
+      isIcfesCourse: undefined,
+    };
+    setPendingFilters(defaultFilters);
+    clearFilters();
   };
 
   const getDifficultyColor = (level: string) => {
@@ -195,7 +191,7 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
 
   // Filtrar lecciones por competencia seleccionada
   const filteredLessons = lessons.filter(lesson => 
-    filters.competencyId === 'all' || lesson.modules.some(module => module.competency?.id === filters.competencyId)
+    pendingFilters.competencyId === 'all' || lesson.modules.some(module => module.competency?.id === pendingFilters.competencyId)
   );
 
   if (error) {
@@ -206,7 +202,7 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-red-900 mb-2">Error al cargar preguntas</h3>
             <p className="text-red-700 mb-4">{error}</p>
-            <Button onClick={refreshQuestions} variant="outline">
+            <Button onClick={() => refreshQuestions({ skipCache: true })} variant="outline">
               <RefreshCw className="w-4 h-4 mr-2" />
               Reintentar
             </Button>
@@ -224,22 +220,22 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
           <h2 className="text-2xl font-bold">Gestión de Preguntas</h2>
           <p className="text-muted-foreground">
             {userRole === 'school_admin' 
-              ? `Consulta las preguntas disponibles para crear exámenes (${filteredQuestions.length} de ${questions.length})`
-              : `Administra las preguntas del sistema (${filteredQuestions.length} de ${questions.length})`
+              ? `Consulta las preguntas disponibles para crear exámenes${pagination ? ` (${pagination.total} total)` : ''}`
+              : `Administra las preguntas del sistema${pagination ? ` (${pagination.total} total)` : ''}`
             }
           </p>
         </div>
         
         <div className="flex items-center gap-2">
-          <Button
-            onClick={refreshQuestions}
-            variant="outline"
-            size="sm"
-            disabled={loading}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Actualizar
-          </Button>
+            <Button
+              onClick={() => refreshQuestions({ skipCache: true })}
+              variant="outline"
+              size="sm"
+              disabled={loading}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </Button>
           
           {canCreate && (
             <Button onClick={() => setShowForm(true)}>
@@ -259,7 +255,7 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
             <div className="space-y-2">
               <Label htmlFor="search">Buscar</Label>
               <div className="relative">
@@ -267,8 +263,8 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
                 <Input
                   id="search"
                   placeholder="Enunciado..."
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  value={pendingFilters.search}
+                  onChange={(e) => handlePendingFilterChange('search', e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -277,8 +273,8 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
             <div className="space-y-2">
               <Label htmlFor="competency">Competencia</Label>
               <Select 
-                value={filters.competencyId} 
-                onValueChange={(value) => setFilters(prev => ({ ...prev, competencyId: value }))}
+                value={pendingFilters.competencyId} 
+                onValueChange={(value) => handlePendingFilterChange('competencyId', value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
@@ -297,8 +293,8 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
             <div className="space-y-2">
               <Label htmlFor="lesson">Lección</Label>
               <Select 
-                value={filters.lessonId} 
-                onValueChange={(value) => setFilters(prev => ({ ...prev, lessonId: value }))}
+                value={pendingFilters.lessonId} 
+                onValueChange={(value) => handlePendingFilterChange('lessonId', value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
@@ -317,8 +313,8 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
             <div className="space-y-2">
               <Label htmlFor="difficulty">Dificultad</Label>
               <Select 
-                value={filters.difficultyLevel} 
-                onValueChange={(value) => setFilters(prev => ({ ...prev, difficultyLevel: value }))}
+                value={pendingFilters.difficultyLevel} 
+                onValueChange={(value) => handlePendingFilterChange('difficultyLevel', value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
@@ -335,8 +331,8 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
             <div className="space-y-2">
               <Label htmlFor="type">Tipo</Label>
               <Select 
-                value={filters.questionType} 
-                onValueChange={(value) => setFilters(prev => ({ ...prev, questionType: value }))}
+                value={pendingFilters.questionType} 
+                onValueChange={(value) => handlePendingFilterChange('questionType', value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
@@ -355,8 +351,8 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
             <div className="space-y-2">
               <Label htmlFor="images">Imágenes</Label>
               <Select 
-                value={filters.hasImages} 
-                onValueChange={(value) => setFilters(prev => ({ ...prev, hasImages: value }))}
+                value={pendingFilters.hasImages} 
+                onValueChange={(value) => handlePendingFilterChange('hasImages', value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
@@ -368,11 +364,35 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="questionType">Tipo de Curso</Label>
+              <Select 
+                value={pendingFilters.isIcfesCourse === undefined ? 'all' : (pendingFilters.isIcfesCourse ? 'icfes' : 'personalizado')}
+                onValueChange={(value) => {
+                  const isIcfesCourse = value === 'all' ? undefined : (value === 'icfes')
+                  handlePendingFilterChange('isIcfesCourse', isIcfesCourse as any)
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los tipos</SelectItem>
+                  <SelectItem value="icfes">ICFES</SelectItem>
+                  <SelectItem value="personalizado">Personalizado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="flex justify-end mt-4">
-            <Button variant="outline" onClick={clearFilters}>
+          <div className="flex justify-end mt-4 gap-2">
+            <Button variant="outline" onClick={handleClearFilters}>
               Limpiar filtros
+            </Button>
+            <Button onClick={handleApplyFilters}>
+              <Search className="w-4 h-4 mr-2" />
+              Aplicar filtros
             </Button>
           </div>
         </CardContent>
@@ -383,7 +403,7 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
         <CardHeader>
           <CardTitle>Preguntas</CardTitle>
           <CardDescription>
-            {filteredQuestions.length} preguntas encontradas
+            {pagination ? `${pagination.total} preguntas encontradas` : 'Cargando...'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -392,17 +412,17 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
               <RefreshCw className="w-6 h-6 animate-spin mr-2" />
               Cargando preguntas...
             </div>
-          ) : paginatedQuestions.length === 0 ? (
+          ) : filteredQuestions.length === 0 ? (
             <div className="text-center py-8">
               <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium mb-2">No hay preguntas</h3>
               <p className="text-muted-foreground mb-4">
-                {filteredQuestions.length === 0 && questions.length > 0 
-                  ? 'No se encontraron preguntas con los filtros aplicados'
-                  : 'Crea tu primera pregunta para comenzar'
+                {pagination && pagination.total === 0
+                  ? 'Crea tu primera pregunta para comenzar'
+                  : 'No se encontraron preguntas con los filtros aplicados'
                 }
               </p>
-              {questions.length === 0 && canCreate && (
+              {pagination && pagination.total === 0 && canCreate && (
                 <Button onClick={() => setShowForm(true)}>
                   <Plus className="w-4 h-4 mr-2" />
                   Crear Primera Pregunta
@@ -417,6 +437,7 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
                     <TableHead>Pregunta</TableHead>
                     <TableHead>Lección</TableHead>
                     <TableHead>Competencia</TableHead>
+                    <TableHead>Año Escolar</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Dificultad</TableHead>
                     <TableHead>Multimedia</TableHead>
@@ -424,7 +445,7 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedQuestions.map((question) => (
+                  {filteredQuestions.map((question) => (
                     <TableRow key={question.id}>
                       <TableCell className="max-w-xs">
                         <div className="space-y-1">
@@ -445,17 +466,33 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
                       
                       <TableCell>
                         <div className="space-y-1">
-                          <p className="font-medium">{question.lesson.title}</p>
+                          <p className="font-medium">{question.lesson?.title || 'Sin lección'}</p>
                           <p className="text-xs text-muted-foreground">
-                            {question.lesson.modules[0]?.moduleTitle || 'Sin módulo'}
+                            {question.lesson?.modules[0]?.moduleTitle || 'Sin módulo'}
                           </p>
                         </div>
                       </TableCell>
                       
                       <TableCell>
                         <Badge variant="outline">
-                          {question.lesson.modules[0]?.competency?.name || 'N/A'}
+                          {question.lesson?.modules[0]?.competency?.name || 'N/A'}
                         </Badge>
+                      </TableCell>
+                      
+                      <TableCell>
+                        {question.lesson?.academicGrade ? (
+                          <Badge variant="secondary">
+                            {getAcademicGradeDisplayName(question.lesson.academicGrade)}
+                          </Badge>
+                        ) : question.lesson?.year ? (
+                          <Badge variant="secondary">
+                            {question.lesson.year}° Grado
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            N/A
+                          </Badge>
+                        )}
                       </TableCell>
                       
                       <TableCell>
@@ -542,31 +579,31 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
               </Table>
 
               {/* Paginación */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
+              {pagination && pagination.pages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
                   <p className="text-sm text-muted-foreground">
-                    Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, filteredQuestions.length)} de {filteredQuestions.length} preguntas
+                    Mostrando {((pagination.page - 1) * pagination.limit) + 1} a {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total} preguntas
                   </p>
                   
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
+                      onClick={() => goToPage(pagination.page - 1)}
+                      disabled={pagination.page === 1}
                     >
                       Anterior
                     </Button>
                     
                     <span className="text-sm">
-                      Página {currentPage} de {totalPages}
+                      Página {pagination.page} de {pagination.pages}
                     </span>
                     
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages}
+                      onClick={() => goToPage(pagination.page + 1)}
+                      disabled={pagination.page === pagination.pages}
                     >
                       Siguiente
                     </Button>
@@ -579,12 +616,17 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
       </Card>
 
       {/* Formulario de creación/edición */}
-      <Dialog open={showForm || !!editingQuestion} onOpenChange={(open) => {
-        if (!open) {
-          setShowForm(false);
-          setEditingQuestion(null);
-        }
-      }}>
+      <Dialog 
+        open={showForm || !!editingQuestion} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowForm(false);
+            setEditingQuestion(null);
+            setQuestionTypeSelected(false);
+            setSelectedQuestionType('multiple_choice');
+          }
+        }}
+      >
         <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
@@ -599,15 +641,37 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
           </DialogHeader>
           
           <QuestionFormNew
-            question={editingQuestion}
+            question={editingQuestion ? {
+              ...editingQuestion,
+              usage: editingQuestion.usage || 'lesson'
+            } as QuestionFormData : null}
             competencies={competencies}
-            lessons={lessons}
+            lessons={lessons.map((l: any) => ({
+              id: l.id,
+              title: l.title,
+              competencyId: l.competencyId || '',
+              isIcfesCourse: l.isIcfesCourse || false,
+              academicGrade: l.academicGrade,
+              year: l.year
+            }))}
             onSubmit={editingQuestion ? handleUpdateQuestion : handleCreateQuestion}
             onCancel={() => {
               setShowForm(false);
               setEditingQuestion(null);
+              setQuestionTypeSelected(false);
+              setSelectedQuestionType('multiple_choice');
             }}
             loading={loading}
+            onTypeSelected={() => {
+              // Cuando se selecciona un tipo, simplemente actualizar el estado
+              setQuestionTypeSelected(true);
+            }}
+            onQuestionTypeChange={(type) => {
+              setSelectedQuestionType(type);
+            }}
+            questionTypeSelected={questionTypeSelected}
+            setQuestionTypeSelected={setQuestionTypeSelected}
+            initialQuestionType={editingQuestion ? undefined : selectedQuestionType}
           />
         </DialogContent>
       </Dialog>

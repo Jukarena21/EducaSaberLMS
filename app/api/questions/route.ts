@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { yearToAcademicGrade, academicGradeToYear } from '@/lib/academicGrades'
 
 const questionSchema = z.object({
   lessonId: z.string().optional().or(z.literal('')),
@@ -11,6 +12,9 @@ const questionSchema = z.object({
   questionText: z.string().min(1, 'El enunciado es requerido'),
   questionImage: z.string().url().optional().or(z.literal('')),
   questionType: z.enum(['multiple_choice', 'true_false', 'fill_blank', 'matching', 'essay']).default('multiple_choice'),
+
+  // Uso de la pregunta dentro del banco
+  usage: z.enum(['lesson', 'exam', 'both']).default('lesson'),
   
   // Opciones de respuesta
   optionA: z.string().min(1, 'La opción A es requerida'),
@@ -30,6 +34,7 @@ const questionSchema = z.object({
   orderIndex: z.number().int().min(0),
   difficultyLevel: z.enum(['facil', 'medio', 'dificil']).default('medio'),
   timeLimit: z.number().int().min(1).optional(),
+  year: z.number().min(1).max(11).optional(), // Año escolar (1-11) solo para preguntas ICFES
 })
 
 export async function GET(request: NextRequest) {
@@ -58,6 +63,7 @@ export async function GET(request: NextRequest) {
     const competencyId = searchParams.get('competencyId') || ''
     const difficultyLevel = searchParams.get('difficultyLevel') || ''
     const status = searchParams.get('status') || ''
+    const isIcfesCourseParam = searchParams.get('isIcfesCourse')
 
     const skip = (page - 1) * limit
 
@@ -65,13 +71,76 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       whereClause.OR = [
-        { questionText: { contains: search } },
-        { explanation: { contains: search } },
+        { questionText: { contains: search, mode: 'insensitive' } },
+        { explanation: { contains: search, mode: 'insensitive' } },
       ]
     }
 
     if (difficultyLevel) {
       whereClause.difficultyLevel = difficultyLevel
+    }
+
+    // Construir filtros de lección
+    const lessonFilters: any = {}
+
+    // Filter by competencyId if provided
+    if (competencyId) {
+      lessonFilters.moduleLessons = {
+        some: {
+          module: {
+            courseModules: {
+              some: {
+                course: {
+                  competencyId: competencyId
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Filtro por tipo ICFES vs Personalizado
+    // Las preguntas se consideran ICFES si pertenecen a lecciones que están en módulos de cursos ICFES
+    if (isIcfesCourseParam !== null && isIcfesCourseParam !== undefined) {
+      const isIcfesCourse = isIcfesCourseParam === 'true' || isIcfesCourseParam === '1'
+      
+      if (lessonFilters.moduleLessons) {
+        // Combinar con filtro de competencia si existe
+        lessonFilters.moduleLessons = {
+          some: {
+            module: {
+              courseModules: {
+                some: {
+                  course: {
+                    ...(competencyId ? { competencyId: competencyId } : {}),
+                    isIcfesCourse: isIcfesCourse
+                  }
+                }
+              }
+            }
+          }
+        }
+      } else {
+        lessonFilters.moduleLessons = {
+          some: {
+            module: {
+              courseModules: {
+                some: {
+                  course: {
+                    isIcfesCourse: isIcfesCourse
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Aplicar filtros de lección si existen
+    if (Object.keys(lessonFilters).length > 0) {
+      whereClause.lesson = lessonFilters
     }
 
     const [questions, total] = await Promise.all([
@@ -122,11 +191,21 @@ export async function GET(request: NextRequest) {
     // Transform questions to match the expected format
     const transformedQuestions = questions.map(question => {
       // Get the first module and course from moduleLessons
-      const firstModuleLesson = question.lesson.moduleLessons[0];
+      const firstModuleLesson = (question as any).lesson?.moduleLessons?.[0];
       const module = firstModuleLesson?.module;
-      const firstCourseModule = module?.courseModules[0];
+      const firstCourseModule = module?.courseModules?.[0];
       const course = firstCourseModule?.course;
       const competency = course?.competency;
+      
+      // Convertir academicGrade a year si existe (usar any temporalmente hasta que se regenere Prisma)
+      const questionWithGrade = question as any;
+      const lessonWithGrade = (question as any).lesson as any;
+      let year: number | undefined = undefined;
+      if (questionWithGrade.academicGrade) {
+        year = academicGradeToYear(questionWithGrade.academicGrade) || undefined;
+      } else if (lessonWithGrade?.academicGrade) {
+        year = academicGradeToYear(lessonWithGrade.academicGrade) || undefined;
+      }
       
       return {
         id: question.id,
@@ -155,14 +234,18 @@ export async function GET(request: NextRequest) {
         orderIndex: question.orderIndex,
         difficultyLevel: question.difficultyLevel,
         timeLimit: question.timeLimit,
+        academicGrade: questionWithGrade.academicGrade,
+        year: year,
         
-        lesson: {
-          id: question.lesson.id,
-          title: question.lesson.title,
+        lesson: (question as any).lesson ? {
+          id: (question as any).lesson.id,
+          title: (question as any).lesson.title,
+          academicGrade: lessonWithGrade?.academicGrade,
+          year: year,
           modules: module ? [{
             moduleId: module.id,
             moduleTitle: module.title,
-            orderIndex: firstModuleLesson.orderIndex,
+            orderIndex: 0, // orderIndex no está disponible en el select actual
             course: course ? {
               id: course.id,
               title: course.title,
@@ -176,7 +259,7 @@ export async function GET(request: NextRequest) {
               name: competency.name
             } : undefined
           }] : []
-        },
+        } : null,
         createdAt: question.createdAt,
         updatedAt: question.updatedAt
       };
@@ -224,12 +307,45 @@ export async function POST(request: NextRequest) {
     // Validate input
     const validatedData = questionSchema.parse(body)
 
-    // Optional: validate lesson if provided
+    let lessonContext: any = null
     if (validatedData.lessonId) {
-      const lesson = await prisma.lesson.findUnique({ where: { id: validatedData.lessonId } })
-      if (!lesson) {
+      lessonContext = await prisma.lesson.findUnique({
+        where: { id: validatedData.lessonId },
+        include: {
+          moduleLessons: {
+            include: {
+              module: {
+                include: {
+                  courseModules: {
+                    include: {
+                      course: {
+                        select: {
+                          id: true,
+                          isIcfesCourse: true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      })
+      if (!lessonContext) {
         return NextResponse.json({ error: 'La lección especificada no existe' }, { status: 400 })
       }
+    }
+
+    const belongsToIcfesCourse = lessonContext?.moduleLessons?.some((ml: any) =>
+      ml.module.courseModules.some((cm: any) => cm.course?.isIcfesCourse)
+    )
+
+    if (belongsToIcfesCourse && validatedData.questionType !== 'multiple_choice') {
+      return NextResponse.json(
+        { error: 'Las lecciones ICFES solo permiten preguntas de opción múltiple' },
+        { status: 400 }
+      )
     }
 
     // Generate unique orderIndex automatically
@@ -237,6 +353,12 @@ export async function POST(request: NextRequest) {
       where: { lessonId: validatedData.lessonId }
     });
     const autoOrderIndex = existingQuestions + 1;
+
+    // Convertir year a academicGrade si se proporciona
+    let academicGrade: string | null = null;
+    if (validatedData.year) {
+      academicGrade = yearToAcademicGrade(validatedData.year) || null;
+    }
 
     // Create question
     const question = await prisma.lessonQuestion.create({
@@ -247,6 +369,7 @@ export async function POST(request: NextRequest) {
         questionText: validatedData.questionText,
         questionImage: validatedData.questionImage || null,
         questionType: validatedData.questionType,
+        usage: validatedData.usage,
         
         // Opciones de respuesta
         optionA: validatedData.optionA,
@@ -266,6 +389,8 @@ export async function POST(request: NextRequest) {
         orderIndex: autoOrderIndex, // Generado automáticamente
         difficultyLevel: validatedData.difficultyLevel,
         timeLimit: validatedData.timeLimit || null,
+        // @ts-ignore - academicGrade será agregado después de regenerar Prisma
+        academicGrade: academicGrade,
       },
       include: {
         lesson: {

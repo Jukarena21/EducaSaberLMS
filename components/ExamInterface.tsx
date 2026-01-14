@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { StudentHeader } from "@/components/StudentHeader"
 import { 
   Clock, 
   CheckCircle, 
@@ -16,6 +17,7 @@ import {
   Flag,
   BookOpen
 } from "lucide-react"
+import { QuestionRenderer } from "@/components/QuestionRenderer"
 
 interface Question {
   id: string
@@ -23,6 +25,16 @@ interface Question {
   type: string
   difficultyLevel: string
   imageUrl?: string
+  questionImage?: string
+  questionType?: string
+  optionA?: string
+  optionB?: string
+  optionC?: string
+  optionD?: string
+  optionAImage?: string
+  optionBImage?: string
+  optionCImage?: string
+  optionDImage?: string
   options: Array<{
     id: string
     text: string
@@ -44,15 +56,38 @@ interface ExamInterfaceProps {
   questions: Question[]
   attemptId: string
   startedAt: string
+  existingAnswers?: Record<string, any>
 }
 
-export function ExamInterface({ exam, questions, attemptId, startedAt }: ExamInterfaceProps) {
+export function ExamInterface({ exam, questions, attemptId, startedAt, existingAnswers }: ExamInterfaceProps) {
   const router = useRouter()
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [answers, setAnswers] = useState<Record<string, { optionId?: string; text?: string }>>({})
+  const [answers, setAnswers] = useState<Record<string, any>>({})
   const [timeRemaining, setTimeRemaining] = useState(exam.timeLimitMinutes * 60)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false)
+
+  // Inicializar respuestas existentes
+  useEffect(() => {
+    if (existingAnswers) {
+      const formattedAnswers: Record<string, any> = {}
+      Object.keys(existingAnswers).forEach(questionId => {
+        const answer = existingAnswers[questionId]
+        // Mantener el formato completo de la respuesta para que isAnswered funcione correctamente
+        if (answer.answer !== undefined) {
+          // Para matching o respuestas parseadas, usar answer directamente
+          formattedAnswers[questionId] = answer.answer
+        } else if (answer.optionId) {
+          // Para opción múltiple, guardar como string
+          formattedAnswers[questionId] = answer.optionId
+        } else if (answer.text) {
+          // Para fill_blank o essay, guardar como string
+          formattedAnswers[questionId] = answer.text
+        }
+      })
+      setAnswers(formattedAnswers)
+    }
+  }, [existingAnswers])
 
   const currentQuestion = questions[currentQuestionIndex]
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100
@@ -69,8 +104,9 @@ export function ExamInterface({ exam, questions, attemptId, startedAt }: ExamInt
       const remaining = Math.max(0, timeLimitMs - elapsed)
       setTimeRemaining(Math.floor(remaining / 1000))
       
+      // No auto-submit when time runs out, just show warning
       if (remaining <= 0) {
-        handleSubmitExam()
+        setTimeRemaining(0)
       }
     }
 
@@ -80,23 +116,38 @@ export function ExamInterface({ exam, questions, attemptId, startedAt }: ExamInt
   }, [startedAt, exam.timeLimitMinutes])
 
   // Auto-save answers
-  const saveAnswer = useCallback(async (questionId: string, answer: { optionId?: string; text?: string }) => {
+  const saveAnswer = useCallback(async (questionId: string, answer: any) => {
     try {
+      // Adaptar la respuesta al formato esperado por el API
+      const payload: any = { questionId }
+      
+      if (typeof answer === 'string') {
+        // Para opción múltiple o verdadero/falso
+        payload.selectedOptionId = answer
+      } else if (typeof answer === 'object') {
+        if (answer.optionId) {
+          payload.selectedOptionId = answer.optionId
+        }
+        if (answer.text) {
+          payload.answerText = answer.text
+        }
+        // Para matching, convertir el objeto a JSON string
+        if (Object.keys(answer).length > 0 && !answer.optionId && !answer.text) {
+          payload.answerText = JSON.stringify(answer)
+        }
+      }
+      
       await fetch(`/api/student/exams/${attemptId}/answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          questionId,
-          selectedOptionId: answer.optionId,
-          answerText: answer.text
-        })
+        body: JSON.stringify(payload)
       })
     } catch (error) {
       console.error('Error saving answer:', error)
     }
   }, [attemptId])
 
-  const handleAnswerChange = (questionId: string, answer: { optionId?: string; text?: string }) => {
+  const handleAnswerChange = (questionId: string, answer: any) => {
     setAnswers(prev => ({ ...prev, [questionId]: answer }))
     saveAnswer(questionId, answer)
   }
@@ -122,9 +173,12 @@ export function ExamInterface({ exam, questions, attemptId, startedAt }: ExamInt
       
       if (response.ok) {
         const result = await response.json()
+        console.log('Exam submitted successfully:', result)
         router.push(`/estudiante/examen/resultado/${result.resultId}`)
       } else {
-        throw new Error('Error al enviar el examen')
+        const errorData = await response.json()
+        console.error('Submit error:', errorData)
+        throw new Error(errorData.error || 'Error al enviar el examen')
       }
     } catch (error) {
       console.error('Error submitting exam:', error)
@@ -151,32 +205,51 @@ export function ExamInterface({ exam, questions, attemptId, startedAt }: ExamInt
 
   const isAnswered = (questionId: string) => {
     const answer = answers[questionId]
-    return answer && (answer.optionId || (answer.text && answer.text.trim().length > 0))
+    if (!answer) return false
+    
+    // Si es un string (opción múltiple, verdadero/falso, fill_blank, essay)
+    if (typeof answer === 'string') {
+      return answer.trim().length > 0
+    }
+    
+    // Si es un objeto (matching o respuesta estructurada)
+    if (typeof answer === 'object') {
+      // Para matching, verificar que tenga al menos una clave
+      if (Object.keys(answer).length > 0) {
+        return true
+      }
+      // Para respuestas estructuradas
+      if (answer.optionId || (answer.text && answer.text.trim().length > 0) || answer.answer) {
+        return true
+      }
+    }
+    
+    return false
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-gray-800">{exam.title}</h1>
-              <p className="text-sm text-gray-600">{exam.description}</p>
+      <StudentHeader 
+        title={exam.title}
+        subtitle={exam.description}
+        showBackButton={false}
+        rightContent={
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <Clock className="h-5 w-5 text-blue-600" />
+              <span className={`font-mono text-lg ${timeRemaining < 300 ? 'text-red-600' : 'text-gray-800'}`}>
+                {formatTime(timeRemaining)}
+              </span>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <Clock className="h-5 w-5 text-blue-600" />
-                <span className={`font-mono text-lg ${timeRemaining < 300 ? 'text-red-600' : 'text-gray-800'}`}>
-                  {formatTime(timeRemaining)}
-                </span>
-              </div>
-              <Badge variant="outline">
-                {answeredQuestions}/{questions.length} respondidas
-              </Badge>
-            </div>
+            <Badge variant="outline">
+              {answeredQuestions}/{questions.length} respondidas
+            </Badge>
           </div>
-          
+        }
+      />
+      
+      <div className="bg-white border-b">
+        <div className="container mx-auto px-4 py-2">
           {/* Progress Bar */}
           <div className="mt-4">
             <Progress value={progress} className="h-2" />
@@ -218,99 +291,62 @@ export function ExamInterface({ exam, questions, attemptId, startedAt }: ExamInt
               </CardHeader>
               
               <CardContent className="space-y-6">
-                {/* Question Text */}
-                <div>
-                  <p className="text-lg leading-relaxed">{currentQuestion.text}</p>
-                  {currentQuestion.imageUrl && (
-                    <div className="mt-4">
-                      <img 
-                        src={currentQuestion.imageUrl} 
-                        alt="Imagen de la pregunta"
-                        className="max-w-full h-auto rounded-lg border"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Answer Options */}
-                <div className="space-y-3">
-                  {currentQuestion.type === 'multiple_choice' && (
-                    <div className="space-y-2">
-                      {currentQuestion.options.map((option, index) => (
-                        <label
-                          key={option.id}
-                          className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                            answers[currentQuestion.id]?.optionId === option.id
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name={`question-${currentQuestion.id}`}
-                            value={option.id}
-                            checked={answers[currentQuestion.id]?.optionId === option.id}
-                            onChange={() => handleAnswerChange(currentQuestion.id, { optionId: option.id })}
-                            className="h-4 w-4 text-blue-600"
-                          />
-                          <span className="flex-1">
-                            <span className="font-medium">{String.fromCharCode(65 + index)}.</span> {option.text}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-
-                  {currentQuestion.type === 'true_false' && (
-                    <div className="space-y-2">
-                      {currentQuestion.options.map((option) => (
-                        <label
-                          key={option.id}
-                          className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                            answers[currentQuestion.id]?.optionId === option.id
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name={`question-${currentQuestion.id}`}
-                            value={option.id}
-                            checked={answers[currentQuestion.id]?.optionId === option.id}
-                            onChange={() => handleAnswerChange(currentQuestion.id, { optionId: option.id })}
-                            className="h-4 w-4 text-blue-600"
-                          />
-                          <span className="flex-1">{option.text}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-
-                  {currentQuestion.type === 'essay' && (
-                    <div>
-                      <textarea
-                        value={answers[currentQuestion.id]?.text || ''}
-                        onChange={(e) => handleAnswerChange(currentQuestion.id, { text: e.target.value })}
-                        placeholder="Escribe tu respuesta aquí..."
-                        className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  )}
-                </div>
+                {/* Renderizar pregunta usando QuestionRenderer */}
+                <QuestionRenderer
+                  question={{
+                    id: currentQuestion.id,
+                    questionText: currentQuestion.text,
+                    questionType: (currentQuestion.questionType || currentQuestion.type) as 'multiple_choice' | 'true_false' | 'fill_blank' | 'matching' | 'essay',
+                    questionImage: currentQuestion.questionImage || currentQuestion.imageUrl,
+                    optionA: currentQuestion.optionA || currentQuestion.options[0]?.text,
+                    optionB: currentQuestion.optionB || currentQuestion.options[1]?.text,
+                    optionC: currentQuestion.optionC || currentQuestion.options[2]?.text,
+                    optionD: currentQuestion.optionD || currentQuestion.options[3]?.text,
+                    optionAImage: currentQuestion.optionAImage,
+                    optionBImage: currentQuestion.optionBImage,
+                    optionCImage: currentQuestion.optionCImage,
+                    optionDImage: currentQuestion.optionDImage,
+                  }}
+                  selectedAnswer={answers[currentQuestion.id]}
+                  onAnswerChange={(answer) => {
+                    // Adaptar la respuesta al formato esperado por el API
+                    if (typeof answer === 'string') {
+                      handleAnswerChange(currentQuestion.id, { optionId: answer, text: answer })
+                    } else if (typeof answer === 'object') {
+                      handleAnswerChange(currentQuestion.id, answer)
+                    } else {
+                      handleAnswerChange(currentQuestion.id, { text: answer })
+                    }
+                  }}
+                  showCorrectAnswer={false}
+                  isSubmitted={false}
+                  disabled={false}
+                />
               </CardContent>
             </Card>
 
             {/* Navigation */}
             <div className="flex items-center justify-between mt-6">
-              <Button
-                variant="outline"
-                onClick={handlePrevious}
-                disabled={currentQuestionIndex === 0}
-                className="flex items-center space-x-2"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span>Anterior</span>
-              </Button>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={handlePrevious}
+                  disabled={currentQuestionIndex === 0}
+                  className="flex items-center space-x-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Anterior</span>
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/estudiante')}
+                  className="flex items-center space-x-2 text-orange-600 border-orange-300 hover:bg-orange-50"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Salir del Examen</span>
+                </Button>
+              </div>
 
               <div className="flex items-center space-x-2">
                 {currentQuestionIndex < questions.length - 1 ? (
@@ -377,14 +413,21 @@ export function ExamInterface({ exam, questions, attemptId, startedAt }: ExamInt
             </Card>
 
             {/* Time Warning */}
-            {timeRemaining < 300 && (
+            {timeRemaining <= 0 ? (
               <Alert className="mt-4 border-red-200 bg-red-50">
                 <AlertCircle className="h-4 w-4 text-red-600" />
                 <AlertDescription className="text-red-800">
-                  ¡Quedan menos de 5 minutos! Asegúrate de enviar tu examen a tiempo.
+                  ⏰ ¡El tiempo se ha agotado! Puedes continuar respondiendo, pero el examen se marcará como tardío.
                 </AlertDescription>
               </Alert>
-            )}
+            ) : timeRemaining < 300 && timeRemaining > 0 ? (
+              <Alert className="mt-4 border-yellow-200 bg-yellow-50">
+                <AlertCircle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-yellow-800">
+                  ⚠️ ¡Quedan menos de 5 minutos! Asegúrate de enviar tu examen a tiempo.
+                </AlertDescription>
+              </Alert>
+            ) : null}
           </div>
         </div>
       </div>

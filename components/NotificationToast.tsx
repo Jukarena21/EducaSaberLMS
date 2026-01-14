@@ -17,21 +17,31 @@ interface NotificationToastProps {
 const notificationIcons: Record<NotificationType, React.ComponentType<{ className?: string }>> = {
   exam_available: Bell,
   exam_reminder: AlertCircle,
+  exam_scheduled: Bell,
+  exam_closed: AlertCircle,
+  exam_failed: AlertCircle,
+  exam_missed: AlertCircle,
   lesson_completed: CheckCircle,
   achievement_unlocked: Award,
   course_enrolled: Info,
   exam_result: CheckCircle,
   system: Info,
+  admin_broadcast: Bell,
 };
 
 const notificationColors: Record<NotificationType, string> = {
   exam_available: 'border-blue-500 bg-blue-50',
   exam_reminder: 'border-yellow-500 bg-yellow-50',
+  exam_scheduled: 'border-cyan-500 bg-cyan-50',
+  exam_closed: 'border-red-500 bg-red-50',
+  exam_failed: 'border-red-500 bg-red-50',
+  exam_missed: 'border-orange-500 bg-orange-50',
   lesson_completed: 'border-green-500 bg-green-50',
   achievement_unlocked: 'border-purple-500 bg-purple-50',
   course_enrolled: 'border-indigo-500 bg-indigo-50',
-  exam_result: 'border-orange-500 bg-orange-50',
+  exam_result: 'border-green-500 bg-green-50',
   system: 'border-gray-500 bg-gray-50',
+  admin_broadcast: 'border-purple-500 bg-purple-50',
 };
 
 export function NotificationToast({ notification, onClose, onAction }: NotificationToastProps) {

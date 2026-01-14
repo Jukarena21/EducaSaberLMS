@@ -18,6 +18,7 @@ const examSchema = z.object({
   difficultyLevel: z.enum(['facil', 'intermedio', 'dificil', 'variable']).default('intermedio'),
   isAdaptive: z.boolean().default(false),
   isPublished: z.boolean().default(false),
+  isIcfesExam: z.boolean().optional(),
   openDate: z.string().optional(),
   closeDate: z.string().optional(),
   includedModules: z.array(z.string()).optional(),
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
     const difficultyLevel = searchParams.get('difficultyLevel')
     const isPublished = searchParams.get('isPublished')
     const createdById = searchParams.get('createdById')
+    const isIcfesExamParam = searchParams.get('isIcfesExam')
     const openDateFrom = searchParams.get('openDateFrom')
     const openDateTo = searchParams.get('openDateTo')
     const closeDateFrom = searchParams.get('closeDateFrom')
@@ -77,6 +79,12 @@ export async function GET(request: NextRequest) {
     if (createdById) {
       where.createdById = createdById
     }
+
+    // Filtro por tipo ICFES vs Personalizado
+    if (isIcfesExamParam !== null && isIcfesExamParam !== undefined) {
+      const isIcfesExam = isIcfesExamParam === 'true' || isIcfesExamParam === '1'
+      where.isIcfesExam = isIcfesExam
+    }
     
     if (openDateFrom || openDateTo) {
       where.openDate = {}
@@ -95,6 +103,28 @@ export async function GET(request: NextRequest) {
       }
       if (closeDateTo) {
         where.closeDate.lte = new Date(closeDateTo)
+      }
+    }
+
+    // Si es school_admin, filtrar exámenes por cursos de su colegio
+    if (session.user.role === 'school_admin' && session.user.schoolId) {
+      // Obtener cursos del colegio
+      const schoolCourses = await prisma.course.findMany({
+        where: {
+          courseSchools: {
+            some: { schoolId: session.user.schoolId }
+          }
+        },
+        select: { id: true }
+      })
+      const courseIds = schoolCourses.map(c => c.id)
+
+      if (courseIds.length > 0) {
+        // Filtrar exámenes que pertenezcan a cursos del colegio
+        where.courseId = { in: courseIds }
+      } else {
+        // Si no tiene cursos, no mostrar ningún examen
+        where.courseId = { in: [''] }
       }
     }
 
@@ -190,7 +220,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const gate = await requireRole(['teacher_admin'])
+    const gate = await requireRole(['teacher_admin', 'school_admin'])
     if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -201,6 +231,46 @@ export async function POST(request: NextRequest) {
     console.log('🔍 [DEBUG] Datos recibidos para crear examen:', body)
     const validatedData = examSchema.parse(body)
     console.log('🔍 [DEBUG] Datos validados:', validatedData)
+
+    // Validación para school_admin: verificar que el curso pertenezca a su colegio
+    if (session.user.role === 'school_admin' && session.user.schoolId) {
+      if (validatedData.courseId) {
+        const course = await prisma.course.findUnique({
+          where: { id: validatedData.courseId },
+          include: {
+            courseSchools: { select: { schoolId: true } }
+          }
+        })
+
+        if (!course) {
+          return NextResponse.json({ error: 'Curso no encontrado' }, { status: 404 })
+        }
+
+        const courseSchoolIds = course.courseSchools.map(cs => cs.schoolId)
+        if (!courseSchoolIds.includes(session.user.schoolId)) {
+          return NextResponse.json(
+            { error: 'Solo puedes crear exámenes para cursos de tu colegio' },
+            { status: 403 }
+          )
+        }
+      }
+    }
+
+    let isIcfesExamFlag = validatedData.isIcfesExam ?? false
+
+    if (validatedData.courseId) {
+      const relatedCourse = await prisma.course.findUnique({
+        where: { id: validatedData.courseId },
+        select: { isIcfesCourse: true }
+      })
+      if (relatedCourse?.isIcfesCourse) {
+        isIcfesExamFlag = true
+      }
+    }
+
+    if (validatedData.examType === 'simulacro_completo' || validatedData.examType === 'diagnostico') {
+      isIcfesExamFlag = true
+    }
 
     // Preparar datos para la creación
     const examData = {
@@ -215,6 +285,7 @@ export async function POST(request: NextRequest) {
       difficultyLevel: validatedData.difficultyLevel,
       isAdaptive: validatedData.isAdaptive,
       isPublished: validatedData.isPublished,
+      isIcfesExam: isIcfesExamFlag,
       createdById: session.user.id,
       includedModules: validatedData.includedModules ? JSON.stringify(validatedData.includedModules) : null,
       openDate: validatedData.openDate ? new Date(validatedData.openDate) : null,
@@ -243,54 +314,92 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Enviar notificaciones si el examen ya está publicado y abierto
+    // Enviar notificaciones según el estado del examen
     try {
       const now = new Date()
-      const isOpen = !exam.openDate || exam.openDate <= now
-      if (exam.isPublished && isOpen) {
-        let targetUserIds: string[] = []
+      const expiresAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) // 15 días por defecto
+      
+      let targetUserIds: string[] = []
 
-        // Prioridad: estudiantes inscritos en el curso
-        if (exam.courseId) {
+      // Prioridad: estudiantes inscritos en el curso
+      if (exam.courseId) {
+        const enrollments = await prisma.courseEnrollment.findMany({
+          where: { courseId: exam.courseId, isActive: true },
+          select: { userId: true }
+        })
+        targetUserIds = enrollments.map(e => e.userId)
+      }
+
+      // Si no hay courseId o no hay inscritos, intentar por grado académico (a través de cursos)
+      if (targetUserIds.length === 0 && exam.academicGrade) {
+        const coursesWithGrade = await prisma.course.findMany({
+          where: { academicGrade: exam.academicGrade },
+          select: { id: true }
+        })
+        const courseIds = coursesWithGrade.map(c => c.id)
+        if (courseIds.length > 0) {
           const enrollments = await prisma.courseEnrollment.findMany({
-            where: { courseId: exam.courseId, isActive: true },
+            where: { 
+              courseId: { in: courseIds },
+              isActive: true 
+            },
             select: { userId: true }
           })
           targetUserIds = enrollments.map(e => e.userId)
         }
+      }
 
-        // Si no hay courseId o no hay inscritos, intentar por grado académico
-        if (targetUserIds.length === 0 && exam.academicGrade) {
-          const students = await prisma.user.findMany({
-            where: { role: 'student', academicGrade: exam.academicGrade },
-            select: { id: true }
-          })
-          targetUserIds = students.map(s => s.id)
+      // Fallback: todos los estudiantes
+      if (targetUserIds.length === 0) {
+        const students = await prisma.user.findMany({
+          where: { role: 'student' },
+          select: { id: true }
+        })
+        targetUserIds = students.map(s => s.id)
+      }
+
+      if (targetUserIds.length > 0 && exam.isPublished) {
+        // Si el examen tiene openDate en el futuro, notificar que está programado
+        if (exam.openDate && exam.openDate > now) {
+          const openDate = exam.openDate;
+          const scheduledNotifications = targetUserIds.map(userId => ({
+            userId,
+            type: 'exam_scheduled',
+            title: 'Examen Programado',
+            message: `El examen "${exam.title}" está programado para el ${openDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}.`,
+            actionUrl: `/estudiante/examen/${exam.id}`,
+            expiresAt: openDate, // Expira cuando el examen se abre
+            metadata: JSON.stringify({ examId: exam.id, examType: exam.examType, openDate: openDate.toISOString() }),
+          }))
+          await prisma.notification.createMany({ data: scheduledNotifications })
         }
-
-        // Fallback: todos los estudiantes
-        if (targetUserIds.length === 0) {
-          const students = await prisma.user.findMany({
-            where: { role: 'student' },
-            select: { id: true }
-          })
-          targetUserIds = students.map(s => s.id)
-        }
-
-        if (targetUserIds.length > 0) {
-          const notifications = targetUserIds.map(userId => ({
+        
+        // Si el examen ya está abierto, notificar que está disponible
+        const isOpen = !exam.openDate || exam.openDate <= now
+        if (isOpen) {
+          const availableNotifications = targetUserIds.map(userId => ({
             userId,
             type: 'exam_available',
             title: 'Nuevo Examen Disponible',
             message: `El examen "${exam.title}" está disponible para presentar.`,
             actionUrl: `/estudiante/examen/${exam.id}`,
+            expiresAt: exam.closeDate || expiresAt,
             metadata: JSON.stringify({ examId: exam.id, examType: exam.examType }),
           }))
-          await prisma.notification.createMany({ data: notifications })
+          await prisma.notification.createMany({ data: availableNotifications })
         }
+
+        // Notificar a school_admin que se publicó un examen para sus estudiantes
+        const { AdminNotificationService } = await import('@/lib/adminNotificationService');
+        await AdminNotificationService.notifyExamPublished(
+          exam.id,
+          exam.title,
+          exam.courseId,
+          exam.academicGrade
+        );
       }
     } catch (notifyErr) {
-      console.error('Error broadcasting exam available notification:', notifyErr)
+      console.error('Error broadcasting exam notifications:', notifyErr)
     }
 
     // Transformar los datos

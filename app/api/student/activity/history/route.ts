@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
-    const type = searchParams.get('type'); // 'all', 'lessons', 'exams', 'achievements'
+    const type = searchParams.get('type'); // 'all', 'lessons', 'exams', 'courses'
 
     const userId = session.user.id;
 
@@ -28,6 +28,23 @@ export async function GET(request: NextRequest) {
         lesson: {
           include: {
             competency: true,
+            moduleLessons: {
+              include: {
+                module: {
+                  include: {
+                    courseModules: {
+                      include: {
+                        course: {
+                          select: {
+                            id: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -35,11 +52,12 @@ export async function GET(request: NextRequest) {
       take: type === 'lessons' ? limit : Math.ceil(limit / 3),
     });
 
-    // Obtener historial de exámenes
+    // Obtener historial de exámenes (solo completados)
     const examHistory = await prisma.examResult.findMany({
       where: {
         userId,
-        ...(type === 'exams' && { completedAt: { not: null } }),
+        completedAt: { not: null }, // Solo exámenes completados
+        ...(type === 'exams' && {}),
       },
       include: {
         exam: {
@@ -56,7 +74,6 @@ export async function GET(request: NextRequest) {
     const enrollmentHistory = await prisma.courseEnrollment.findMany({
       where: {
         userId,
-        ...(type === 'courses' && { enrolledAt: { not: null } }),
       },
       include: {
         course: {
@@ -69,40 +86,45 @@ export async function GET(request: NextRequest) {
       take: type === 'courses' ? limit : Math.ceil(limit / 3),
     });
 
-    // Combinar y ordenar por fecha
+    // Combinar y ordenar por fecha, filtrando por tipo si se especifica
     const allActivities = [
-      ...lessonHistory.map(progress => ({
-        id: `lesson-${progress.id}`,
-        type: 'lesson_completed' as const,
-        title: `Lección completada: ${progress.lesson.title}`,
-        description: `Completaste la lección de ${progress.lesson.competency?.displayName || 'General'}`,
-        date: progress.completedAt || progress.updatedAt,
-        metadata: {
-          lessonId: progress.lesson.id,
-          lessonTitle: progress.lesson.title,
-          competency: progress.lesson.competency?.displayName,
-          progressPercentage: progress.progressPercentage,
-        },
-        actionUrl: `/leccion/${progress.lesson.id}`,
-      })),
-      ...examHistory.map(result => ({
+      ...(type === 'all' || type === 'lessons' || !type ? lessonHistory.map(progress => {
+        // Obtener el primer curso disponible de la lección
+        const firstCourseId = progress.lesson.moduleLessons?.[0]?.module?.courseModules?.[0]?.course?.id || '';
+        
+        return {
+          id: `lesson-${progress.id}`,
+          type: 'lesson_completed' as const,
+          title: `Lección completada: ${progress.lesson.title}`,
+          description: `Completaste la lección de ${progress.lesson.competency?.displayName || 'General'}`,
+          date: progress.completedAt || progress.updatedAt,
+          metadata: {
+            lessonId: progress.lesson.id,
+            lessonTitle: progress.lesson.title,
+            competency: progress.lesson.competency?.displayName,
+            progressPercentage: progress.progressPercentage,
+          },
+          actionUrl: firstCourseId ? `/estudiante/cursos/${firstCourseId}/leccion/${progress.lesson.id}` : `/estudiante`,
+        };
+      }) : []),
+      ...(type === 'all' || type === 'exams' || !type ? examHistory.map(result => ({
         id: `exam-${result.id}`,
         type: 'exam_completed' as const,
         title: `Examen completado: ${result.exam.title}`,
-        description: `Puntuación: ${result.score}/${result.totalQuestions} (${Math.round((result.score / result.totalQuestions) * 100)}%)`,
+        description: `Puntuación: ${result.score}%${result.isPassed ? ' (Aprobado)' : ' (No aprobado)'}`,
         date: result.completedAt || result.createdAt,
         metadata: {
           examId: result.exam.id,
           examTitle: result.exam.title,
           score: result.score,
           totalQuestions: result.totalQuestions,
-          percentage: Math.round((result.score / result.totalQuestions) * 100),
-          passed: result.passed,
+          percentage: result.score, // score ya es un porcentaje (0-100)
+          passed: result.isPassed,
           competency: result.exam.competency?.displayName,
         },
         actionUrl: `/estudiante/examen/resultado/${result.id}`,
-      })),
-      ...enrollmentHistory.map(enrollment => ({
+      })) : []),
+      ...(type === 'all' || type === 'courses' || !type ? enrollmentHistory.map(enrollment => ({
         id: `enrollment-${enrollment.id}`,
         type: 'course_enrolled' as const,
         title: `Curso inscrito: ${enrollment.course.title}`,
@@ -115,7 +137,7 @@ export async function GET(request: NextRequest) {
           academicGrade: enrollment.course.academicGrade,
         },
         actionUrl: `/estudiante/cursos/${enrollment.course.id}`,
-      })),
+      })) : []),
     ];
 
     // Ordenar por fecha descendente
@@ -131,7 +153,7 @@ export async function GET(request: NextRequest) {
       examsCompleted: examHistory.length,
       coursesEnrolled: enrollmentHistory.length,
       averageExamScore: examHistory.length > 0 
-        ? Math.round(examHistory.reduce((sum, exam) => sum + (exam.score / exam.totalQuestions) * 100, 0) / examHistory.length)
+        ? Math.round(examHistory.reduce((sum, exam) => sum + exam.score, 0) / examHistory.length)
         : 0,
       totalStudyTime: lessonHistory.reduce((sum, lesson) => sum + (lesson.totalTimeMinutes || 0), 0),
     };

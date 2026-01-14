@@ -1,6 +1,27 @@
 import { useState, useEffect } from 'react';
 import { LessonData, LessonFormData, LessonFilters } from '@/types/lesson';
 
+const LESSON_CACHE_TTL = 5 * 60 * 1000;
+const lessonCache = new Map<string, { data: LessonData[]; timestamp: number }>();
+
+const getLessonCacheEntry = (key: string) => {
+  const entry = lessonCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > LESSON_CACHE_TTL) {
+    lessonCache.delete(key);
+    return null;
+  }
+  return entry;
+};
+
+const setLessonCacheEntry = (key: string, data: LessonData[]) => {
+  lessonCache.set(key, { data, timestamp: Date.now() });
+};
+
+const invalidateLessonCache = () => {
+  lessonCache.clear();
+};
+
 export function useLessons() {
   const [lessons, setLessons] = useState<LessonData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -13,18 +34,30 @@ export function useLessons() {
     if (filters.search) params.append('search', filters.search);
     if (filters.moduleId) params.append('moduleId', filters.moduleId);
     if (filters.competencyId) params.append('competencyId', filters.competencyId);
+    if (filters.isIcfesCourse !== undefined) params.append('isIcfesCourse', filters.isIcfesCourse.toString());
     
     const queryString = params.toString();
     return queryString ? `${baseUrl}?${queryString}` : baseUrl;
   };
 
   // Obtener lecciones
-  const fetchLessons = async (newFilters?: LessonFilters) => {
+  const fetchLessons = async (newFilters?: LessonFilters, options: { skipCache?: boolean } = {}) => {
+    const activeFilters = newFilters ?? filters;
+    const url = buildUrl('/api/lessons', activeFilters);
+    const cacheKey = url;
+
+    if (!options.skipCache) {
+      const cached = getLessonCacheEntry(cacheKey);
+      if (cached) {
+        setLessons(cached.data);
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
     
     try {
-      const url = buildUrl('/api/lessons', newFilters || filters);
       const response = await fetch(url);
       
       if (!response.ok) {
@@ -34,6 +67,7 @@ export function useLessons() {
       
       const data = await response.json();
       setLessons(data);
+      setLessonCacheEntry(cacheKey, data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -62,6 +96,7 @@ export function useLessons() {
       
       const newLesson = await response.json();
       setLessons(prev => [...prev, newLesson]);
+      invalidateLessonCache();
       return newLesson;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -92,7 +127,8 @@ export function useLessons() {
       
       const updatedLesson = await response.json();
       // Refrescar la lista completa para asegurar datos actualizados
-      await fetchLessons();
+      await fetchLessons(undefined, { skipCache: true });
+      invalidateLessonCache();
       return updatedLesson;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -114,11 +150,15 @@ export function useLessons() {
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al eliminar lección');
+        const errorMessage = errorData.details 
+          ? `${errorData.error}: ${errorData.details}`
+          : errorData.error || 'Error al eliminar lección';
+        throw new Error(errorMessage);
       }
       
       // Refrescar la lista completa para asegurar datos actualizados
-      await fetchLessons();
+      await fetchLessons(undefined, { skipCache: true });
+      invalidateLessonCache();
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -154,18 +194,19 @@ export function useLessons() {
   // Aplicar filtros
   const applyFilters = (newFilters: LessonFilters) => {
     setFilters(newFilters);
-    fetchLessons(newFilters);
+    fetchLessons(newFilters, { skipCache: true });
   };
 
   // Limpiar filtros
   const clearFilters = () => {
     setFilters({});
-    fetchLessons({});
+    fetchLessons({}, { skipCache: true });
   };
 
   // Cargar lecciones al montar el hook
   useEffect(() => {
-    fetchLessons();
+    // Try cache first, only fetch if no cached data
+    fetchLessons({}, { skipCache: false });
   }, []);
 
   return {

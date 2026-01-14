@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const enrollments = await prisma.courseEnrollment.findMany({
       where: { 
         userId,
-        status: status as any
+        isActive: status === 'active'
       },
       include: {
         course: {
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
       )
 
       const totalTimeMinutes = contentProgress.reduce((acc, lp) => 
-        acc + (lp.timeSpentMinutes || 0), 0
+        acc + (lp.totalTimeMinutes || 0), 0
       )
 
       const progressPercentage = totalLessons > 0 
@@ -92,7 +92,11 @@ export async function GET(request: NextRequest) {
         
         const moduleTimeMinutes = contentProgress
           .filter(lp => moduleLessons.some(ml => ml.lessonId === lp.lessonId))
-          .reduce((acc, lp) => acc + (lp.timeSpentMinutes || 0), 0)
+          .reduce((acc, lp) => acc + (lp.totalTimeMinutes || 0), 0)
+
+        const moduleProgressPercentage = moduleLessons.length > 0 
+          ? Math.round((completedModuleLessons / moduleLessons.length) * 100) 
+          : 0
 
         return {
           id: cm.module.id,
@@ -101,13 +105,39 @@ export async function GET(request: NextRequest) {
           orderIndex: cm.module.orderIndex,
           totalLessons: moduleLessons.length,
           completedLessons,
-          progressPercentage: moduleLessons.length > 0 
-            ? Math.round((completedModuleLessons / moduleLessons.length) * 100) 
-            : 0,
+          progressPercentage: moduleProgressPercentage,
           timeSpentMinutes: moduleTimeMinutes,
-          estimatedTimeMinutes: cm.module.estimatedTimeMinutes || 0
+          estimatedTimeMinutes: cm.module.estimatedTimeMinutes || 0,
+          isCompleted: moduleProgressPercentage === 100
         }
       })
+
+      // Calcular métricas adicionales
+      const completedModules = modulesProgress.filter(m => m.isCompleted).length
+      
+      // Encontrar próxima lección pendiente
+      let nextLesson = null
+      for (const cm of course.courseModules.sort((a, b) => a.module.orderIndex - b.module.orderIndex)) {
+        for (const ml of cm.module.moduleLessons.sort((a, b) => a.orderIndex - b.orderIndex)) {
+          const lessonProg = lessonProgress.find(lp => lp.lessonId === ml.lessonId)
+          if (!lessonProg || lessonProg.status !== 'completed') {
+            nextLesson = {
+              id: ml.lesson.id,
+              title: ml.lesson.title,
+              moduleTitle: cm.module.title,
+              orderIndex: ml.orderIndex
+            }
+            break
+          }
+        }
+        if (nextLesson) break
+      }
+
+      // Calcular días desde última actividad
+      const lastActivityDate = enrollment.lastActivityAt || enrollment.enrolledAt
+      const daysSinceLastActivity = lastActivityDate
+        ? Math.floor((new Date().getTime() - new Date(lastActivityDate).getTime()) / (1000 * 60 * 60 * 24))
+        : null
 
       return {
         id: course.id,
@@ -117,15 +147,18 @@ export async function GET(request: NextRequest) {
         competencyDisplayName: course.competency?.displayName || 'General',
         academicGrade: course.academicGrade,
         totalModules,
+        completedModules,
         totalLessons,
         completedLessons,
         progressPercentage,
         timeSpentMinutes: totalTimeMinutes,
         estimatedTimeMinutes: course.estimatedTimeMinutes || 0,
         modules: modulesProgress.sort((a, b) => a.orderIndex - b.orderIndex),
+        nextLesson,
+        daysSinceLastActivity,
         enrollment: {
           id: enrollment.id,
-          status: enrollment.status,
+          status: enrollment.isActive ? 'active' : 'inactive',
           enrolledAt: enrollment.enrolledAt,
           lastActivityAt: enrollment.lastActivityAt
         }

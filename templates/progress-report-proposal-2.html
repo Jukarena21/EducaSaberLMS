@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe de Progreso - Infografía Educativa</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @page {
+            size: A4;
+            margin: 0.3in;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            color: #1f2937;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+        
+        .hero-section {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 16px rgba(30, 64, 175, 0.3);
+        }
+        
+        .score-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+            position: relative;
+            background: white;
+            color: #1e40af;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .score-circle::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 8px solid;
+            border-top-color: #3b82f6;
+            border-right-color: #3b82f6;
+            border-bottom-color: #e5e7eb;
+            border-left-color: #e5e7eb;
+            transform: rotate(-45deg);
+        }
+        
+        .competency-radial {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            margin: 0 auto;
+            background: conic-gradient(
+                from 0deg,
+                #3b82f6 0deg,
+                #3b82f6 calc(var(--score) * 3.6deg),
+                #e5e7eb calc(var(--score) * 3.6deg),
+                #e5e7eb 360deg
+            );
+        }
+        
+        .competency-radial::before {
+            content: '';
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: white;
+        }
+        
+        .competency-radial::after {
+            content: attr(data-score) '%';
+            position: absolute;
+            font-size: 18px;
+            font-weight: bold;
+            color: #1e40af;
+            z-index: 1;
+        }
+        
+        .info-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-top: 4px solid;
+            margin-bottom: 16px;
+        }
+        
+        .info-card.blue { border-top-color: #3b82f6; }
+        .info-card.green { border-top-color: #10b981; }
+        .info-card.orange { border-top-color: #f59e0b; }
+        .info-card.purple { border-top-color: #8b5cf6; }
+        
+        .timeline-item {
+            position: relative;
+            padding-left: 30px;
+            margin-bottom: 16px;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #3b82f6;
+            border: 3px solid white;
+            box-shadow: 0 0 0 2px #3b82f6;
+        }
+        
+        .timeline-item::after {
+            content: '';
+            position: absolute;
+            left: 5px;
+            top: 12px;
+            width: 2px;
+            height: calc(100% + 4px);
+            background: #e5e7eb;
+        }
+        
+        .timeline-item:last-child::after {
+            display: none;
+        }
+        
+        .achievement-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            font-size: 24px;
+            margin: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .achievement-badge.unlocked {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        .achievement-badge.locked {
+            background: #f3f4f6;
+            color: #9ca3af;
+            opacity: 0.5;
+        }
+        
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin: 0 auto 12px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="flex justify-between items-start mb-4">
+            <div class="flex items-center space-x-4">
+                {{#if companyLogo}}
+                <img src="{{companyLogo}}" alt="Logo EducaSaber" class="h-14 w-auto object-contain bg-white/10 p-2 rounded-lg" onerror="this.style.display='none'">
+                {{/if}}
+            </div>
+            <div class="flex items-center space-x-4">
+                {{#if schoolLogo}}
+                <img src="{{schoolLogo}}" alt="Logo {{schoolName}}" class="h-14 w-auto object-contain bg-white/10 p-2 rounded-lg" onerror="this.style.display='none'">
+                {{/if}}
+            </div>
+        </div>
+        <div class="flex justify-between items-start mb-6">
+            <div>
+                <h1 class="text-3xl font-bold mb-2">Informe de Progreso</h1>
+                <p class="text-blue-100 text-lg">{{studentName}}</p>
+                <p class="text-blue-200 text-sm">{{schoolName}}</p>
+            </div>
+            <div class="text-right">
+                <p class="text-blue-100 text-sm">{{generationDate}}</p>
+            </div>
+        </div>
+        <div class="grid grid-cols-4 gap-6">
+            <div class="text-center">
+                <div class="score-circle" style="--score: {{generalScore}};">
+                    <div class="text-3xl font-bold">{{generalScore}}%</div>
+                    <div class="text-xs mt-1">Progreso General</div>
+                    <div class="text-xs mt-1 text-blue-200">Lecciones completadas</div>
+                </div>
+            </div>
+            <div class="text-center">
+                <div class="stat-icon bg-white/20 text-white">
+                    📊
+                </div>
+                <div class="text-xl font-bold">{{estimatedIcfesScore}}</div>
+                <div class="text-xs text-blue-100">ICFES Estimado</div>
+                <div class="text-xs text-blue-200 mt-1">0-500 puntos</div>
+            </div>
+            <div class="text-center">
+                <div class="stat-icon bg-white/20 text-white">
+                    🏆
+                </div>
+                <div class="text-xl font-bold">{{schoolRankGeneral}}%</div>
+                <div class="text-xs text-blue-100">Percentil Colegio</div>
+                <div class="text-xs text-blue-200 mt-1">Por encima del {{schoolRankGeneral}}%</div>
+            </div>
+            <div class="text-center">
+                <div class="stat-icon bg-white/20 text-white">
+                    🌟
+                </div>
+                <div class="text-xl font-bold">{{platformRankGeneral}}%</div>
+                <div class="text-xs text-blue-100">Percentil Plataforma</div>
+                <div class="text-xs text-blue-200 mt-1">Por encima del {{platformRankGeneral}}%</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfica Radar de Competencias (Reemplaza Competencias ICFES) -->
+    <div class="info-card blue mb-6">
+        <h2 class="text-xl font-bold mb-6 text-gray-800 flex items-center">
+            <span class="mr-2">📊</span>
+            Desempeño por Competencia
+        </h2>
+        <div class="flex justify-center">
+            {{{radarChart competencies studentScoresForRadar schoolScoresForRadar platformScoresForRadar}}}
+        </div>
+        <p class="text-xs text-gray-500 text-center mt-4">
+            Comparación entre las notas del estudiante (azul), promedio del colegio (naranja) y promedio de la plataforma (verde).
+        </p>
+    </div>
+
+    <!-- Evolución Temporal con Gráfica de Control -->
+    <div class="info-card green mb-6">
+        <h2 class="text-xl font-bold mb-6 text-gray-800 flex items-center">
+            <span class="mr-2">📈</span>
+            Evolución de Exámenes
+        </h2>
+        {{#each competencies}}
+        {{#if examHistory}}
+        <div class="mb-8">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-gray-700 text-sm">{{displayName}}</h3>
+                {{#if overallTrend}}
+                <span class="px-3 py-1 rounded-full text-xs font-bold
+                    {{#if (eq overallTrend 'improving')}}bg-green-100 text-green-700{{/if}}
+                    {{#if (eq overallTrend 'declining')}}bg-red-100 text-red-700{{/if}}
+                    {{#if (eq overallTrend 'stable')}}bg-gray-100 text-gray-700{{/if}}">
+                    {{#if (eq overallTrend 'improving')}}↗ Mejorando{{/if}}
+                    {{#if (eq overallTrend 'declining')}}↘ Mejorar{{/if}}
+                    {{#if (eq overallTrend 'stable')}}→ Estable{{/if}}
+                </span>
+                {{/if}}
+            </div>
+            <!-- Gráfica de Control -->
+            <div class="mb-4">
+                {{{controlChart examHistory displayName id schoolScoresForRadar platformScoresForRadar}}}
+            </div>
+            <div class="text-xs text-gray-500 text-center mt-2">
+                Última nota: {{score}} | Progreso: {{progressPercentage}}%
+            </div>
+        </div>
+        {{else}}
+        <div class="mb-4 p-4 bg-gray-50 rounded-lg">
+            <h3 class="font-semibold text-gray-700 mb-2 text-sm">{{displayName}}</h3>
+            <p class="text-xs text-gray-500">Aún no se han presentado exámenes en esta competencia</p>
+        </div>
+        {{/if}}
+        {{/each}}
+    </div>
+
+    <!-- Clasificaciones Visuales -->
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="info-card orange">
+            <h2 class="text-lg font-bold mb-4 text-gray-800 flex items-center">
+                <span class="mr-2">🏫</span>
+                Clasificación Colegio
+            </h2>
+            {{#each competencies}}
+            <div class="mb-3">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm text-gray-700">{{displayName}}</span>
+                    <span class="font-bold text-orange-600">Percentil {{schoolRank}}%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                    <div class="bg-gradient-to-r from-orange-400 to-orange-600 h-3 rounded-full" style="width: {{schoolRank}}%"></div>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+        <div class="info-card purple">
+            <h2 class="text-lg font-bold mb-4 text-gray-800 flex items-center">
+                <span class="mr-2">🌐</span>
+                Clasificación Plataforma
+            </h2>
+            {{#each competencies}}
+            <div class="mb-3">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm text-gray-700">{{displayName}}</span>
+                    <span class="font-bold text-purple-600">Percentil {{platformRank}}%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                    <div class="bg-gradient-to-r from-purple-400 to-purple-600 h-3 rounded-full" style="width: {{platformRank}}%"></div>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+
+    <!-- Análisis -->
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="info-card green">
+            <h2 class="text-lg font-bold mb-4 text-green-600 flex items-center">
+                <span class="mr-2">✅</span>
+                Fortalezas
+            </h2>
+            <div class="space-y-3">
+                {{#each strengths}}
+                <div class="flex items-start p-3 bg-green-50 rounded-lg">
+                    <span class="text-green-500 mr-3 text-lg">✓</span>
+                    <span class="text-sm text-gray-700">{{this}}</span>
+                </div>
+                {{/each}}
+            </div>
+        </div>
+        <div class="info-card orange">
+            <h2 class="text-lg font-bold mb-4 text-orange-600 flex items-center">
+                <span class="mr-2">🎯</span>
+                Áreas de Mejora
+            </h2>
+            <div class="space-y-3">
+                {{#each improvementAreas}}
+                <div class="flex items-start p-3 bg-orange-50 rounded-lg">
+                    <span class="text-orange-500 mr-3 text-lg">→</span>
+                    <span class="text-sm text-gray-700">{{this}}</span>
+                </div>
+                {{/each}}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recomendaciones Timeline -->
+    <div class="info-card blue mb-6">
+        <h2 class="text-lg font-bold mb-4 text-gray-800 flex items-center">
+            <span class="mr-2">💡</span>
+            Recomendaciones
+        </h2>
+        <div class="space-y-4">
+            {{#each parentRecommendations}}
+            <div class="timeline-item">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-700">{{this}}</p>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+
+    <!-- Logros -->
+    <div class="info-card purple">
+        <h2 class="text-lg font-bold mb-4 text-gray-800 flex items-center">
+            <span class="mr-2">🏆</span>
+            Logros Desbloqueados
+        </h2>
+        <div class="mb-6">
+            <div class="flex justify-between items-center mb-3">
+                <span class="text-sm text-gray-600">Progreso General</span>
+                <span class="font-bold text-purple-600 text-lg">{{achievementsUnlocked}}/{{achievementsTotal}}</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-6">
+                <div class="bg-gradient-to-r from-purple-500 to-purple-600 h-6 rounded-full flex items-center justify-end pr-2" style="width: {{achievementsProgress}}%">
+                    <span class="text-white text-xs font-bold">{{achievementsProgress}}%</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex flex-wrap justify-center">
+            {{#each achievements}}
+            <div class="text-center m-2">
+                <div class="achievement-badge {{#if unlocked}}unlocked{{else}}locked{{/if}}">
+                    {{icon}}
+                </div>
+                <div class="text-xs font-semibold text-gray-700 mt-2 max-w-[60px]">{{name}}</div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+</body>
+</html>

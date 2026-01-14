@@ -25,8 +25,14 @@ export async function GET(request: NextRequest) {
     const limit = searchParams.get('limit');
     const offset = searchParams.get('offset');
 
+    const now = new Date();
     const where: any = {
       userId: session.user.id,
+      // Excluir notificaciones expiradas
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: now } }
+      ],
     };
 
     if (type) {
@@ -44,17 +50,28 @@ export async function GET(request: NextRequest) {
       skip: offset ? parseInt(offset) : 0,
     });
 
-    // Obtener estadísticas
+    // Obtener estadísticas (excluyendo expiradas)
+    const statsWhere = {
+      userId: session.user.id,
+      OR: [
+        { expiresAt: null },
+        { expiresAt: { gt: now } }
+      ]
+    };
+    
     const stats = await prisma.notification.groupBy({
       by: ['type', 'isRead'],
-      where: { userId: session.user.id },
+      where: statsWhere,
       _count: true,
     });
 
     const notificationStats = {
-      total: await prisma.notification.count({ where: { userId: session.user.id } }),
+      total: await prisma.notification.count({ where: statsWhere }),
       unread: await prisma.notification.count({ 
-        where: { userId: session.user.id, isRead: false } 
+        where: { 
+          ...statsWhere,
+          isRead: false 
+        } 
       }),
       byType: stats.reduce((acc, stat) => {
         if (!acc[stat.type as any]) {
@@ -82,7 +99,7 @@ export async function GET(request: NextRequest) {
 }
 
 const createNotificationSchema = z.object({
-  type: z.enum(['exam_available', 'exam_reminder', 'lesson_completed', 'achievement_unlocked', 'course_enrolled', 'exam_result', 'system']),
+  type: z.enum(['exam_available', 'exam_reminder', 'exam_scheduled', 'exam_closed', 'exam_failed', 'exam_missed', 'lesson_completed', 'achievement_unlocked', 'course_enrolled', 'exam_result', 'system', 'admin_broadcast', 'live_class_scheduled']).optional().default('system'),
   title: z.string().min(1),
   message: z.string().min(1),
   metadata: z.record(z.any()).optional(),
@@ -102,10 +119,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = createNotificationSchema.parse(body);
 
+    // Calcular fecha de expiración por defecto (15 días) si no se especifica
+    const defaultExpiresAt = data.expiresAt || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+
     const notification = await prisma.notification.create({
       data: {
         userId: session.user.id,
-        ...data,
+        type: data.type || 'system',
+        title: data.title,
+        message: data.message,
+        actionUrl: data.actionUrl,
+        scheduledAt: data.scheduledAt,
+        expiresAt: defaultExpiresAt,
         metadata: data.metadata ? JSON.stringify(data.metadata) : null,
       },
     });

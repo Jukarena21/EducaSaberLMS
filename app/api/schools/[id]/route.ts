@@ -6,9 +6,11 @@ import { z } from 'zod'
 
 const schoolSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido'),
+  type: z.enum(['school', 'company', 'government_entity', 'other']).optional().default('school'),
   city: z.string().min(1, 'La ciudad es requerida'),
   neighborhood: z.string().min(1, 'El barrio es requerido'),
   address: z.string().optional(),
+  daneCode: z.string().optional(),
   institutionType: z.enum(['publica', 'privada', 'otro']),
   academicCalendar: z.enum(['diurno', 'nocturno', 'ambos']),
   totalStudents: z.number().min(0, 'El total de estudiantes debe ser mayor o igual a 0'),
@@ -119,9 +121,29 @@ export async function PUT(
       )
     }
 
+    // Check if daneCode is unique (if provided and different from current)
+    if (validatedData.daneCode && validatedData.daneCode.trim()) {
+      const existingDaneCode = await prisma.school.findUnique({
+        where: {
+          daneCode: validatedData.daneCode.trim(),
+        },
+      })
+
+      if (existingDaneCode && existingDaneCode.id !== id) {
+        return NextResponse.json(
+          { error: 'Ya existe un colegio con ese código DANE' },
+          { status: 400 }
+        )
+      }
+    }
+
     const school = await prisma.school.update({
       where: { id },
-      data: validatedData,
+      data: {
+        ...validatedData,
+        type: validatedData.type || 'school',
+        daneCode: validatedData.daneCode?.trim() || null,
+      },
     })
 
     return NextResponse.json(school)

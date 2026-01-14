@@ -7,6 +7,7 @@ export interface ExamData {
   examType: 'simulacro_completo' | 'por_competencia' | 'por_modulo' | 'personalizado' | 'diagnostico'
   courseId?: string
   competencyId?: string
+  isIcfesExam?: boolean
   timeLimitMinutes?: number
   passingScore: number
   difficultyLevel: 'facil' | 'intermedio' | 'dificil' | 'variable'
@@ -18,6 +19,9 @@ export interface ExamData {
   includedModules?: string[] // Array de module_ids
   questionsPerModule: number
   totalQuestions?: number
+  // Campos para simulacros manuales
+  isManualSimulacro?: boolean
+  isPredefined?: boolean
   createdAt: string
   updatedAt: string
   
@@ -25,12 +29,14 @@ export interface ExamData {
   course?: {
     id: string
     title: string
+    academicGrade?: string
     competency: {
       id: string
       name: string
       displayName: string
     }
   }
+  academicGrade?: string
   competency?: {
     id: string
     name: string
@@ -43,6 +49,9 @@ export interface ExamData {
   }
   examQuestions?: ExamQuestionData[]
   examResults?: ExamResultData[]
+  // Asignaciones para simulacros manuales
+  examSchools?: ExamSchoolData[]
+  examAssignments?: ExamAssignmentData[]
 }
 
 export interface ExamFormData {
@@ -57,6 +66,7 @@ export interface ExamFormData {
   difficultyLevel: 'facil' | 'intermedio' | 'dificil' | 'variable'
   isAdaptive: boolean
   isPublished: boolean
+  isIcfesExam: boolean
   openDate: string
   closeDate: string
   includedModules: string[]
@@ -86,6 +96,11 @@ export interface ExamQuestionData {
   timeLimit?: number
   lessonId?: string
   lessonUrl?: string
+  // Metadatos adicionales para simulacros manuales
+  tema?: string
+  subtema?: string
+  componente?: string
+  competencyId?: string
   createdAt: string
   updatedAt: string
   
@@ -130,6 +145,10 @@ export interface ExamResultData {
   questionsWithIdenticalTiming: number
   fraudRiskScore: number
   resultsByCompetency?: string // JSON string
+  // Resultados organizados por metadatos para reportes
+  resultsByTema?: string // JSON string
+  resultsBySubtema?: string // JSON string
+  resultsByComponente?: string // JSON string
   createdAt: string
   
   // Relaciones
@@ -208,3 +227,17 @@ export interface ExamStatistics {
   recentExams: ExamData[]
   topPerformingExams: ExamData[]
 }
+
+// Re-exportar tipos de simulacros manuales
+export type {
+  ManualSimulacroFormData,
+  ManualSimulacroQuestionData,
+  ManualSimulacroQuestionFormData,
+  ExamSchoolData,
+  ExamAssignmentData,
+  ManualSimulacroData,
+  SimulacroAssignmentFormData,
+  ResultsByMetadata,
+  ManualSimulacroReport,
+  ManualSimulacroFilters
+} from './manual-simulacro'

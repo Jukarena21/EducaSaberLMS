@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { 
   BookOpen, 
   Clock, 
@@ -14,7 +15,16 @@ import {
   ChevronRight,
   Target,
   Calendar,
-  Award
+  Award,
+  TrendingUp,
+  Users,
+  Star,
+  Zap,
+  Brain,
+  GraduationCap,
+  BarChart3,
+  Timer,
+  BookMarked
 } from "lucide-react"
 
 interface EnrolledCourse {
@@ -25,11 +35,19 @@ interface EnrolledCourse {
   competencyDisplayName: string
   academicGrade: string
   totalModules: number
+  completedModules?: number
   totalLessons: number
   completedLessons: number
   progressPercentage: number
   timeSpentMinutes: number
   estimatedTimeMinutes: number
+  nextLesson?: {
+    id: string
+    title: string
+    moduleTitle: string
+    orderIndex: number
+  } | null
+  daysSinceLastActivity?: number | null
   modules: Array<{
     id: string
     title: string
@@ -151,38 +169,138 @@ export function MyCourses() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Mis Cursos</h2>
-        <p className="text-gray-600">
-          Continúa tu aprendizaje en los cursos en los que estás inscrito.
-        </p>
-      </div>
+      {/* Summary Stats - Estilo consistente con dashboard + tooltips */}
+      <TooltipProvider delayDuration={200}>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 hover:shadow-lg transition-all duration-300 cursor-help">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-3xl font-bold text-blue-700">{courses.length}</div>
+                      <div className="text-sm text-blue-600 font-medium">Cursos Inscritos</div>
+                    </div>
+                    <div className="p-3 bg-blue-200 rounded-full">
+                      <BookOpen className="h-6 w-6 text-blue-700" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs leading-snug">
+              Cantidad de cursos que tienes asignados en la plataforma.{" "}
+              Se basa en tus inscripciones activas e inactivas registradas por el colegio.
+            </TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 hover:shadow-lg transition-all duration-300 cursor-help">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-3xl font-bold text-green-700">
+                        {courses.reduce((acc, c) => acc + c.completedLessons, 0)}
+                      </div>
+                      <div className="text-sm text-green-600 font-medium">Lecciones Completadas</div>
+                    </div>
+                    <div className="p-3 bg-green-200 rounded-full">
+                      <CheckCircle className="h-6 w-6 text-green-700" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs leading-snug">
+              Suma de todas las lecciones que has marcado como completadas en tus cursos.{" "}
+              Te ayuda a ver cuánto contenido has terminado en total.
+            </TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 hover:shadow-lg transition-all duration-300 cursor-help">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-3xl font-bold text-purple-700">
+                        {formatTime(courses.reduce((acc, c) => acc + c.timeSpentMinutes, 0))}
+                      </div>
+                      <div className="text-sm text-purple-600 font-medium">Tiempo Total</div>
+                    </div>
+                    <div className="p-3 bg-purple-200 rounded-full">
+                      <Timer className="h-6 w-6 text-purple-700" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs leading-snug">
+              Tiempo total invertido estudiando en todos tus cursos.{" "}
+              Se calcula a partir de los minutos registrados en cada lección.
+            </TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 hover:shadow-lg transition-all duration-300 cursor-help">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-3xl font-bold text-orange-700">
+                        {courses.reduce((acc, c) => acc + (c.completedModules || 0), 0)}
+                      </div>
+                      <div className="text-sm text-orange-600 font-medium">Módulos Completados</div>
+                      <div className="text-xs text-orange-500">
+                        de {courses.reduce((acc, c) => acc + c.totalModules, 0)} total
+                      </div>
+                    </div>
+                    <div className="p-3 bg-orange-200 rounded-full">
+                      <Target className="h-6 w-6 text-orange-700" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs leading-snug">
+              Número de módulos que has completado dentro de todos tus cursos.{" "}
+              Un módulo se considera completado cuando todas sus lecciones están marcadas como terminadas.
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </TooltipProvider>
 
-      {/* Courses List */}
-      <div className="space-y-4">
+      {/* Courses List mejorada */}
+      <div className="space-y-6">
         {courses.map((course) => (
-          <Card key={course.id} className="hover:shadow-md transition-shadow">
-            <CardHeader>
+          <Card key={course.id} className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-blue-500">
+            <CardHeader className="pb-4">
               <div 
                 className="flex items-start justify-between cursor-pointer"
                 onClick={() => toggleCourse(course.id)}
               >
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-3">
                     <ChevronRight 
-                      className={`h-4 w-4 transition-transform ${
+                      className={`h-5 w-5 transition-transform text-blue-600 ${
                         expandedCourse === course.id ? 'rotate-90' : ''
                       }`} 
                     />
-                    <BookOpen className="h-5 w-5 text-blue-600" />
+                    <div className="p-3 bg-blue-100 rounded-lg">
+                      <GraduationCap className="h-6 w-6 text-blue-600" />
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle className="text-xl">{course.title}</CardTitle>
-                    <p className="text-gray-600 mt-1">{course.description}</p>
-                    <div className="flex items-center space-x-2 mt-2">
-                      <Badge variant="outline">{course.competencyDisplayName}</Badge>
-                      <Badge variant="outline">{course.academicGrade}</Badge>
+                  <div className="flex-1">
+                    <CardTitle className="text-xl text-gray-800 mb-2">{course.title}</CardTitle>
+                    <p className="text-gray-600 mb-3">{course.description}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200">
+                        {course.competencyDisplayName}
+                      </Badge>
+                      <Badge className="bg-green-100 text-green-800 hover:bg-green-200">
+                        {course.academicGrade}
+                      </Badge>
                       <Badge className={getStatusColor(course.enrollment.status)}>
                         {getStatusLabel(course.enrollment.status)}
                       </Badge>
@@ -190,78 +308,99 @@ export function MyCourses() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-blue-600">
+                  <div className="text-3xl font-bold text-blue-600 mb-1">
                     {course.progressPercentage}%
                   </div>
                   <div className="text-sm text-gray-600">
                     {course.completedLessons}/{course.totalLessons} lecciones
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {formatTime(course.timeSpentMinutes)} estudiado
                   </div>
                 </div>
               </div>
             </CardHeader>
             
             {expandedCourse === course.id && (
-              <CardContent className="space-y-4">
-                {/* Overall Progress */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">Progreso General</span>
-                    <span className="text-sm text-gray-600">
+              <CardContent className="space-y-6 bg-gradient-to-r from-gray-50 to-blue-50">
+                {/* Overall Progress mejorado */}
+                <div className="p-4 bg-white rounded-lg border border-blue-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-lg font-semibold text-gray-800">Progreso General</span>
+                    <span className="text-sm text-gray-600 font-medium">
                       {formatTime(course.timeSpentMinutes)} / {formatTime(course.estimatedTimeMinutes)}
                     </span>
                   </div>
-                  <Progress value={course.progressPercentage} className="h-3" />
+                  <Progress value={course.progressPercentage} className="h-4" />
+                  <div className="flex justify-between text-sm text-gray-600 mt-2">
+                    <span>0%</span>
+                    <span className="font-semibold">{course.progressPercentage}%</span>
+                    <span>100%</span>
+                  </div>
                 </div>
 
-                {/* Course Stats */}
+                {/* Course Stats mejoradas */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <CheckCircle className="h-6 w-6 text-blue-600 mx-auto mb-1" />
-                    <p className="text-lg font-bold text-blue-600">{course.completedLessons}</p>
-                    <p className="text-xs text-gray-600">Completadas</p>
+                  <div className="text-center p-4 bg-white rounded-lg border border-blue-100 hover:shadow-md transition-shadow">
+                    <CheckCircle className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                    <p className="text-xl font-bold text-blue-700">{course.completedModules || 0}/{course.totalModules}</p>
+                    <p className="text-sm text-blue-600 font-medium">Módulos Completados</p>
                   </div>
                   
-                  <div className="text-center p-3 bg-green-50 rounded-lg">
-                    <Clock className="h-6 w-6 text-green-600 mx-auto mb-1" />
-                    <p className="text-lg font-bold text-green-600">
+                  <div className="text-center p-4 bg-white rounded-lg border border-green-100 hover:shadow-md transition-shadow">
+                    <Timer className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                    <p className="text-xl font-bold text-green-700">
                       {formatTime(course.timeSpentMinutes)}
                     </p>
-                    <p className="text-xs text-gray-600">Tiempo</p>
+                    <p className="text-sm text-green-600 font-medium">Tiempo</p>
                   </div>
                   
-                  <div className="text-center p-3 bg-purple-50 rounded-lg">
-                    <BookOpen className="h-6 w-6 text-purple-600 mx-auto mb-1" />
-                    <p className="text-lg font-bold text-purple-600">{course.totalModules}</p>
-                    <p className="text-xs text-gray-600">Módulos</p>
-                  </div>
-                  
-                  <div className="text-center p-3 bg-orange-50 rounded-lg">
-                    <Calendar className="h-6 w-6 text-orange-600 mx-auto mb-1" />
-                    <p className="text-lg font-bold text-orange-600">
-                      {new Date(course.enrollment.enrolledAt).toLocaleDateString()}
+                  <div className="text-center p-4 bg-white rounded-lg border border-purple-100 hover:shadow-md transition-shadow">
+                    <Target className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                    <p className="text-xl font-bold text-purple-700">
+                      {course.nextLesson ? 'Sí' : 'No'}
                     </p>
-                    <p className="text-xs text-gray-600">Inscrito</p>
+                    <p className="text-sm text-purple-600 font-medium">Próxima Lección</p>
+                    {course.nextLesson && (
+                      <p className="text-xs text-purple-500 truncate">{course.nextLesson.title}</p>
+                    )}
+                  </div>
+                  
+                  <div className="text-center p-4 bg-white rounded-lg border border-orange-100 hover:shadow-md transition-shadow">
+                    <Calendar className="h-8 w-8 text-orange-600 mx-auto mb-2" />
+                    <p className="text-xl font-bold text-orange-700">
+                      {course.daysSinceLastActivity !== null && course.daysSinceLastActivity !== undefined 
+                        ? course.daysSinceLastActivity 
+                        : 'N/A'}
+                    </p>
+                    <p className="text-sm text-orange-600 font-medium">Días sin Actividad</p>
+                    {course.daysSinceLastActivity !== null && course.daysSinceLastActivity > 7 && (
+                      <p className="text-xs text-red-500">Requiere atención</p>
+                    )}
                   </div>
                 </div>
 
-                {/* Modules Progress */}
-                <div>
-                  <h4 className="font-semibold mb-3">Progreso por Módulo</h4>
-                  <div className="space-y-2">
+                {/* Modules Progress mejorado */}
+                <div className="p-4 bg-white rounded-lg border border-blue-100">
+                  <h4 className="font-semibold mb-4 text-gray-800 flex items-center space-x-2">
+                    <Brain className="h-5 w-5 text-blue-600" />
+                    <span>Progreso por Módulo</span>
+                  </h4>
+                  <div className="space-y-3">
                     {course.modules.map((module) => (
-                      <div key={module.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div key={module.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                         <div className="flex-1">
-                          <p className="font-medium">{module.title}</p>
+                          <p className="font-semibold text-gray-800">{module.title}</p>
                           <p className="text-sm text-gray-600">
-                            {module.completedLessons} de {module.totalLessons} lecciones
+                            {module.completedLessons} de {module.totalLessons} lecciones completadas
                           </p>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-3">
                           <Progress 
                             value={module.progressPercentage} 
-                            className="w-20 h-2"
+                            className="w-24 h-3"
                           />
-                          <span className="text-sm font-medium w-8">
+                          <span className="text-sm font-bold text-blue-600 w-10">
                             {module.progressPercentage}%
                           </span>
                         </div>
@@ -270,21 +409,30 @@ export function MyCourses() {
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex space-x-3">
+                {/* Action Buttons mejorados */}
+                <div className="flex space-x-4">
                   <Button 
-                    className="flex-1"
-                    onClick={() => router.push(`/estudiante/cursos/${course.id}`)}
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-md hover:shadow-lg transition-all duration-200"
+                    onClick={() => {
+                      // Si hay próxima lección, ir directamente a ella
+                      if (course.nextLesson) {
+                        router.push(`/estudiante/cursos/${course.id}/leccion/${course.nextLesson.id}`)
+                      } else {
+                        // Si no hay próxima lección, ir a la página del curso
+                        router.push(`/estudiante/cursos/${course.id}`)
+                      }
+                    }}
                   >
-                    <Play className="h-4 w-4 mr-2" />
+                    <Play className="h-5 w-5 mr-2" />
                     Continuar Aprendiendo
                   </Button>
                   <Button 
                     variant="outline"
+                    className="border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300"
                     onClick={() => router.push(`/estudiante/cursos/${course.id}`)}
                   >
-                    <Target className="h-4 w-4 mr-2" />
-                    Ver Detalles
+                    <Target className="h-5 w-5 mr-2" />
+                    Ver Curso Completo
                   </Button>
                 </div>
               </CardContent>
@@ -292,42 +440,6 @@ export function MyCourses() {
           </Card>
         ))}
       </div>
-
-      {/* Summary Stats */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Award className="h-5 w-5 text-yellow-600" />
-            <span>Resumen de Progreso</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-blue-600">{courses.length}</p>
-              <p className="text-sm text-gray-600">Cursos Inscritos</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">
-                {courses.reduce((acc, c) => acc + c.completedLessons, 0)}
-              </p>
-              <p className="text-sm text-gray-600">Lecciones Completadas</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-purple-600">
-                {formatTime(courses.reduce((acc, c) => acc + c.timeSpentMinutes, 0))}
-              </p>
-              <p className="text-sm text-gray-600">Tiempo Total</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-orange-600">
-                {Math.round(courses.reduce((acc, c) => acc + c.progressPercentage, 0) / courses.length)}%
-              </p>
-              <p className="text-sm text-gray-600">Promedio General</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

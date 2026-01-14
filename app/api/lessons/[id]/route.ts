@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { yearToAcademicGrade, academicGradeToYear } from '@/lib/academicGrades';
 
 // Schema de validación para actualizar lecciones
 const lessonUpdateSchema = z.object({
@@ -13,6 +14,7 @@ const lessonUpdateSchema = z.object({
   videoDescription: z.string().optional(),
   theoryContent: z.string().min(1, 'El contenido es requerido'),
   competencyId: z.string().optional(),
+  year: z.number().min(1).max(11).optional(), // Año escolar (1-11) solo para lecciones ICFES
 });
 
 // GET - Obtener lección específica
@@ -39,7 +41,12 @@ export async function GET(
                   include: {
                     course: {
                       include: {
-                        competency: true
+                        competency: true,
+                        courseSchools: {
+                          select: {
+                            schoolId: true
+                          }
+                        }
                       }
                     }
                   }
@@ -58,12 +65,19 @@ export async function GET(
       );
     }
 
-    // Si es admin de colegio, verificar que la lección pertenece a su colegio
+    // Si es admin de colegio, verificar que la lección pertenece a su colegio o es general
     if (session.user.role === 'school_admin') {
+      if (!session.user.schoolId) {
+        return NextResponse.json(
+          { error: 'Usuario sin colegio asignado' },
+          { status: 400 }
+        );
+      }
       const hasAccess = lesson.moduleLessons.some(ml => 
-        ml.module.courseModules.some(cm => 
-          cm.course.schoolId === session.user.schoolId
-        )
+        ml.module.courseModules.some(cm => {
+          const courseSchoolIds = cm.course.courseSchools.map(cs => cs.schoolId);
+          return courseSchoolIds.length === 0 || courseSchoolIds.includes(session.user.schoolId!);
+        })
       );
       if (!hasAccess) {
         return NextResponse.json(
@@ -71,6 +85,12 @@ export async function GET(
           { status: 403 }
         );
       }
+    }
+
+    // Convertir academicGrade a year si existe
+    let year: number | undefined = undefined;
+    if (lesson.academicGrade) {
+      year = academicGradeToYear(lesson.academicGrade) || undefined;
     }
 
     // Transformar datos
@@ -83,6 +103,9 @@ export async function GET(
       videoDescription: lesson.videoDescription,
       theoryContent: lesson.theoryContent,
       isPublished: lesson.isPublished,
+      competencyId: lesson.competencyId,
+      academicGrade: lesson.academicGrade,
+      year: year,
       modules: lesson.moduleLessons.map(ml => ({
         moduleId: ml.module.id,
         moduleTitle: ml.module.title,
@@ -151,6 +174,12 @@ export async function PUT(
       );
     }
 
+    // Convertir year a academicGrade si se proporciona
+    let academicGrade: string | null = null;
+    if (validatedData.year) {
+      academicGrade = yearToAcademicGrade(validatedData.year) || null;
+    }
+
     const lesson = await prisma.lesson.update({
       where: { id },
       data: {
@@ -161,6 +190,7 @@ export async function PUT(
         videoDescription: validatedData.videoDescription || null,
         theoryContent: validatedData.theoryContent,
         competencyId: validatedData.competencyId || null,
+        academicGrade: academicGrade !== null ? academicGrade : undefined, // Solo actualizar si se proporciona
       },
       include: {
         moduleLessons: {
@@ -183,6 +213,12 @@ export async function PUT(
       }
     });
 
+    // Convertir academicGrade a year si existe
+    let year: number | undefined = undefined;
+    if (lesson.academicGrade) {
+      year = academicGradeToYear(lesson.academicGrade) || undefined;
+    }
+
     // Transformar respuesta
     const transformedLesson = {
       id: lesson.id,
@@ -194,6 +230,8 @@ export async function PUT(
       theoryContent: lesson.theoryContent,
       isPublished: lesson.isPublished,
       competencyId: lesson.competencyId,
+      academicGrade: lesson.academicGrade,
+      year: year,
       modules: lesson.moduleLessons.map(ml => ({
         moduleId: ml.module.id,
         moduleTitle: ml.module.title,
@@ -253,15 +291,78 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Verificar que la lección existe
+    // Verificar que la lección existe y obtener información de uso
     const existingLesson = await prisma.lesson.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        moduleLessons: {
+          include: {
+            module: {
+              select: {
+                id: true,
+                title: true
+              }
+            }
+          }
+        },
+        lessonQuestions: {
+          select: {
+            id: true
+          }
+        },
+        examQuestions: {
+          select: {
+            id: true
+          }
+        },
+        liveClasses: {
+          select: {
+            id: true
+          }
+        }
+      }
     });
 
     if (!existingLesson) {
       return NextResponse.json(
         { error: 'Lección no encontrada' },
         { status: 404 }
+      );
+    }
+
+    // Verificar si la lección está siendo usada
+    const isInUse = 
+      existingLesson.moduleLessons.length > 0 ||
+      existingLesson.lessonQuestions.length > 0 ||
+      existingLesson.examQuestions.length > 0 ||
+      existingLesson.liveClasses.length > 0;
+
+    if (isInUse) {
+      const usageDetails = [];
+      
+      if (existingLesson.moduleLessons.length > 0) {
+        const moduleNames = existingLesson.moduleLessons.map(ml => ml.module.title).join(', ');
+        usageDetails.push(`${existingLesson.moduleLessons.length} módulo(s): ${moduleNames}`);
+      }
+      
+      if (existingLesson.lessonQuestions.length > 0) {
+        usageDetails.push(`${existingLesson.lessonQuestions.length} pregunta(s) asociada(s)`);
+      }
+      
+      if (existingLesson.examQuestions.length > 0) {
+        usageDetails.push(`${existingLesson.examQuestions.length} pregunta(s) en examen(es)`);
+      }
+      
+      if (existingLesson.liveClasses.length > 0) {
+        usageDetails.push(`${existingLesson.liveClasses.length} clase(s) en vivo asociada(s)`);
+      }
+
+      return NextResponse.json(
+        { 
+          error: 'No se puede eliminar la lección porque está siendo usada',
+          details: usageDetails.join('; ')
+        },
+        { status: 400 }
       );
     }
 

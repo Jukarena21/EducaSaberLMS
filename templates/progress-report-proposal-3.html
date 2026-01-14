@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Informe de Progreso - Reporte Ejecutivo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @page {
+            size: A4;
+            margin: 0.3in;
+        }
+        
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            background: #fafafa;
+            color: #1f2937;
+            font-size: 10px;
+            line-height: 1.5;
+        }
+        
+        .header {
+            border-bottom: 3px solid #1e40af;
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .executive-summary {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-left: 4px solid #1e40af;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        
+        .metric-box {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            height: 100%;
+        }
+        
+        .metric-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1e40af;
+            margin: 8px 0;
+        }
+        
+        .metric-label {
+            font-size: 11px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .competency-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .competency-table th {
+            background: #1e40af;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        
+        .competency-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 10px;
+        }
+        
+        .competency-table tr:hover {
+            background: #f9fafb;
+        }
+        
+        .progress-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .progress-bar {
+            flex: 1;
+            height: 20px;
+            background: #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 6px;
+            color: white;
+            font-size: 9px;
+            font-weight: bold;
+        }
+        
+        .evolution-chart {
+            background: white;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+            margin: 20px 0;
+        }
+        
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 40px 1fr;
+            gap: 8px;
+            margin-top: 20px;
+        }
+        
+        .chart-y-axis {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #6b7280;
+            text-align: right;
+            padding-right: 8px;
+        }
+        
+        .chart-area {
+            position: relative;
+            height: 150px;
+            border-left: 2px solid #e5e7eb;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .chart-line {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            padding: 0 10px;
+        }
+        
+        .chart-bar {
+            width: 30px;
+            background: linear-gradient(to top, #3b82f6, #60a5fa);
+            border-radius: 4px 4px 0 0;
+            position: relative;
+            margin: 0 4px;
+        }
+        
+        .chart-bar::after {
+            content: attr(data-value) '%';
+            position: absolute;
+            top: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 9px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        
+        .classification-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin: 20px 0;
+        }
+        
+        .classification-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            padding: 16px;
+        }
+        
+        .classification-card h3 {
+            font-size: 12px;
+            font-weight: 600;
+            color: #1e40af;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .classification-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .classification-item:last-child {
+            border-bottom: none;
+        }
+        
+        .analysis-section {
+            background: white;
+            border: 1px solid #e5e7eb;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .analysis-section h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1e40af;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #1e40af;
+            padding-bottom: 8px;
+        }
+        
+        .analysis-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .analysis-list li {
+            padding: 8px 0;
+            padding-left: 20px;
+            position: relative;
+            font-size: 10px;
+            color: #374151;
+        }
+        
+        .analysis-list li::before {
+            content: '▸';
+            position: absolute;
+            left: 0;
+            color: #1e40af;
+            font-weight: bold;
+        }
+        
+        .achievements-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+        
+        .achievement-item {
+            text-align: center;
+            padding: 12px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        
+        .achievement-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+            opacity: 0.3;
+        }
+        
+        .achievement-icon.unlocked {
+            opacity: 1;
+        }
+        
+        .achievement-name {
+            font-size: 9px;
+            font-weight: 600;
+            color: #374151;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="flex justify-between items-center mb-4">
+            <div class="flex items-center space-x-4">
+                {{#if companyLogo}}
+                <img src="{{companyLogo}}" alt="Logo EducaSaber" class="h-12 w-auto object-contain" onerror="this.style.display='none'">
+                {{/if}}
+            </div>
+            <div class="flex items-center space-x-4">
+                {{#if schoolLogo}}
+                <img src="{{schoolLogo}}" alt="Logo {{schoolName}}" class="h-12 w-auto object-contain" onerror="this.style.display='none'">
+                {{/if}}
+            </div>
+        </div>
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Informe de Progreso Académico</h1>
+                <p class="text-sm text-gray-600 mt-1">{{studentName}} | {{schoolName}}</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500">Fecha de Generación: {{generationDate}}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Executive Summary -->
+    <div class="executive-summary">
+        <h2 class="text-lg font-bold mb-4 text-gray-800">Resumen Ejecutivo</h2>
+        <div class="grid grid-cols-4 gap-4">
+            <div class="metric-box">
+                <div class="metric-label">Progreso General</div>
+                <div class="metric-value">{{generalScore}}%</div>
+                <div class="text-xs text-gray-500 mt-2">Porcentaje de lecciones completadas en todos los cursos</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-label">Puntuación ICFES</div>
+                <div class="metric-value">{{estimatedIcfesScore}}</div>
+                <div class="text-xs text-gray-500 mt-2">Puntuación estimada en el examen ICFES (0-500 puntos)</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-label">Percentil Colegio</div>
+                <div class="metric-value">{{schoolRankGeneral}}%</div>
+                <div class="text-xs text-gray-500 mt-2">Estás por encima del {{schoolRankGeneral}}% de estudiantes de tu colegio</div>
+            </div>
+            <div class="metric-box">
+                <div class="metric-label">Percentil Plataforma</div>
+                <div class="metric-value">{{platformRankGeneral}}%</div>
+                <div class="text-xs text-gray-500 mt-2">Estás por encima del {{platformRankGeneral}}% de estudiantes en EducaSaber</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfica Radar de Competencias (Reemplaza Tabla) -->
+    <div class="executive-summary">
+        <h2 class="text-lg font-bold mb-4 text-gray-800">Desempeño por Competencia ICFES</h2>
+        <div class="flex justify-center mb-4">
+            {{{radarChart competencies studentScoresForRadar schoolScoresForRadar platformScoresForRadar}}}
+        </div>
+        <p class="text-xs text-gray-500 text-center">
+            Comparación entre las notas del estudiante (azul), promedio del colegio (naranja) y promedio de la plataforma (verde).
+        </p>
+    </div>
+
+    <!-- Evolución Temporal con Gráfica de Control -->
+    <div class="evolution-chart">
+        <h2 class="text-lg font-bold mb-4 text-gray-800">Evolución de Exámenes por Competencia</h2>
+        {{#each competencies}}
+        {{#if examHistory}}
+        <div class="mb-8">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold text-gray-700 text-sm">{{displayName}}</h3>
+                {{#if overallTrend}}
+                <span class="px-2 py-1 rounded text-xs font-semibold
+                    {{#if (eq overallTrend 'improving')}}bg-green-100 text-green-700{{/if}}
+                    {{#if (eq overallTrend 'declining')}}bg-red-100 text-red-700{{/if}}
+                    {{#if (eq overallTrend 'stable')}}bg-gray-100 text-gray-700{{/if}}">
+                    {{#if (eq overallTrend 'improving')}}↗ Mejorando{{/if}}
+                    {{#if (eq overallTrend 'declining')}}↘ Mejorar{{/if}}
+                    {{#if (eq overallTrend 'stable')}}→ Estable{{/if}}
+                </span>
+                {{/if}}
+            </div>
+            <!-- Gráfica de Control -->
+            <div class="mb-4">
+                {{{controlChart examHistory displayName id schoolScoresForRadar platformScoresForRadar}}}
+            </div>
+            <div class="text-xs text-gray-500 text-center mt-2">
+                <span class="font-semibold">Última nota: {{score}}</span>
+                {{#if (gt totalExams 1)}}
+                <span class="mx-2">|</span>
+                {{#each examHistory}}
+                {{#if @first}}
+                <span>Primera nota: {{score}}</span>
+                {{/if}}
+                {{/each}}
+                {{/if}}
+                <span class="mx-2">|</span>
+                <span>Progreso: {{progressPercentage}}%</span>
+            </div>
+        </div>
+        {{else}}
+        <div class="mb-6 p-4 bg-gray-50 rounded border border-gray-200">
+            <h3 class="font-semibold text-gray-700 mb-2 text-sm">{{displayName}}</h3>
+            <p class="text-xs text-gray-500">Aún no se han presentado exámenes en esta competencia</p>
+        </div>
+        {{/if}}
+        {{/each}}
+    </div>
+
+    <!-- Clasificaciones -->
+    <div class="classification-grid">
+        <div class="classification-card">
+            <h3>Clasificación Colegio</h3>
+            {{#each competencies}}
+            <div class="classification-item">
+                <span class="text-sm text-gray-700">{{displayName}}</span>
+                <span class="font-bold text-orange-600">Percentil {{schoolRank}}%</span>
+            </div>
+            {{/each}}
+        </div>
+        <div class="classification-card">
+            <h3>Clasificación Plataforma</h3>
+            {{#each competencies}}
+            <div class="classification-item">
+                <span class="text-sm text-gray-700">{{displayName}}</span>
+                <span class="font-bold text-green-600">Percentil {{platformRank}}%</span>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+
+    <!-- Análisis y Recomendaciones -->
+    <div class="grid grid-cols-2 gap-4">
+        <div class="analysis-section">
+            <h2>Fortalezas Identificadas</h2>
+            <ul class="analysis-list">
+                {{#each strengths}}
+                <li>{{this}}</li>
+                {{/each}}
+            </ul>
+        </div>
+        <div class="analysis-section">
+            <h2>Áreas de Mejora</h2>
+            <ul class="analysis-list">
+                {{#each improvementAreas}}
+                <li>{{this}}</li>
+                {{/each}}
+            </ul>
+        </div>
+    </div>
+
+    <div class="analysis-section">
+        <h2>Recomendaciones</h2>
+        <ul class="analysis-list">
+            {{#each parentRecommendations}}
+            <li>{{this}}</li>
+            {{/each}}
+        </ul>
+    </div>
+
+    <!-- Logros -->
+    <div class="analysis-section">
+        <h2>Logros Desbloqueados</h2>
+        <div class="mb-4">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm text-gray-600">Progreso: {{achievementsUnlocked}} de {{achievementsTotal}} logros</span>
+                <span class="font-bold text-blue-600">{{achievementsProgress}}%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{achievementsProgress}}%;">
+                    {{achievementsProgress}}%
+                </div>
+            </div>
+        </div>
+        <div class="achievements-grid">
+            {{#each achievements}}
+            <div class="achievement-item">
+                <div class="achievement-icon {{#if unlocked}}unlocked{{/if}}">
+                    {{icon}}
+                </div>
+                <div class="achievement-name">{{name}}</div>
+                <div class="text-xs text-gray-500 mt-1">{{points}} pts</div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+</body>
+</html>
+

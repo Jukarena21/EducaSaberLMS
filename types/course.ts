@@ -7,12 +7,28 @@ export interface CourseData {
   competency?: {
     id: string;
     name: string;
+    displayName?: string;
   };
-  schoolId: string;
+  isIcfesCourse?: boolean;
+  schoolIds?: string[];
+  schoolId?: string; // Deprecated: usar schools en su lugar
   school?: {
     id: string;
     name: string;
   };
+  schools?: {
+    id: string;
+    name: string;
+    type: string;
+  }[];
+  courseSchools?: {
+    id: string;
+    school: {
+      id: string;
+      name: string;
+      type: string;
+    };
+  }[];
   modules?: {
     id: string;
     title: string;
@@ -31,7 +47,8 @@ export interface CourseFormData {
   description: string;
   year: number;
   competencyId: string;
-  schoolId: string;
+  isIcfesCourse: boolean;
+  schoolIds?: string[]; // Array de IDs de colegios/entidades (puede estar vacío para curso general)
   moduleIds: string[]; // IDs de los módulos a asociar
 }
 
@@ -40,4 +57,5 @@ export interface CourseFilters {
   schoolId?: string;
   competencyId?: string;
   year?: number;
+  isIcfesCourse?: boolean;
 } 

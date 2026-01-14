@@ -9,32 +9,80 @@ export async function GET(request: NextRequest) {
     const gate = await requireRole(['teacher_admin','school_admin'])
     if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
+    if (!gate.session) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+    
     const { searchParams } = new URL(request.url)
     const from = searchParams.get('from') ? new Date(searchParams.get('from')!) : new Date(Date.now() - 365*24*60*60*1000)
     const to = searchParams.get('to') ? new Date(searchParams.get('to')!) : new Date()
-    const schoolId = searchParams.get('schoolId') || undefined
+    // Para school_admin, forzar el filtro por su schoolId
+    const schoolId = gate.session.user.role === 'school_admin' 
+      ? gate.session.user.schoolId 
+      : (searchParams.get('schoolId') || undefined)
     const courseId = searchParams.get('courseId') || undefined
     const competencyId = searchParams.get('competencyId') || undefined
     const academicGrade = searchParams.get('academicGrade') || undefined
 
-    const whereER: any = { createdAt: { gte: from, lte: to } }
+    // Construir filtros directamente en Prisma para mejor performance
+    const whereExam: any = {}
+    if (competencyId) whereExam.competencyId = competencyId
+    if (courseId) whereExam.courseId = courseId
+    
     const whereCourse: any = {}
-    if (schoolId) whereCourse.schoolId = schoolId
     if (academicGrade) whereCourse.academicGrade = academicGrade
+    if (schoolId) {
+      whereCourse.courseSchools = {
+        some: { schoolId: schoolId }
+      }
+    }
+    
+    const whereER: any = { 
+      createdAt: { gte: from, lte: to },
+      exam: {
+        ...(Object.keys(whereExam).length > 0 ? whereExam : {}),
+        ...(Object.keys(whereCourse).length > 0 ? {
+          course: whereCourse
+        } : {})
+      }
+    }
 
     const results = await prisma.examResult.findMany({
       where: whereER,
       include: {
-        exam: { select: { id: true, competencyId: true, difficultyLevel: true, courseId: true }, include: { competency: true, course: { where: Object.keys(whereCourse).length ? whereCourse : undefined, select: { id: true } } } },
+        exam: { 
+          include: { 
+            competency: true,
+            course: {
+              include: {
+                courseSchools: {
+                  select: { schoolId: true }
+                }
+              }
+            }
+          } 
+        },
       }
     })
 
+    // Filtrado adicional solo para casos edge que no se pueden hacer en Prisma
     const filtered = results.filter(r => {
-      if (courseId && r.exam?.courseId !== courseId) return false
-      if (competencyId && r.exam?.competencyId !== competencyId) return false
-      if (schoolId && r.exam?.course?.id !== courseId && whereCourse.schoolId) {
-        // course filter handled above, school filter via course relation
+      // Verificar que tenga exam y relaciones necesarias
+      if (!r.exam || !r.exam.competency) return false
+      
+      // Filtros de exam (ya aplicados en where, pero verificamos por seguridad)
+      if (competencyId && r.exam.competencyId !== competencyId) return false
+      if (courseId && r.exam.courseId !== courseId) return false
+      
+      // Filtro de schoolId (verificar courseSchools)
+      if (schoolId && r.exam.course) {
+        const courseSchoolIds = r.exam.course.courseSchools?.map(cs => cs.schoolId) || []
+        if (!courseSchoolIds.includes(schoolId)) return false
       }
+      
+      // Filtro de academicGrade (ya aplicado en where, pero verificamos)
+      if (academicGrade && r.exam.course?.academicGrade !== academicGrade) return false
+      
       return true
     })
 

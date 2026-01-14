@@ -18,6 +18,7 @@ const examUpdateSchema = z.object({
   difficultyLevel: z.enum(['facil', 'intermedio', 'dificil', 'variable']).optional(),
   isAdaptive: z.boolean().optional(),
   isPublished: z.boolean().optional(),
+  isIcfesExam: z.boolean().optional(),
   openDate: z.string().optional(),
   closeDate: z.string().optional(),
   includedModules: z.array(z.string()).optional(),
@@ -41,7 +42,10 @@ export async function GET(
       include: {
         course: {
           include: {
-            competency: true
+            competency: true,
+            courseSchools: {
+              select: { schoolId: true }
+            }
           }
         },
         competency: true,
@@ -102,6 +106,25 @@ export async function GET(
       return NextResponse.json({ error: 'Examen no encontrado' }, { status: 404 })
     }
 
+    // Validación para school_admin: verificar que el examen pertenezca a su colegio
+    if (session.user.role === 'school_admin' && session.user.schoolId) {
+      if (exam.courseId && exam.course) {
+        const courseSchoolIds = exam.course.courseSchools.map(cs => cs.schoolId)
+        if (!courseSchoolIds.includes(session.user.schoolId)) {
+          return NextResponse.json(
+            { error: 'No tienes permisos para ver este examen' },
+            { status: 403 }
+          )
+        }
+      } else {
+        // Exámenes sin curso no pueden ser vistos por school_admin
+        return NextResponse.json(
+          { error: 'No tienes permisos para ver este examen' },
+          { status: 403 }
+        )
+      }
+    }
+
     // Transformar los datos
     const transformedExam = {
       ...exam,
@@ -138,7 +161,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const gate = await requireRole(['teacher_admin'])
+    const gate = await requireRole(['teacher_admin', 'school_admin'])
     if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
     const { id } = await params
@@ -149,11 +172,87 @@ export async function PUT(
 
     // Verificar que el examen existe
     const existingExam = await prisma.exam.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        course: {
+          include: {
+            courseSchools: {
+              select: { schoolId: true }
+            }
+          }
+        }
+      }
     })
 
     if (!existingExam) {
       return NextResponse.json({ error: 'Examen no encontrado' }, { status: 404 })
+    }
+
+    // Validación para school_admin: verificar que el examen pertenezca a su colegio
+    if (gate.session.user.role === 'school_admin' && gate.session.user.schoolId) {
+      if (!existingExam.courseId) {
+        // Exámenes sin curso no pueden ser editados por school_admin
+        return NextResponse.json(
+          { error: 'Solo puedes editar exámenes asociados a cursos de tu colegio' },
+          { status: 403 }
+        )
+      }
+
+      if (existingExam.course) {
+        const courseSchoolIds = existingExam.course.courseSchools.map(cs => cs.schoolId)
+        if (!courseSchoolIds.includes(gate.session.user.schoolId)) {
+          return NextResponse.json(
+            { error: 'Solo puedes editar exámenes de tu colegio' },
+            { status: 403 }
+          )
+        }
+      }
+
+      // Validar que si cambia courseId, el nuevo curso pertenezca a su colegio
+      if (validatedData.courseId !== undefined && validatedData.courseId !== '' && validatedData.courseId !== existingExam.courseId) {
+        const newCourse = await prisma.course.findUnique({
+          where: { id: validatedData.courseId },
+          include: {
+            courseSchools: { select: { schoolId: true } }
+          }
+        })
+
+        if (!newCourse) {
+          return NextResponse.json({ error: 'Curso no encontrado' }, { status: 404 })
+        }
+
+        const newCourseSchoolIds = newCourse.courseSchools.map(cs => cs.schoolId)
+        if (!newCourseSchoolIds.includes(gate.session.user.schoolId)) {
+          return NextResponse.json(
+            { error: 'Solo puedes asignar exámenes a cursos de tu colegio' },
+            { status: 403 }
+          )
+        }
+      }
+    }
+
+    const nextCourseId =
+      validatedData.courseId !== undefined
+        ? (validatedData.courseId !== '' ? validatedData.courseId : null)
+        : existingExam.courseId
+
+    const nextExamType = validatedData.examType ?? existingExam.examType
+
+    let nextIsIcfesExam =
+      validatedData.isIcfesExam !== undefined ? validatedData.isIcfesExam : existingExam.isIcfesExam
+
+    if (nextCourseId) {
+      const relatedCourse = await prisma.course.findUnique({
+        where: { id: nextCourseId },
+        select: { isIcfesCourse: true }
+      })
+      if (relatedCourse?.isIcfesCourse) {
+        nextIsIcfesExam = true
+      }
+    }
+
+    if (nextExamType === 'simulacro_completo' || nextExamType === 'diagnostico') {
+      nextIsIcfesExam = true
     }
 
     // Preparar datos normalizados para la actualización
@@ -187,6 +286,8 @@ export async function PUT(
       ...(validatedData.questionsPerModule !== undefined ? { questionsPerModule: validatedData.questionsPerModule } : {}),
     }
 
+    updateData.isIcfesExam = nextIsIcfesExam
+
     console.log('🔍 [DEBUG] Datos finales para actualizar examen:', updateData)
 
     // Actualizar el examen
@@ -210,51 +311,110 @@ export async function PUT(
       }
     })
 
-    // Si el examen pasa a publicado y está abierto, enviar notificaciones
+    // Enviar notificaciones según cambios en el examen
     try {
       const now = new Date()
-      const isOpen = !exam.openDate || exam.openDate <= now
-      if (exam.isPublished && isOpen) {
-        let targetUserIds: string[] = []
+      const expiresAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) // 15 días por defecto
+      
+      // Detectar cambios importantes
+      const wasClosed = existingExam.closeDate && existingExam.closeDate > now
+      const isNowClosed = exam.closeDate && exam.closeDate <= now && (!existingExam.closeDate || existingExam.closeDate > now)
+      const wasOpen = !existingExam.openDate || existingExam.openDate <= now
+      const isNowOpen = !exam.openDate || exam.openDate <= now
+      const openDateChanged = exam.openDate?.getTime() !== existingExam.openDate?.getTime()
+      const closeDateChanged = exam.closeDate?.getTime() !== existingExam.closeDate?.getTime()
+      
+      let targetUserIds: string[] = []
 
-        if (exam.courseId) {
+      if (exam.courseId) {
+        const enrollments = await prisma.courseEnrollment.findMany({
+          where: { courseId: exam.courseId, isActive: true },
+          select: { userId: true }
+        })
+        targetUserIds = enrollments.map(e => e.userId)
+      }
+
+      // Si no hay courseId o no hay inscritos, intentar por grado académico (a través de cursos)
+      if (targetUserIds.length === 0 && exam.academicGrade) {
+        const coursesWithGrade = await prisma.course.findMany({
+          where: { academicGrade: exam.academicGrade },
+          select: { id: true }
+        })
+        const courseIds = coursesWithGrade.map(c => c.id)
+        if (courseIds.length > 0) {
           const enrollments = await prisma.courseEnrollment.findMany({
-            where: { courseId: exam.courseId, isActive: true },
+            where: { 
+              courseId: { in: courseIds },
+              isActive: true 
+            },
             select: { userId: true }
           })
           targetUserIds = enrollments.map(e => e.userId)
         }
+      }
 
-        if (targetUserIds.length === 0 && exam.academicGrade) {
-          const students = await prisma.user.findMany({
-            where: { role: 'student', academicGrade: exam.academicGrade },
-            select: { id: true }
-          })
-          targetUserIds = students.map(s => s.id)
+      if (targetUserIds.length === 0) {
+        const students = await prisma.user.findMany({
+          where: { role: 'student' },
+          select: { id: true }
+        })
+        targetUserIds = students.map(s => s.id)
+      }
+
+      if (targetUserIds.length > 0 && exam.isPublished) {
+        // Notificar cierre de examen
+        if (isNowClosed || (closeDateChanged && exam.closeDate && exam.closeDate <= now)) {
+          const closedNotifications = targetUserIds.map(userId => ({
+            userId,
+            type: 'exam_closed',
+            title: 'Examen Cerrado',
+            message: `El examen "${exam.title}" ha sido cerrado. Ya no está disponible para presentar.`,
+            actionUrl: `/estudiante/examen/${exam.id}`,
+            expiresAt: expiresAt,
+            metadata: JSON.stringify({ examId: exam.id, examType: exam.examType, closeDate: exam.closeDate?.toISOString() }),
+          }))
+          await prisma.notification.createMany({ data: closedNotifications })
+
+          // Notificar a school_admin que el examen se cerró
+          const { AdminNotificationService } = await import('@/lib/adminNotificationService');
+          await AdminNotificationService.notifyExamClosed(
+            exam.id,
+            exam.title,
+            exam.courseId,
+            exam.academicGrade
+          );
         }
-
-        if (targetUserIds.length === 0) {
-          const students = await prisma.user.findMany({
-            where: { role: 'student' },
-            select: { id: true }
-          })
-          targetUserIds = students.map(s => s.id)
+        
+        // Notificar programación de examen (si openDate cambió y está en el futuro)
+        if (openDateChanged && exam.openDate && exam.openDate > now) {
+          const scheduledNotifications = targetUserIds.map(userId => ({
+            userId,
+            type: 'exam_scheduled',
+            title: 'Examen Programado',
+            message: `El examen "${exam.title}" está programado para el ${exam.openDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}.`,
+            actionUrl: `/estudiante/examen/${exam.id}`,
+            expiresAt: exam.openDate,
+            metadata: JSON.stringify({ examId: exam.id, examType: exam.examType, openDate: exam.openDate.toISOString() }),
+          }))
+          await prisma.notification.createMany({ data: scheduledNotifications })
         }
-
-        if (targetUserIds.length > 0) {
-          const notifications = targetUserIds.map(userId => ({
+        
+        // Notificar disponibilidad (si pasa a estar abierto)
+        if (!wasOpen && isNowOpen) {
+          const availableNotifications = targetUserIds.map(userId => ({
             userId,
             type: 'exam_available',
-            title: 'Nuevo Examen Disponible',
-            message: `El examen "${exam.title}" está disponible para presentar.`,
+            title: 'Examen Disponible',
+            message: `El examen "${exam.title}" está ahora disponible para presentar.`,
             actionUrl: `/estudiante/examen/${exam.id}`,
+            expiresAt: exam.closeDate || expiresAt,
             metadata: JSON.stringify({ examId: exam.id, examType: exam.examType }),
           }))
-          await prisma.notification.createMany({ data: notifications })
+          await prisma.notification.createMany({ data: availableNotifications })
         }
       }
     } catch (notifyErr) {
-      console.error('Error broadcasting exam available notification (update):', notifyErr)
+      console.error('Error broadcasting exam notifications (update):', notifyErr)
     }
 
     // Transformar los datos
@@ -301,12 +461,39 @@ export async function DELETE(
     const existingExam = await prisma.exam.findUnique({
       where: { id },
       include: {
-        examResults: true
+        examResults: true,
+        course: {
+          include: {
+            courseSchools: {
+              select: { schoolId: true }
+            }
+          }
+        }
       }
     })
 
     if (!existingExam) {
       return NextResponse.json({ error: 'Examen no encontrado' }, { status: 404 })
+    }
+
+    // Validación para school_admin: verificar que el examen pertenezca a su colegio
+    if (session.user.role === 'school_admin' && session.user.schoolId) {
+      if (!existingExam.courseId) {
+        return NextResponse.json(
+          { error: 'Solo puedes eliminar exámenes asociados a cursos de tu colegio' },
+          { status: 403 }
+        )
+      }
+
+      if (existingExam.course) {
+        const courseSchoolIds = existingExam.course.courseSchools.map(cs => cs.schoolId)
+        if (!courseSchoolIds.includes(session.user.schoolId)) {
+          return NextResponse.json(
+            { error: 'Solo puedes eliminar exámenes de tu colegio' },
+            { status: 403 }
+          )
+        }
+      }
     }
 
     // Verificar si hay resultados de exámenes
