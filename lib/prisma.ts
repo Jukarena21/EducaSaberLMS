@@ -24,16 +24,34 @@ if (dbUrl?.startsWith('file:')) {
 }
 
 // PrismaClient usa DATABASE_URL automáticamente desde process.env
-// Configurar para trabajar con PgBouncer (Transaction Pooler de Supabase)
+// Configurar para trabajar con Supabase (con o sin pooler)
 let databaseUrl = process.env.DATABASE_URL || ''
 const isPooler = databaseUrl.includes('pooler') || databaseUrl.includes(':6543')
+const isSupabase = databaseUrl.includes('supabase.co')
 
-// Agregar parámetros para PgBouncer si es necesario
-if (isPooler && !databaseUrl.includes('pgbouncer=true')) {
+// Agregar parámetros necesarios para Supabase
+if (isSupabase) {
   const separator = databaseUrl.includes('?') ? '&' : '?'
-  databaseUrl = `${databaseUrl}${separator}pgbouncer=true&connection_limit=1`
-  console.log('[Prisma Init] Agregando parámetros PgBouncer a DATABASE_URL')
+  const params: string[] = []
+  
+  // SSL siempre requerido para Supabase desde Vercel
+  if (!databaseUrl.includes('sslmode=')) {
+    params.push('sslmode=require')
+  }
+  
+  // Si es pooler, agregar parámetros de PgBouncer
+  if (isPooler && !databaseUrl.includes('pgbouncer=true')) {
+    params.push('pgbouncer=true')
+    params.push('connection_limit=1')
+  }
+  
+  if (params.length > 0) {
+    databaseUrl = `${databaseUrl}${separator}${params.join('&')}`
+    console.log('[Prisma Init] Agregando parámetros para Supabase:', params.join(', '))
+  }
 }
+
+console.log('[Prisma Init] URL final (preview):', databaseUrl.substring(0, 50) + '...')
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   datasources: {
