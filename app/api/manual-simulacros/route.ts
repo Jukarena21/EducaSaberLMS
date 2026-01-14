@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
     // Construir filtros
     const where: any = {
       isManualSimulacro: true, // Solo simulacros manuales
+      isIcfesExam: true,       // Solo simulacros tipo Saber/ICFES
     }
     
     if (search) {
