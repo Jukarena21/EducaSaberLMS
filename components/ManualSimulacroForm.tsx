@@ -112,6 +112,9 @@ export function ManualSimulacroForm({
 
     onSubmit({
       ...formData,
+      // Siempre crear simulacros manuales como NO publicados desde este formulario.
+      // La publicación se controlará después desde otra pantalla.
+      isPublished: false,
       openDate: openDateStr || undefined,
       closeDate: closeDateStr || undefined,
     })
@@ -229,26 +232,21 @@ export function ManualSimulacroForm({
           </div>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="isPredefined"
-            checked={formData.isPredefined}
-            onCheckedChange={(checked) => setFormData({ ...formData, isPredefined: checked })}
-          />
-          <Label htmlFor="isPredefined" className="cursor-pointer">
-            Es un simulacro predefinido de EducaSaber
-          </Label>
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="isPublished"
-            checked={formData.isPublished}
-            onCheckedChange={(checked) => setFormData({ ...formData, isPublished: checked })}
-          />
-          <Label htmlFor="isPublished" className="cursor-pointer">
-            Publicar simulacro
-          </Label>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="isPredefined"
+              checked={formData.isPredefined}
+              onCheckedChange={(checked) => setFormData({ ...formData, isPredefined: checked })}
+            />
+            <Label htmlFor="isPredefined" className="cursor-pointer">
+              Es un simulacro predefinido de EducaSaber
+            </Label>
+          </div>
+          <p className="text-xs text-muted-foreground pl-7">
+            Marca esta opción solo para simulacros oficiales diseñados por EducaSaber. 
+            Los simulacros creados por docentes normalmente se dejan sin marcar.
+          </p>
         </div>
       </div>
 

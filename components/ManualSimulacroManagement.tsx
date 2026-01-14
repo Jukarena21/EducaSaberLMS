@@ -128,11 +128,15 @@ export function ManualSimulacroManagement() {
       })
 
       if (response.ok) {
+        const created = await response.json()
         toast({
           title: "Éxito",
           description: "Simulacro creado correctamente"
         })
         setShowForm(false)
+        // Paso 2: abrir automáticamente el editor de preguntas para el nuevo simulacro
+        setSelectedSimulacro(created)
+        setShowQuestionsDialog(true)
         fetchSimulacros()
       } else {
         const error = await response.json()
@@ -146,6 +150,40 @@ export function ManualSimulacroManagement() {
       toast({
         title: "Error",
         description: "Error al crear el simulacro",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleTogglePublish = async (simulacro: ManualSimulacroData) => {
+    const newStatus = !simulacro.isPublished
+
+    try {
+      const response = await fetch(`/api/manual-simulacros/${simulacro.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublished: newStatus })
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Éxito",
+          description: newStatus ? "Simulacro publicado" : "Simulacro despublicado"
+        })
+        fetchSimulacros()
+      } else {
+        const error = await response.json().catch(() => ({}))
+        toast({
+          title: "Error",
+          description: error.error || "No se pudo actualizar el estado del simulacro",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Error toggling publish state:", error)
+      toast({
+        title: "Error",
+        description: "Error al actualizar el estado del simulacro",
         variant: "destructive"
       })
     }
@@ -395,7 +433,15 @@ export function ManualSimulacroManagement() {
                       {format(new Date(simulacro.createdAt), "dd/MM/yyyy", { locale: es })}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleTogglePublish(simulacro)}
+                          title={simulacro.isPublished ? "Despublicar simulacro" : "Publicar simulacro"}
+                        >
+                          {simulacro.isPublished ? "Despublicar" : "Publicar"}
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
