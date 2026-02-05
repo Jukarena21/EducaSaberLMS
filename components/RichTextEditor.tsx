@@ -11,7 +11,7 @@ import TextStyle from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import LinkExtension from '@tiptap/extension-link';
 import UnderlineExtension from '@tiptap/extension-underline';
-import { Extension } from '@tiptap/core';
+import { Extension, Mark } from '@tiptap/core';
 import { Button } from '@/components/ui/button';
 import { 
   Bold, 
@@ -43,35 +43,51 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { ImageUpload } from './ImageUpload';
 
-// Extensión personalizada para fontSize
-// Esta extensión agrega el atributo fontSize al mark textStyle
-const FontSize = Extension.create({
+// Extensión personalizada para fontSize usando Mark en lugar de Extension
+import { Mark } from '@tiptap/core';
+
+const FontSize = Mark.create({
   name: 'fontSize',
   
-  addGlobalAttributes() {
+  addOptions() {
+    return {
+      HTMLAttributes: {},
+    };
+  },
+  
+  addAttributes() {
+    return {
+      fontSize: {
+        default: null,
+        parseHTML: element => element.style.fontSize || null,
+        renderHTML: attributes => {
+          if (!attributes.fontSize) {
+            return {};
+          }
+          return {
+            style: `font-size: ${attributes.fontSize}`,
+          };
+        },
+      },
+    };
+  },
+  
+  parseHTML() {
     return [
       {
-        // Aplicar a todos los nodos que usen textStyle
-        types: ['textStyle'],
-        attributes: {
-          fontSize: {
-            default: null,
-            parseHTML: element => {
-              const fontSize = element.style.fontSize;
-              return fontSize || null;
-            },
-            renderHTML: attributes => {
-              if (!attributes.fontSize) {
-                return {};
-              }
-              return {
-                style: `font-size: ${attributes.fontSize}`,
-              };
-            },
-          },
+        tag: 'span[style*="font-size"]',
+        getAttrs: (node) => {
+          if (typeof node === 'string') return false;
+          const element = node as HTMLElement;
+          const fontSize = element.style.fontSize;
+          return fontSize ? { fontSize } : false;
         },
       },
     ];
+  },
+  
+  renderHTML({ HTMLAttributes }) {
+    return ['span', HTMLAttributes, 0];
   },
   
   addCommands() {
@@ -79,13 +95,13 @@ const FontSize = Extension.create({
       setFontSize: (fontSize: string) => ({ chain }) => {
         return chain()
           .focus()
-          .setMark('textStyle', { fontSize })
+          .setMark(this.name, { fontSize })
           .run();
       },
       unsetFontSize: () => ({ chain }) => {
         return chain()
           .focus()
-          .unsetMark('textStyle')
+          .unsetMark(this.name)
           .run();
       },
     };
@@ -129,10 +145,10 @@ export function RichTextEditor({
           class: 'max-w-full h-auto rounded-lg',
         },
       }),
-      TextStyle, // Debe ir antes de FontSize
+      TextStyle,
       Color,
+      FontSize, // Extensión personalizada para fontSize
       UnderlineExtension,
-      FontSize, // Debe ir después de TextStyle para que pueda agregar atributos a textStyle
       LinkExtension.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -318,27 +334,32 @@ export function RichTextEditor({
                       
                       if (!editor) return;
                       
-                      // Verificar que el mark textStyle esté disponible
-                      const textStyleMark = editor.state.schema.marks.textStyle;
-                      if (!textStyleMark) {
-                        console.error('textStyle mark not found in schema');
-                        return;
-                      }
-                      
-                      // Aplicar el tamaño de fuente
+                      // Aplicar el tamaño de fuente usando el mark fontSize
                       try {
-                        // Primero intentar con el comando personalizado
+                        // Usar el comando personalizado setFontSize
                         const result = editor.chain().focus().setFontSize(option.value).run();
                         
                         if (!result) {
-                          // Si falla, intentar directamente con setMark
+                          // Si falla, intentar directamente con setMark usando el nombre del mark
                           editor.chain()
                             .focus()
-                            .setMark('textStyle', { fontSize: option.value })
+                            .setMark('fontSize', { fontSize: option.value })
                             .run();
                         }
                       } catch (error) {
                         console.error('Error applying font size:', error);
+                        // Último intento: aplicar directamente al texto seleccionado usando DOM
+                        try {
+                          const { from, to } = editor.state.selection;
+                          if (from !== to) {
+                            editor.chain()
+                              .focus()
+                              .setMark('fontSize', { fontSize: option.value })
+                              .run();
+                          }
+                        } catch (err) {
+                          console.error('Final fallback failed:', err);
+                        }
                       }
                       
                       // Cerrar el popover
