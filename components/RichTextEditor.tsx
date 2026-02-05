@@ -230,7 +230,7 @@ export function RichTextEditor({
   // Obtener el tamaño de fuente actual del texto seleccionado
   const getCurrentFontSize = () => {
     try {
-      const attrs = editor.getAttributes('textStyle');
+      const attrs = editor.getAttributes('fontSize');
       return attrs.fontSize || '16px';
     } catch {
       return '16px';
