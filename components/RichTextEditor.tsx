@@ -78,22 +78,28 @@ const FontSize = Extension.create({
   addCommands() {
     return {
       setFontSize: (fontSize: string) => ({ chain, state, tr, dispatch }) => {
-        if (!dispatch || !tr) return false;
+        if (!dispatch) return false;
         
         const { selection } = state;
         const { from, to } = selection;
+        const { textStyle } = state.schema.marks;
         
-        // Si hay texto seleccionado, aplicar el mark al rango
+        if (!textStyle) return false;
+        
+        // Usar chain para aplicar el mark de forma más confiable
         if (from !== to) {
-          tr.removeMark(from, to, state.schema.marks.textStyle);
-          tr.addMark(from, to, state.schema.marks.textStyle.create({ fontSize }));
+          // Hay texto seleccionado, aplicar al rango
+          return chain()
+            .focus()
+            .setMark('textStyle', { fontSize })
+            .run();
         } else {
-          // Si no hay selección, aplicar el mark para el siguiente texto
-          const mark = state.schema.marks.textStyle.create({ fontSize });
-          tr.setStoredMarks([mark]);
+          // No hay selección, aplicar para el siguiente texto
+          return chain()
+            .focus()
+            .setMark('textStyle', { fontSize })
+            .run();
         }
-        
-        return true;
       },
       unsetFontSize: () => ({ chain }) => {
         return chain()
@@ -328,18 +334,39 @@ export function RichTextEditor({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      // Aplicar el tamaño de fuente directamente
-                      if (editor) {
-                        editor.chain().focus().setFontSize(option.value).run();
+                      
+                      if (!editor) return;
+                      
+                      // Aplicar el tamaño de fuente
+                      const result = editor.chain().focus().setFontSize(option.value).run();
+                      
+                      // Si no funcionó, intentar método alternativo
+                      if (!result) {
+                        const { from, to } = editor.state.selection;
+                        if (from !== to) {
+                          // Hay texto seleccionado
+                          editor.chain()
+                            .focus()
+                            .setMark('textStyle', { fontSize: option.value })
+                            .run();
+                        } else {
+                          // No hay selección, aplicar para siguiente texto
+                          editor.chain()
+                            .focus()
+                            .setMark('textStyle', { fontSize: option.value })
+                            .run();
+                        }
                       }
+                      
                       // Cerrar el popover
                       setFontSizePopoverOpen(false);
-                      // Restaurar foco
+                      
+                      // Restaurar foco después de un pequeño delay
                       setTimeout(() => {
                         if (editor) {
                           editor.commands.focus();
                         }
-                      }, 50);
+                      }, 100);
                     }}
                   >
                     {option.label}
