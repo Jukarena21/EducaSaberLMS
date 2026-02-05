@@ -82,24 +82,13 @@ const FontSize = Extension.create({
         
         const { selection } = state;
         const { from, to } = selection;
-        const { textStyle } = state.schema.marks;
-        
-        if (!textStyle) return false;
         
         // Usar chain para aplicar el mark de forma más confiable
-        if (from !== to) {
-          // Hay texto seleccionado, aplicar al rango
-          return chain()
-            .focus()
-            .setMark('textStyle', { fontSize })
-            .run();
-        } else {
-          // No hay selección, aplicar para el siguiente texto
-          return chain()
-            .focus()
-            .setMark('textStyle', { fontSize })
-            .run();
-        }
+        // TipTap maneja automáticamente si hay selección o no
+        return chain()
+          .focus()
+          .setMark('textStyle', { fontSize })
+          .run();
       },
       unsetFontSize: () => ({ chain }) => {
         return chain()
@@ -337,24 +326,20 @@ export function RichTextEditor({
                       
                       if (!editor) return;
                       
-                      // Aplicar el tamaño de fuente
-                      const result = editor.chain().focus().setFontSize(option.value).run();
-                      
-                      // Si no funcionó, intentar método alternativo
-                      if (!result) {
-                        const { from, to } = editor.state.selection;
-                        if (from !== to) {
-                          // Hay texto seleccionado
-                          editor.chain()
-                            .focus()
-                            .setMark('textStyle', { fontSize: option.value })
-                            .run();
-                        } else {
-                          // No hay selección, aplicar para siguiente texto
-                          editor.chain()
-                            .focus()
-                            .setMark('textStyle', { fontSize: option.value })
-                            .run();
+                      // Aplicar el tamaño de fuente usando setMark directamente
+                      // Esto es más confiable que usar el comando personalizado
+                      try {
+                        editor.chain()
+                          .focus()
+                          .setMark('textStyle', { fontSize: option.value })
+                          .run();
+                      } catch (error) {
+                        console.error('Error applying font size:', error);
+                        // Fallback: intentar con el comando personalizado
+                        try {
+                          editor.chain().focus().setFontSize(option.value).run();
+                        } catch (err) {
+                          console.error('Error with custom command:', err);
                         }
                       }
                       
