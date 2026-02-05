@@ -96,9 +96,6 @@ export async function GET(request: NextRequest) {
           }
         },
         examQuestions: {
-          orderBy: {
-            orderIndex: 'asc'
-          },
           select: {
             id: true,
             examId: true,
@@ -135,6 +132,9 @@ export async function GET(request: NextRequest) {
             },
             createdAt: true,
             updatedAt: true,
+          },
+          orderBy: {
+            orderIndex: 'asc'
           }
         },
         examSchools: {
