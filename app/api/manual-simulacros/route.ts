@@ -99,14 +99,42 @@ export async function GET(request: NextRequest) {
           orderBy: {
             orderIndex: 'asc'
           },
-          include: {
+          select: {
+            id: true,
+            examId: true,
+            questionText: true,
+            questionImage: true,
+            questionType: true,
+            optionA: true,
+            optionB: true,
+            optionC: true,
+            optionD: true,
+            optionAImage: true,
+            optionBImage: true,
+            optionCImage: true,
+            optionDImage: true,
+            correctOption: true,
+            explanation: true,
+            explanationImage: true,
+            difficultyLevel: true,
+            points: true,
+            orderIndex: true,
+            timeLimit: true,
+            lessonId: true,
+            lessonUrl: true,
+            tema: true,
+            subtema: true,
+            componente: true,
+            competencyId: true,
             competency: {
               select: {
                 id: true,
                 name: true,
                 displayName: true
               }
-            }
+            },
+            createdAt: true,
+            updatedAt: true,
           }
         },
         examSchools: {
@@ -143,7 +171,16 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json(exams)
+    // Agregar competencia como null a todas las preguntas (temporal hasta que se ejecute la migración)
+    const examsWithCompetencia = exams.map(exam => ({
+      ...exam,
+      examQuestions: exam.examQuestions.map((q: any) => ({
+        ...q,
+        competencia: null // Temporal hasta que se ejecute la migración
+      }))
+    }))
+
+    return NextResponse.json(examsWithCompetencia)
   } catch (error) {
     console.error('Error fetching manual simulacros:', error)
     return NextResponse.json(
