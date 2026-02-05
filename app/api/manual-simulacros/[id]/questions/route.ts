@@ -66,6 +66,8 @@ export async function GET(
       )
     }
 
+    // Consulta usando include (más simple) - Prisma manejará automáticamente campos opcionales
+    // Si el campo competencia no existe en la BD, será null automáticamente
     const questions = await prisma.examQuestion.findMany({
       where: { examId: id },
       include: {
@@ -82,7 +84,14 @@ export async function GET(
       }
     })
 
-    return NextResponse.json(questions)
+    // Agregar competencia como null si no existe (para compatibilidad con el frontend)
+    // Una vez que se ejecute la migración, este campo se llenará automáticamente
+    const questionsWithCompetencia = questions.map(q => ({
+      ...q,
+      competencia: (q as any).competencia ?? null
+    }))
+
+    return NextResponse.json(questionsWithCompetencia)
   } catch (error) {
     console.error('Error fetching questions:', error)
     return NextResponse.json(
