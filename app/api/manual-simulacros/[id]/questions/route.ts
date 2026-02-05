@@ -66,29 +66,56 @@ export async function GET(
       )
     }
 
-    // Consulta usando include (más simple) - Prisma manejará automáticamente campos opcionales
-    // Si el campo competencia no existe en la BD, será null automáticamente
+    // Consulta usando select explícito para evitar errores si el campo competencia no existe aún
+    // Una vez que se ejecute la migración de la BD, se puede cambiar de vuelta a include
     const questions = await prisma.examQuestion.findMany({
       where: { examId: id },
-      include: {
+      select: {
+        id: true,
+        examId: true,
+        questionText: true,
+        questionImage: true,
+        questionType: true,
+        optionA: true,
+        optionB: true,
+        optionC: true,
+        optionD: true,
+        optionAImage: true,
+        optionBImage: true,
+        optionCImage: true,
+        optionDImage: true,
+        correctOption: true,
+        explanation: true,
+        explanationImage: true,
+        difficultyLevel: true,
+        points: true,
+        orderIndex: true,
+        timeLimit: true,
+        lessonId: true,
+        lessonUrl: true,
+        tema: true,
+        subtema: true,
+        componente: true,
+        competencyId: true,
         competency: {
           select: {
             id: true,
             name: true,
             displayName: true
           }
-        }
+        },
+        createdAt: true,
+        updatedAt: true,
       },
       orderBy: {
         orderIndex: 'asc'
       }
     })
 
-    // Agregar competencia como null si no existe (para compatibilidad con el frontend)
-    // Una vez que se ejecute la migración, este campo se llenará automáticamente
+    // Agregar competencia como null (el campo se agregará cuando se ejecute la migración)
     const questionsWithCompetencia = questions.map(q => ({
       ...q,
-      competencia: (q as any).competencia ?? null
+      competencia: null // Temporalmente null hasta que se ejecute la migración
     }))
 
     return NextResponse.json(questionsWithCompetencia)
