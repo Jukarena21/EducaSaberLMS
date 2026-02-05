@@ -1,7 +1,8 @@
 'use client';
 
 import { useEditor, EditorContent } from '@tiptap/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import * as React from 'react';
 import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -76,17 +77,23 @@ const FontSize = Extension.create({
   
   addCommands() {
     return {
-      setFontSize: (fontSize: string) => ({ chain, state, dispatch }) => {
-        if (!dispatch) return false;
+      setFontSize: (fontSize: string) => ({ chain, state, tr, dispatch }) => {
+        if (!dispatch || !tr) return false;
         
         const { selection } = state;
         const { from, to } = selection;
         
-        // Aplicar el mark de fontSize al texto seleccionado o al siguiente texto
-        return chain()
-          .focus()
-          .setMark('textStyle', { fontSize })
-          .run();
+        // Si hay texto seleccionado, aplicar el mark al rango
+        if (from !== to) {
+          tr.removeMark(from, to, state.schema.marks.textStyle);
+          tr.addMark(from, to, state.schema.marks.textStyle.create({ fontSize }));
+        } else {
+          // Si no hay selección, aplicar el mark para el siguiente texto
+          const mark = state.schema.marks.textStyle.create({ fontSize });
+          tr.setStoredMarks([mark]);
+        }
+        
+        return true;
       },
       unsetFontSize: () => ({ chain }) => {
         return chain()
@@ -150,12 +157,25 @@ export function RichTextEditor({
       onChange(editor.getHTML());
     },
     immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm max-w-none focus:outline-none',
+      },
+    },
   });
 
-  // Sincronizar el contenido cuando cambie el prop
+  // Sincronizar el contenido cuando cambie el prop (evitar loops)
+  const contentRef = useRef(content);
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
+    if (!editor) return;
+    
+    // Solo actualizar si el contenido cambió desde fuera (no del editor mismo)
+    if (contentRef.current !== content) {
+      const currentContent = editor.getHTML();
+      if (content !== currentContent) {
+        editor.commands.setContent(content, false);
+      }
+      contentRef.current = content;
     }
   }, [content, editor]);
 
@@ -276,7 +296,7 @@ export function RichTextEditor({
                 {getCurrentFontSize()}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-32 p-1" align="start">
+            <PopoverContent className="w-32 p-1" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
               <div className="flex flex-col gap-1">
                 {fontSizeOptions.map(option => (
                   <Button
@@ -284,8 +304,14 @@ export function RichTextEditor({
                     variant={getCurrentFontSize() === option.value ? "default" : "ghost"}
                     size="sm"
                     className="w-full justify-start text-xs"
-                    onClick={() => {
-                      editor.chain().focus().setFontSize(option.value).run();
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      // Aplicar el tamaño de fuente directamente
+                      if (editor) {
+                        editor.chain().focus().setFontSize(option.value).run();
+                      }
                     }}
                   >
                     {option.label}
