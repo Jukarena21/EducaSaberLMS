@@ -337,11 +337,18 @@ export function RichTextEditor({
                       
                       // Aplicar el tamaño de fuente usando el mark fontSize
                       try {
+                        // Verificar que el mark fontSize esté disponible
+                        const fontSizeMark = editor.state.schema.marks.fontSize;
+                        if (!fontSizeMark) {
+                          console.error('fontSize mark not found in schema');
+                          return;
+                        }
+                        
                         // Usar el comando personalizado setFontSize
                         const result = editor.chain().focus().setFontSize(option.value).run();
                         
                         if (!result) {
-                          // Si falla, intentar directamente con setMark usando el nombre del mark
+                          // Si falla, intentar directamente con setMark
                           editor.chain()
                             .focus()
                             .setMark('fontSize', { fontSize: option.value })
@@ -349,18 +356,6 @@ export function RichTextEditor({
                         }
                       } catch (error) {
                         console.error('Error applying font size:', error);
-                        // Último intento: aplicar directamente al texto seleccionado usando DOM
-                        try {
-                          const { from, to } = editor.state.selection;
-                          if (from !== to) {
-                            editor.chain()
-                              .focus()
-                              .setMark('fontSize', { fontSize: option.value })
-                              .run();
-                          }
-                        } catch (err) {
-                          console.error('Final fallback failed:', err);
-                        }
                       }
                       
                       // Cerrar el popover
