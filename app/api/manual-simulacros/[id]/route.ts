@@ -189,17 +189,45 @@ export async function PUT(
           }
         },
         examQuestions: {
-          orderBy: {
-            orderIndex: 'asc'
-          },
-          include: {
+          select: {
+            id: true,
+            examId: true,
+            questionText: true,
+            questionImage: true,
+            questionType: true,
+            optionA: true,
+            optionB: true,
+            optionC: true,
+            optionD: true,
+            optionAImage: true,
+            optionBImage: true,
+            optionCImage: true,
+            optionDImage: true,
+            correctOption: true,
+            explanation: true,
+            explanationImage: true,
+            difficultyLevel: true,
+            points: true,
+            orderIndex: true,
+            timeLimit: true,
+            lessonId: true,
+            lessonUrl: true,
+            tema: true,
+            subtema: true,
+            componente: true,
+            competencyId: true,
             competency: {
               select: {
                 id: true,
                 name: true,
                 displayName: true
               }
-            }
+            },
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: {
+            orderIndex: 'asc'
           }
         },
         examSchools: {
