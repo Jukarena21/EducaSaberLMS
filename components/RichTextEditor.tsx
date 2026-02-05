@@ -287,16 +287,22 @@ export function RichTextEditor({
                 variant="ghost"
                 size="sm"
                 className="w-20 h-8 text-xs justify-start"
-                onClick={(e) => {
-                  e.preventDefault();
-                  // Mantener el foco en el editor
-                  editor.commands.focus();
-                }}
+                type="button"
               >
                 {getCurrentFontSize()}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-32 p-1" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+            <PopoverContent 
+              className="w-32 p-1" 
+              align="start" 
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onInteractOutside={(e) => {
+                // Restaurar foco al editor cuando se cierra el popover
+                setTimeout(() => {
+                  editor.commands.focus();
+                }, 100);
+              }}
+            >
               <div className="flex flex-col gap-1">
                 {fontSizeOptions.map(option => (
                   <Button
