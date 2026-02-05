@@ -35,6 +35,7 @@ import {
   Link
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -75,23 +76,17 @@ const FontSize = Extension.create({
   
   addCommands() {
     return {
-      setFontSize: (fontSize: string) => ({ chain, state }) => {
+      setFontSize: (fontSize: string) => ({ chain, state, dispatch }) => {
+        if (!dispatch) return false;
+        
         const { selection } = state;
         const { from, to } = selection;
         
-        if (from === to) {
-          // No hay texto seleccionado, aplicar al siguiente texto que se escriba
-          return chain()
-            .focus()
-            .setMark('textStyle', { fontSize })
-            .run();
-        } else {
-          // Hay texto seleccionado, aplicar al rango seleccionado
-          return chain()
-            .focus()
-            .setMark('textStyle', { fontSize })
-            .run();
-        }
+        // Aplicar el mark de fontSize al texto seleccionado o al siguiente texto
+        return chain()
+          .focus()
+          .setMark('textStyle', { fontSize })
+          .run();
       },
       unsetFontSize: () => ({ chain }) => {
         return chain()
@@ -266,27 +261,39 @@ export function RichTextEditor({
         {/* Font Size */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Type className="w-4 h-4 text-muted-foreground" />
-          <Select 
-            value={getCurrentFontSize()} 
-            onValueChange={(value) => {
-              // Restaurar el foco al editor después de seleccionar
-              setTimeout(() => {
-                editor.commands.focus();
-                setFontSize(value);
-              }, 50);
-            }}
-          >
-            <SelectTrigger className="w-20 h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {fontSizeOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-20 h-8 text-xs justify-start"
+                onClick={(e) => {
+                  e.preventDefault();
+                  // Mantener el foco en el editor
+                  editor.commands.focus();
+                }}
+              >
+                {getCurrentFontSize()}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-32 p-1" align="start">
+              <div className="flex flex-col gap-1">
+                {fontSizeOptions.map(option => (
+                  <Button
+                    key={option.value}
+                    variant={getCurrentFontSize() === option.value ? "default" : "ghost"}
+                    size="sm"
+                    className="w-full justify-start text-xs"
+                    onClick={() => {
+                      editor.chain().focus().setFontSize(option.value).run();
+                    }}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Headings */}
