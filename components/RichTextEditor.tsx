@@ -44,23 +44,22 @@ import { useToast } from '@/hooks/use-toast';
 import { ImageUpload } from './ImageUpload';
 
 // Extensión personalizada para fontSize
+// Esta extensión agrega el atributo fontSize al mark textStyle
 const FontSize = Extension.create({
   name: 'fontSize',
-  
-  addOptions() {
-    return {
-      types: ['textStyle'],
-    };
-  },
   
   addGlobalAttributes() {
     return [
       {
-        types: this.options.types,
+        // Aplicar a todos los nodos que usen textStyle
+        types: ['textStyle'],
         attributes: {
           fontSize: {
             default: null,
-            parseHTML: element => element.style.fontSize || null,
+            parseHTML: element => {
+              const fontSize = element.style.fontSize;
+              return fontSize || null;
+            },
             renderHTML: attributes => {
               if (!attributes.fontSize) {
                 return {};
@@ -77,14 +76,7 @@ const FontSize = Extension.create({
   
   addCommands() {
     return {
-      setFontSize: (fontSize: string) => ({ chain, state, tr, dispatch }) => {
-        if (!dispatch) return false;
-        
-        const { selection } = state;
-        const { from, to } = selection;
-        
-        // Usar chain para aplicar el mark de forma más confiable
-        // TipTap maneja automáticamente si hay selección o no
+      setFontSize: (fontSize: string) => ({ chain }) => {
         return chain()
           .focus()
           .setMark('textStyle', { fontSize })
@@ -137,10 +129,10 @@ export function RichTextEditor({
           class: 'max-w-full h-auto rounded-lg',
         },
       }),
-      TextStyle,
+      TextStyle, // Debe ir antes de FontSize
       Color,
-      FontSize,
       UnderlineExtension,
+      FontSize, // Debe ir después de TextStyle para que pueda agregar atributos a textStyle
       LinkExtension.configure({
         openOnClick: false,
         HTMLAttributes: {
