@@ -245,6 +245,7 @@ export function RichTextEditor({
         {/* Text formatting */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Button
+            type="button"
             variant={editor.isActive('bold') ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleBold().run()}
@@ -255,6 +256,7 @@ export function RichTextEditor({
           </Button>
           
           <Button
+            type="button"
             variant={editor.isActive('italic') ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleItalic().run()}
@@ -265,6 +267,7 @@ export function RichTextEditor({
           </Button>
 
           <Button
+            type="button"
             variant={editor.isActive('underline') ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleUnderline().run()}
@@ -274,6 +277,7 @@ export function RichTextEditor({
           </Button>
 
           <Button
+            type="button"
             variant={editor.isActive('strike') ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleStrike().run()}
@@ -380,6 +384,7 @@ export function RichTextEditor({
         {/* Headings */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Button
+            type="button"
             variant={editor.isActive('heading', { level: 1 }) ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
@@ -389,6 +394,7 @@ export function RichTextEditor({
           </Button>
           
           <Button
+            type="button"
             variant={editor.isActive('heading', { level: 2 }) ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
@@ -398,6 +404,7 @@ export function RichTextEditor({
           </Button>
           
           <Button
+            type="button"
             variant={editor.isActive('heading', { level: 3 }) ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
@@ -410,6 +417,7 @@ export function RichTextEditor({
         {/* Lists */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Button
+            type="button"
             variant={editor.isActive('bulletList') ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -419,6 +427,7 @@ export function RichTextEditor({
           </Button>
           
           <Button
+            type="button"
             variant={editor.isActive('orderedList') ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
@@ -431,6 +440,7 @@ export function RichTextEditor({
         {/* Block elements */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Button
+            type="button"
             variant={editor.isActive('blockquote') ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
@@ -440,6 +450,7 @@ export function RichTextEditor({
           </Button>
           
           <Button
+            type="button"
             variant={editor.isActive('codeBlock') ? 'default' : 'ghost'}
             size="sm"
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -449,6 +460,7 @@ export function RichTextEditor({
           </Button>
 
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
@@ -461,6 +473,7 @@ export function RichTextEditor({
         {/* Media */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={() => setShowImageDialog(true)}
@@ -470,6 +483,7 @@ export function RichTextEditor({
           </Button>
 
           <Button
+            type="button"
             variant={editor.isActive('link') ? 'default' : 'ghost'}
             size="sm"
             onClick={addLink}
@@ -482,6 +496,7 @@ export function RichTextEditor({
         {/* History */}
         <div className="flex items-center gap-1">
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={() => editor.chain().focus().undo().run()}
@@ -492,6 +507,7 @@ export function RichTextEditor({
           </Button>
           
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={() => editor.chain().focus().redo().run()}
