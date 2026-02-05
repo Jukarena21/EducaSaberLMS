@@ -122,6 +122,7 @@ export function RichTextEditor({
   const [showImageDialog, setShowImageDialog] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [imageAlt, setImageAlt] = useState('');
+  const [fontSizePopoverOpen, setFontSizePopoverOpen] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -281,7 +282,7 @@ export function RichTextEditor({
         {/* Font Size */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Type className="w-4 h-4 text-muted-foreground" />
-          <Popover>
+          <Popover open={fontSizePopoverOpen} onOpenChange={setFontSizePopoverOpen} modal={false}>
             <PopoverTrigger asChild>
               <Button
                 variant="ghost"
@@ -293,13 +294,26 @@ export function RichTextEditor({
               </Button>
             </PopoverTrigger>
             <PopoverContent 
-              className="w-32 p-1" 
+              className="w-32 p-1 z-[9999]" 
               align="start" 
+              side="bottom"
+              sideOffset={4}
               onOpenAutoFocus={(e) => e.preventDefault()}
-              onInteractOutside={(e) => {
+              onCloseAutoFocus={(e) => {
+                e.preventDefault();
                 // Restaurar foco al editor cuando se cierra el popover
                 setTimeout(() => {
-                  editor.commands.focus();
+                  if (editor) {
+                    editor.commands.focus();
+                  }
+                }, 100);
+              }}
+              onEscapeKeyDown={() => {
+                setFontSizePopoverOpen(false);
+                setTimeout(() => {
+                  if (editor) {
+                    editor.commands.focus();
+                  }
                 }, 100);
               }}
             >
@@ -311,13 +325,21 @@ export function RichTextEditor({
                     size="sm"
                     className="w-full justify-start text-xs"
                     type="button"
-                    onMouseDown={(e) => {
+                    onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       // Aplicar el tamaño de fuente directamente
                       if (editor) {
                         editor.chain().focus().setFontSize(option.value).run();
                       }
+                      // Cerrar el popover
+                      setFontSizePopoverOpen(false);
+                      // Restaurar foco
+                      setTimeout(() => {
+                        if (editor) {
+                          editor.commands.focus();
+                        }
+                      }, 50);
                     }}
                   >
                     {option.label}
