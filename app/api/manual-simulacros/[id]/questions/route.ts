@@ -28,6 +28,7 @@ const questionSchema = z.object({
   tema: z.string().min(1, 'El tema es requerido'),
   subtema: z.string().min(1, 'El subtema es requerido'),
   componente: z.string().min(1, 'El componente es requerido'),
+  competencia: z.string().optional(),
   competencyId: z.string().min(1, 'La competencia es requerida'),
 })
 
@@ -154,6 +155,7 @@ export async function POST(
         tema: validatedData.tema,
         subtema: validatedData.subtema,
         componente: validatedData.componente,
+        competencia: validatedData.competencia || null,
         competencyId: validatedData.competencyId,
       },
       include: {

@@ -68,6 +68,7 @@ export function ManualSimulacroQuestionEditor({
     tema: '',
     subtema: '',
     componente: '',
+    competencia: '',
     competencyId: '',
   })
 
@@ -153,6 +154,7 @@ export function ManualSimulacroQuestionEditor({
       tema: question.tema || '',
       subtema: question.subtema || '',
       componente: question.componente || '',
+      competencia: question.competencia || '',
       competencyId: question.competencyId || '',
     })
     setShowForm(true)
@@ -587,6 +589,16 @@ export function ManualSimulacroQuestionEditor({
               </div>
 
               <div>
+                <Label htmlFor="competencia">Competencia</Label>
+                <Input
+                  id="competencia"
+                  value={formData.competencia || ''}
+                  onChange={(e) => setFormData({ ...formData, competencia: e.target.value })}
+                  placeholder="Ej: Competencia específica"
+                />
+              </div>
+
+              <div>
                 <Label htmlFor="points">Puntos</Label>
                 <Input
                   id="points"
@@ -688,7 +700,7 @@ export function ManualSimulacroQuestionEditor({
               <div className="md:col-span-2">
                 <Label htmlFor="explanation">Explicación</Label>
                 <RichTextEditor
-                  content={formData.explanation}
+                  content={formData.explanation || ''}
                   onChange={(value) => setFormData({ ...formData, explanation: value })}
                   placeholder="Explicación de la respuesta correcta (opcional)"
                   className="min-h-[160px]"

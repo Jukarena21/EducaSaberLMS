@@ -100,11 +100,17 @@ export interface ExamQuestionData {
   tema?: string
   subtema?: string
   componente?: string
+  competencia?: string
   competencyId?: string
   createdAt: string
   updatedAt: string
   
   // Relaciones
+  competency?: {
+    id: string
+    name: string
+    displayName: string
+  }
   lesson?: {
     id: string
     title: string

@@ -27,6 +27,7 @@ const questionSchema = z.object({
   tema: z.string().optional(),
   subtema: z.string().optional(),
   componente: z.string().optional(),
+  competencia: z.string().optional(),
   competencyId: z.string().optional(),
 })
 

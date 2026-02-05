@@ -56,7 +56,7 @@ model User {
   medicalConditions       String?
   homeTechnologyAccess    Boolean?
   homeInternetAccess      Boolean?
-  status                  String  @default("active") // 'active', 'inactive', 'suspended'
+  status                  String   @default("active") // 'active', 'inactive', 'suspended'
 
   // Métricas de plataforma
   totalPlatformTimeMinutes  Int       @default(0)
@@ -88,7 +88,7 @@ model User {
   goals                  Goal[]
   userStats              UserStats?
   examAssignments        ExamAssignment[] // Exámenes asignados al estudiante
-  assignedExams          ExamAssignment[] @relation("ExamAssigner") // Exámenes que asignó (si es admin)
+  assignedExams          ExamAssignment[]         @relation("ExamAssigner") // Exámenes que asignó (si es admin)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -148,12 +148,12 @@ model Competency {
   iconName    String?
 
   // Relaciones inversas
-  courses        Course[]
-  exams          Exam[]
-  modules        Module[]
-  lessons        Lesson[]
-  liveClasses     LiveClass[]
-  examQuestions  ExamQuestion[] @relation("ExamQuestionCompetency")
+  courses       Course[]
+  exams         Exam[]
+  modules       Module[]
+  lessons       Lesson[]
+  liveClasses   LiveClass[]
+  examQuestions ExamQuestion[] @relation("ExamQuestionCompetency")
 
   createdAt DateTime @default(now())
 }
@@ -370,10 +370,10 @@ model Exam {
   isPredefined      Boolean @default(false) // Si es un examen predefinido de EducaSaber
 
   // Relaciones inversas
-  examQuestions    ExamQuestion[]
-  examResults      ExamResult[]
-  examSchools      ExamSchool[]      // Asignación a colegios
-  examAssignments  ExamAssignment[]  // Asignación a estudiantes
+  examQuestions   ExamQuestion[]
+  examResults     ExamResult[]
+  examSchools     ExamSchool[] // Asignación a colegios
+  examAssignments ExamAssignment[] // Asignación a estudiantes
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -415,9 +415,10 @@ model ExamQuestion {
   lessonUrl String?
 
   // Metadatos adicionales para simulacros manuales (retrocompatible - opcional)
-  tema        String? // Tema de la pregunta
-  subtema     String? // Subtema de la pregunta
-  componente  String? // Componente ICFES (ej: "Lectura Crítica - Comprensión")
+  tema         String? // Tema de la pregunta
+  subtema      String? // Subtema de la pregunta
+  componente   String? // Componente ICFES (ej: "Lectura Crítica - Comprensión")
+  competencia  String? // Competencia (texto libre)
   competencyId String? // Competencia directa (opcional, puede venir de Exam)
   competency   Competency? @relation("ExamQuestionCompetency", fields: [competencyId], references: [id])
 
@@ -539,7 +540,7 @@ model ExamQuestionAnswer {
   questionId       String
   question         ExamQuestion @relation(fields: [questionId], references: [id])
   selectedOption   String?
-  answerText       String?      // Para fill_blank, essay, matching (JSON string para matching)
+  answerText       String? // Para fill_blank, essay, matching (JSON string para matching)
   isCorrect        Boolean?
   timeSpentSeconds Int?
   feedbackViewed   Boolean      @default(false)
@@ -558,42 +559,42 @@ model ExamQuestionAnswer {
 
 // Asignación de exámenes a colegios (para simulacros manuales)
 model ExamSchool {
-  id        String   @id @default(cuid())
-  examId    String
-  exam      Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
-  schoolId  String
-  school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  
+  id       String @id @default(cuid())
+  examId   String
+  exam     Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
   // Configuración específica por colegio
   academicGrade String? // 'sexto', 'septimo', etc. - Filtro por año escolar
-  openDate  DateTime? // Fecha de apertura específica para este colegio
-  closeDate DateTime? // Fecha de cierre específica para este colegio
-  isActive  Boolean  @default(true) // Si está activo para este colegio
-  
+  openDate      DateTime? // Fecha de apertura específica para este colegio
+  closeDate     DateTime? // Fecha de cierre específica para este colegio
+  isActive      Boolean   @default(true) // Si está activo para este colegio
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
   @@unique([examId, schoolId, academicGrade]) // Un colegio puede tener múltiples asignaciones por año escolar
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 // Asignación de exámenes a estudiantes (para simulacros manuales)
 model ExamAssignment {
-  id        String   @id @default(cuid())
-  examId    String
-  exam      Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id     String @id @default(cuid())
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Configuración específica por estudiante
   openDate  DateTime? // Fecha de apertura específica para este estudiante
   closeDate DateTime? // Fecha de cierre específica para este estudiante
-  isActive  Boolean  @default(true) // Si está activo para este estudiante
-  
+  isActive  Boolean   @default(true) // Si está activo para este estudiante
+
   assignedById String? // Quién asignó el examen
-  assignedBy   User?   @relation("ExamAssigner", fields: [assignedById], references: [id])
-  
+  assignedBy   User?    @relation("ExamAssigner", fields: [assignedById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
   @@unique([examId, userId])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 // =====================================================
@@ -644,43 +645,43 @@ model LiveClass {
   id            String    @id @default(cuid())
   title         String
   description   String?
-  meetingUrl    String    // Enlace de la reunión (Zoom, Meet, Teams, etc.)
-  provider      String?   // 'zoom', 'meet', 'teams', 'webex', 'other' (opcional)
+  meetingUrl    String // Enlace de la reunión (Zoom, Meet, Teams, etc.)
+  provider      String? // 'zoom', 'meet', 'teams', 'webex', 'other' (opcional)
   startDateTime DateTime
   endDateTime   DateTime?
-  
+
   // Año escolar (obligatorio)
   academicGrade String? // 'sexto', 'septimo', etc.
-  
+
   // Relaciones con contenido educativo
-  competencyId  String?
-  competency    Competency? @relation(fields: [competencyId], references: [id], onDelete: SetNull)
-  moduleId      String?
-  module        Module?     @relation(fields: [moduleId], references: [id], onDelete: SetNull)
-  lessonId      String?
-  lesson        Lesson?      @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  
+  competencyId String?
+  competency   Competency? @relation(fields: [competencyId], references: [id], onDelete: SetNull)
+  moduleId     String?
+  module       Module?     @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+  lessonId     String?
+  lesson       Lesson?     @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
   // Relaciones con colegio y creador
-  schoolId      String?
-  school        School?      @relation(fields: [schoolId], references: [id], onDelete: SetNull)
-  createdById   String
-  createdBy     User         @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  
+  schoolId    String?
+  school      School? @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  createdById String
+  createdBy   User    @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
   // Invitaciones
-  invitations   LiveClassInvitation[]
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  invitations LiveClassInvitation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model LiveClassInvitation {
-  id           String     @id @default(cuid())
-  liveClassId  String
-  liveClass    LiveClass  @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
-  userId       String
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invitedAt    DateTime   @default(now())
-  
+  id          String    @id @default(cuid())
+  liveClassId String
+  liveClass   LiveClass @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedAt   DateTime  @default(now())
+
   @@unique([liveClassId, userId])
 }
 

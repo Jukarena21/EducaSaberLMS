@@ -19,6 +19,7 @@ export interface ManualSimulacroQuestionData extends ExamQuestionData {
   tema: string
   subtema: string
   componente: string
+  competencia?: string
   competencyId: string
 }
 
@@ -48,6 +49,7 @@ export interface ManualSimulacroQuestionFormData {
   tema: string
   subtema: string
   componente: string
+  competencia?: string
   competencyId: string
 }
 
