@@ -108,7 +108,16 @@ export async function GET(
       return NextResponse.json({ error: gate.error }, { status: gate.status })
     }
 
-    return NextResponse.json(exam)
+    // Agregar competencia como null a todas las preguntas (temporal hasta que se ejecute la migración)
+    const examWithCompetencia = {
+      ...exam,
+      examQuestions: exam.examQuestions.map((q: any) => ({
+        ...q,
+        competencia: null // Temporal hasta que se ejecute la migración
+      }))
+    }
+
+    return NextResponse.json(examWithCompetencia)
   } catch (error) {
     console.error('Error fetching manual simulacro:', error)
     return NextResponse.json(
@@ -219,7 +228,16 @@ export async function PUT(
       }
     })
 
-    return NextResponse.json(updatedExam)
+    // Agregar competencia como null a todas las preguntas (temporal hasta que se ejecute la migración)
+    const updatedExamWithCompetencia = {
+      ...updatedExam,
+      examQuestions: updatedExam.examQuestions.map((q: any) => ({
+        ...q,
+        competencia: null // Temporal hasta que se ejecute la migración
+      }))
+    }
+
+    return NextResponse.json(updatedExamWithCompetencia)
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
