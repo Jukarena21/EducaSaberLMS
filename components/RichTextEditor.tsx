@@ -43,9 +43,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { useToast } from '@/hooks/use-toast';
 import { ImageUpload } from './ImageUpload';
 
-// Extensión personalizada para fontSize usando Mark en lugar de Extension
-import { Mark } from '@tiptap/core';
-
+// Extensión personalizada para fontSize usando Mark
 const FontSize = Mark.create({
   name: 'fontSize',
   
@@ -133,6 +131,9 @@ export function RichTextEditor({
         heading: {
           levels: [1, 2, 3],
         },
+        // Deshabilitar link y underline porque los agregamos por separado
+        link: false,
+        underline: false,
       }),
       Typography,
       Placeholder.configure({
