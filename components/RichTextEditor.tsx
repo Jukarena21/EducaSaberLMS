@@ -75,15 +75,28 @@ const FontSize = Extension.create({
   
   addCommands() {
     return {
-      setFontSize: (fontSize: string) => ({ chain }) => {
-        return chain()
-          .setMark('textStyle', { fontSize })
-          .run();
+      setFontSize: (fontSize: string) => ({ chain, state }) => {
+        const { selection } = state;
+        const { from, to } = selection;
+        
+        if (from === to) {
+          // No hay texto seleccionado, aplicar al siguiente texto que se escriba
+          return chain()
+            .focus()
+            .setMark('textStyle', { fontSize })
+            .run();
+        } else {
+          // Hay texto seleccionado, aplicar al rango seleccionado
+          return chain()
+            .focus()
+            .setMark('textStyle', { fontSize })
+            .run();
+        }
       },
       unsetFontSize: () => ({ chain }) => {
         return chain()
-          .setMark('textStyle', { fontSize: null })
-          .removeEmptyTextStyle()
+          .focus()
+          .unsetMark('textStyle')
           .run();
       },
     };
@@ -188,6 +201,10 @@ export function RichTextEditor({
   ];
 
   const setFontSize = (size: string) => {
+    if (!editor) return;
+    
+    // Aplicar el tamaño de fuente directamente
+    // El comando setFontSize ya maneja el foco internamente
     editor.chain().focus().setFontSize(size).run();
   };
 
@@ -249,7 +266,16 @@ export function RichTextEditor({
         {/* Font Size */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Type className="w-4 h-4 text-muted-foreground" />
-          <Select value={getCurrentFontSize()} onValueChange={setFontSize}>
+          <Select 
+            value={getCurrentFontSize()} 
+            onValueChange={(value) => {
+              // Restaurar el foco al editor después de seleccionar
+              setTimeout(() => {
+                editor.commands.focus();
+                setFontSize(value);
+              }, 50);
+            }}
+          >
             <SelectTrigger className="w-20 h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
