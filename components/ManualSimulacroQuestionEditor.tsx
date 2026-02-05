@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,10 +22,18 @@ import { useToast } from '@/hooks/use-toast'
 import { ManualSimulacroQuestionFormData, ManualSimulacroQuestionData } from '@/types/manual-simulacro'
 import { useCompetencies } from '@/hooks/useCompetencies'
 import { ImageUpload } from '@/components/ImageUpload'
+import { RichTextEditor } from '@/components/RichTextEditor'
 
 interface ManualSimulacroQuestionEditorProps {
   simulacroId: string
   onClose: () => void
+}
+
+// Helper para validar campos de texto enriquecido (HTML) vacíos
+const isRichTextEmpty = (html: string) => {
+  if (!html) return true
+  const text = html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, '').trim()
+  return text.length === 0
 }
 
 export function ManualSimulacroQuestionEditor({ 
@@ -155,7 +162,7 @@ export function ManualSimulacroQuestionEditor({
     e.preventDefault()
 
     // Validaciones
-    if (!formData.contextText.trim()) {
+    if (isRichTextEmpty(formData.contextText)) {
       toast({
         title: "Error",
         description: "El enunciado es requerido",
@@ -164,7 +171,7 @@ export function ManualSimulacroQuestionEditor({
       return
     }
 
-    if (!formData.questionText.trim()) {
+    if (isRichTextEmpty(formData.questionText)) {
       toast({
         title: "Error",
         description: "El texto de la pregunta es requerido",
@@ -173,7 +180,12 @@ export function ManualSimulacroQuestionEditor({
       return
     }
 
-    if (!formData.optionA.trim() || !formData.optionB.trim() || !formData.optionC.trim() || !formData.optionD.trim()) {
+    if (
+      isRichTextEmpty(formData.optionA) ||
+      isRichTextEmpty(formData.optionB) ||
+      isRichTextEmpty(formData.optionC) ||
+      isRichTextEmpty(formData.optionD)
+    ) {
       toast({
         title: "Error",
         description: "Todas las opciones (A, B, C, D) son requeridas para simulacros ICFES",
@@ -312,9 +324,10 @@ export function ManualSimulacroQuestionEditor({
                     {((question as any).lessonUrl || question.questionImage) && (
                       <div className="mb-3">
                         {(question as any).lessonUrl && (
-                          <p className="text-sm text-gray-800 whitespace-pre-line">
-                            {(question as any).lessonUrl}
-                          </p>
+                          <div
+                            className="text-sm text-gray-800 prose max-w-none"
+                            dangerouslySetInnerHTML={{ __html: (question as any).lessonUrl }}
+                          />
                         )}
                         {question.questionImage && (
                           <div className="mt-2">
@@ -330,13 +343,21 @@ export function ManualSimulacroQuestionEditor({
                     )}
 
                     {/* Pregunta específica */}
-                    <CardTitle className="text-base">{question.questionText}</CardTitle>
+                    <CardTitle className="text-base">
+                      <div
+                        className="prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: question.questionText }}
+                      />
+                    </CardTitle>
                     <div className="mt-3 text-sm text-gray-500 space-y-2">
                       <div className="space-y-2">
                         <div className="flex items-start gap-2">
                           <strong className="min-w-[60px]">Opción A:</strong>
                           <div className="flex-1">
-                            <div>{question.optionA}</div>
+                            <div
+                              className="prose prose-sm max-w-none"
+                              dangerouslySetInnerHTML={{ __html: question.optionA }}
+                            />
                             {question.optionAImage && (
                               <img 
                                 src={question.optionAImage} 
@@ -350,7 +371,10 @@ export function ManualSimulacroQuestionEditor({
                         <div className="flex items-start gap-2">
                           <strong className="min-w-[60px]">Opción B:</strong>
                           <div className="flex-1">
-                            <div>{question.optionB}</div>
+                            <div
+                              className="prose prose-sm max-w-none"
+                              dangerouslySetInnerHTML={{ __html: question.optionB }}
+                            />
                             {question.optionBImage && (
                               <img 
                                 src={question.optionBImage} 
@@ -364,7 +388,10 @@ export function ManualSimulacroQuestionEditor({
                         <div className="flex items-start gap-2">
                           <strong className="min-w-[60px]">Opción C:</strong>
                           <div className="flex-1">
-                            <div>{question.optionC}</div>
+                            <div
+                              className="prose prose-sm max-w-none"
+                              dangerouslySetInnerHTML={{ __html: question.optionC }}
+                            />
                             {question.optionCImage && (
                               <img 
                                 src={question.optionCImage} 
@@ -378,7 +405,10 @@ export function ManualSimulacroQuestionEditor({
                         <div className="flex items-start gap-2">
                           <strong className="min-w-[60px]">Opción D:</strong>
                           <div className="flex-1">
-                            <div>{question.optionD}</div>
+                            <div
+                              className="prose prose-sm max-w-none"
+                              dangerouslySetInnerHTML={{ __html: question.optionD }}
+                            />
                             {question.optionDImage && (
                               <img 
                                 src={question.optionDImage} 
@@ -397,7 +427,11 @@ export function ManualSimulacroQuestionEditor({
                       </div>
                       {question.explanation && (
                         <div className="pt-2 border-t">
-                          <strong>Explicación:</strong> {question.explanation}
+                          <strong>Explicación:</strong>{" "}
+                          <span
+                            className="prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{ __html: question.explanation }}
+                          />
                           {question.explanationImage && (
                             <img 
                               src={question.explanationImage} 
@@ -449,13 +483,11 @@ export function ManualSimulacroQuestionEditor({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2 space-y-2">
                 <Label htmlFor="contextText">Enunciado / Texto base *</Label>
-                <Textarea
-                  id="contextText"
-                  value={formData.contextText}
-                  onChange={(e) => setFormData({ ...formData, contextText: e.target.value })}
-                  required
-                  rows={4}
+                <RichTextEditor
+                  content={formData.contextText}
+                  onChange={(value) => setFormData({ ...formData, contextText: value })}
                   placeholder="Texto introductorio o situación problema sobre la cual se harán las preguntas (estilo ICFES)."
+                  className="min-h-[220px]"
                 />
               </div>
 
@@ -470,13 +502,11 @@ export function ManualSimulacroQuestionEditor({
 
               <div className="md:col-span-2 space-y-2">
                 <Label htmlFor="questionText">Pregunta (enunciado de opción múltiple) *</Label>
-                <Textarea
-                  id="questionText"
-                  value={formData.questionText}
-                  onChange={(e) => setFormData({ ...formData, questionText: e.target.value })}
-                  required
-                  rows={3}
+                <RichTextEditor
+                  content={formData.questionText}
+                  onChange={(value) => setFormData({ ...formData, questionText: value })}
                   placeholder="Ej: Según el texto anterior, ¿cuál de las siguientes opciones..."
+                  className="min-h-[180px]"
                 />
               </div>
 
@@ -508,11 +538,17 @@ export function ManualSimulacroQuestionEditor({
                     <SelectValue placeholder="Seleccionar área" />
                   </SelectTrigger>
                   <SelectContent>
-                    {competencies.map((comp) => (
-                      <SelectItem key={comp.id} value={comp.id}>
-                        {comp.displayName}
-                      </SelectItem>
-                    ))}
+                    {competencies
+                      .filter((comp) =>
+                        ['Lectura Crítica', 'Matemáticas', 'Ciencias Naturales', 'Ciencias Sociales', 'Inglés'].includes(
+                          comp.displayName || comp.name
+                        )
+                      )
+                      .map((comp) => (
+                        <SelectItem key={comp.id} value={comp.id}>
+                          {comp.displayName || comp.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -566,12 +602,11 @@ export function ManualSimulacroQuestionEditor({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                   <div className="space-y-2">
                     <Label htmlFor="optionA" className="text-xs font-semibold">Opción A *</Label>
-                    <Input
-                      id="optionA"
-                      value={formData.optionA}
-                      onChange={(e) => setFormData({ ...formData, optionA: e.target.value })}
-                      required
+                    <RichTextEditor
+                      content={formData.optionA}
+                      onChange={(value) => setFormData({ ...formData, optionA: value })}
                       placeholder="Texto de la opción A"
+                      className="min-h-[120px]"
                     />
                     <ImageUpload
                       value={formData.optionAImage}
@@ -583,12 +618,11 @@ export function ManualSimulacroQuestionEditor({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="optionB" className="text-xs font-semibold">Opción B *</Label>
-                    <Input
-                      id="optionB"
-                      value={formData.optionB}
-                      onChange={(e) => setFormData({ ...formData, optionB: e.target.value })}
-                      required
+                    <RichTextEditor
+                      content={formData.optionB}
+                      onChange={(value) => setFormData({ ...formData, optionB: value })}
                       placeholder="Texto de la opción B"
+                      className="min-h-[120px]"
                     />
                     <ImageUpload
                       value={formData.optionBImage}
@@ -600,12 +634,11 @@ export function ManualSimulacroQuestionEditor({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="optionC" className="text-xs font-semibold">Opción C *</Label>
-                    <Input
-                      id="optionC"
-                      value={formData.optionC}
-                      onChange={(e) => setFormData({ ...formData, optionC: e.target.value })}
-                      required
+                    <RichTextEditor
+                      content={formData.optionC}
+                      onChange={(value) => setFormData({ ...formData, optionC: value })}
                       placeholder="Texto de la opción C"
+                      className="min-h-[120px]"
                     />
                     <ImageUpload
                       value={formData.optionCImage}
@@ -617,12 +650,11 @@ export function ManualSimulacroQuestionEditor({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="optionD" className="text-xs font-semibold">Opción D *</Label>
-                    <Input
-                      id="optionD"
-                      value={formData.optionD}
-                      onChange={(e) => setFormData({ ...formData, optionD: e.target.value })}
-                      required
+                    <RichTextEditor
+                      content={formData.optionD}
+                      onChange={(value) => setFormData({ ...formData, optionD: value })}
                       placeholder="Texto de la opción D"
+                      className="min-h-[120px]"
                     />
                     <ImageUpload
                       value={formData.optionDImage}
@@ -655,12 +687,11 @@ export function ManualSimulacroQuestionEditor({
 
               <div className="md:col-span-2">
                 <Label htmlFor="explanation">Explicación</Label>
-                <Textarea
-                  id="explanation"
-                  value={formData.explanation}
-                  onChange={(e) => setFormData({ ...formData, explanation: e.target.value })}
-                  rows={2}
+                <RichTextEditor
+                  content={formData.explanation}
+                  onChange={(value) => setFormData({ ...formData, explanation: value })}
                   placeholder="Explicación de la respuesta correcta (opcional)"
+                  className="min-h-[160px]"
                 />
               </div>
 
