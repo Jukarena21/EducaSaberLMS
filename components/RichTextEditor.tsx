@@ -318,21 +318,27 @@ export function RichTextEditor({
                       
                       if (!editor) return;
                       
-                      // Aplicar el tamaño de fuente usando setMark directamente
-                      // Esto es más confiable que usar el comando personalizado
+                      // Verificar que el mark textStyle esté disponible
+                      const textStyleMark = editor.state.schema.marks.textStyle;
+                      if (!textStyleMark) {
+                        console.error('textStyle mark not found in schema');
+                        return;
+                      }
+                      
+                      // Aplicar el tamaño de fuente
                       try {
-                        editor.chain()
-                          .focus()
-                          .setMark('textStyle', { fontSize: option.value })
-                          .run();
+                        // Primero intentar con el comando personalizado
+                        const result = editor.chain().focus().setFontSize(option.value).run();
+                        
+                        if (!result) {
+                          // Si falla, intentar directamente con setMark
+                          editor.chain()
+                            .focus()
+                            .setMark('textStyle', { fontSize: option.value })
+                            .run();
+                        }
                       } catch (error) {
                         console.error('Error applying font size:', error);
-                        // Fallback: intentar con el comando personalizado
-                        try {
-                          editor.chain().focus().setFontSize(option.value).run();
-                        } catch (err) {
-                          console.error('Error with custom command:', err);
-                        }
                       }
                       
                       // Cerrar el popover
