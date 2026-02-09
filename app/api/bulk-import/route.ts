@@ -96,6 +96,12 @@ function parseBool(v?: string | null) {
 function parseIntOrU(v?: string | null) { if (!v) return undefined; const n = parseInt(v); return isNaN(n) ? undefined : n }
 function parseFloatOrU(v?: string | null) { if (!v) return undefined; const n = parseFloat(v); return isNaN(n) ? undefined : n }
 
+// Validar formato de email
+function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
