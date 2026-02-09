@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     let competencies
     if (isIcfesStudent) {
       // Si es estudiante ICFES, solo mostrar competencias ICFES
-      competencies = await prisma.competency.findMany({
+      competencies = await prisma.area.findMany({
         where: {
           OR: [
             { name: { in: ICFES_COMPETENCY_NAMES } },
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
       })
     } else {
       // Si no es ICFES, mostrar todas excepto ICFES y "otros"
-      competencies = await prisma.competency.findMany({
+      competencies = await prisma.area.findMany({
         where: {
           AND: [
             { name: { not: 'otros' } },
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
       }
     } else {
       // Si no es ICFES, excluir exámenes de competencias ICFES
-      const icfesCompetencyIds = await prisma.competency.findMany({
+      const icfesCompetencyIds = await prisma.area.findMany({
         where: {
           OR: [
             { name: { in: ICFES_COMPETENCY_NAMES } },

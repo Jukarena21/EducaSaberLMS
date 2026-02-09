@@ -635,7 +635,7 @@ export async function POST(request: NextRequest) {
     // Si es estudiante ICFES, filtrar solo exámenes de competencias ICFES
     if (isIcfesStudentForFilter) {
       // Obtener IDs de competencias ICFES
-      const icfesCompetencies = await prisma.competency.findMany({
+      const icfesCompetencies = await prisma.area.findMany({
         where: {
           OR: [
             { name: { in: ICFES_COMPETENCY_NAMES_FOR_FILTER } },
@@ -899,7 +899,7 @@ export async function POST(request: NextRequest) {
         let competencies
         if (isIcfesStudent) {
           // Si es estudiante ICFES, solo mostrar competencias ICFES
-          competencies = await prisma.competency.findMany({
+          competencies = await prisma.area.findMany({
             where: {
               OR: [
                 { name: { in: ICFES_COMPETENCY_NAMES } },
@@ -911,7 +911,7 @@ export async function POST(request: NextRequest) {
           })
         } else {
           // Si no es ICFES, mostrar todas excepto ICFES y "otros"
-          competencies = await prisma.competency.findMany({
+          competencies = await prisma.area.findMany({
             where: {
               AND: [
                 { name: { not: 'otros' } },

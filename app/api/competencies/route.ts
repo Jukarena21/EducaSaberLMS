@@ -6,7 +6,7 @@ import { requireRole } from '@/lib/rbac';
 
 export async function GET(request: NextRequest) {
   try {
-    const competencies = await prisma.competency.findMany({
+    const competencies = await prisma.area.findMany({
       orderBy: {
         name: 'asc',
       },
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar si ya existe una competencia con ese nombre
-    const existing = await prisma.competency.findFirst({
+    const existing = await prisma.area.findFirst({
       where: {
         OR: [
           { name: name },
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const competency = await prisma.competency.create({
+    const competency = await prisma.area.create({
       data: {
         name,
         displayName,

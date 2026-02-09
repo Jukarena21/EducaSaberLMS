@@ -498,7 +498,7 @@ export async function POST(request: NextRequest) {
     console.log(`📊 Generando reporte para ${students.length} estudiantes`)
 
     // Obtener todas las competencias
-    const competencies = await prisma.competency.findMany({
+    const competencies = await prisma.area.findMany({
       orderBy: { name: 'asc' }
     })
 

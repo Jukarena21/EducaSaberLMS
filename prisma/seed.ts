@@ -40,7 +40,7 @@ async function main() {
   await prisma.reportCache.deleteMany()
   await prisma.user.deleteMany()
   await prisma.school.deleteMany()
-  await prisma.competency.deleteMany()
+  await prisma.area.deleteMany()
 
   console.log('✅ Base de datos limpiada\n')
 
@@ -109,7 +109,7 @@ async function main() {
   ]
 
   for (const comp of icfesCompetencies) {
-    await prisma.competency.create({
+    await prisma.area.create({
       data: comp,
     })
     console.log(`  ✅ ${comp.displayName}`)

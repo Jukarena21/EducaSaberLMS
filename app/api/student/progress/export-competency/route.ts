@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Obtener información de la competencia (solo exámenes, no cursos)
-    const competency = await prisma.competency.findUnique({
+    const competency = await prisma.area.findUnique({
       where: { id: competencyId },
       include: {
         exams: {

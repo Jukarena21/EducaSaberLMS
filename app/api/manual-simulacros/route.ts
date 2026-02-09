@@ -122,6 +122,7 @@ export async function GET(request: NextRequest) {
             tema: true,
             subtema: true,
             componente: true,
+            competencia: true,
             competencyId: true,
             competency: {
               select: {
@@ -171,16 +172,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Agregar competencia como null a todas las preguntas (temporal hasta que se ejecute la migración)
-    const examsWithCompetencia = exams.map(exam => ({
-      ...exam,
-      examQuestions: exam.examQuestions.map((q: any) => ({
-        ...q,
-        competencia: null // Temporal hasta que se ejecute la migración
-      }))
-    }))
-
-    return NextResponse.json(examsWithCompetencia)
+    return NextResponse.json(exams)
   } catch (error) {
     console.error('Error fetching manual simulacros:', error)
     return NextResponse.json(

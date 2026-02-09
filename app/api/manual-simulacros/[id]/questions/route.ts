@@ -96,6 +96,7 @@ export async function GET(
         tema: true,
         subtema: true,
         componente: true,
+        competencia: true,
         competencyId: true,
         competency: {
           select: {
@@ -112,13 +113,7 @@ export async function GET(
       }
     })
 
-    // Agregar competencia como null (el campo se agregará cuando se ejecute la migración)
-    const questionsWithCompetencia = questions.map(q => ({
-      ...q,
-      competencia: null // Temporalmente null hasta que se ejecute la migración
-    }))
-
-    return NextResponse.json(questionsWithCompetencia)
+    return NextResponse.json(questions)
   } catch (error) {
     console.error('Error fetching questions:', error)
     return NextResponse.json(

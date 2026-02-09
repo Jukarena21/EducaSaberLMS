@@ -139,7 +139,9 @@ model School {
   updatedAt DateTime @updatedAt
 }
 
-model Competency {
+// Modelo que representa las Áreas ICFES (Matemáticas, Ciencias Naturales, etc.)
+// Nota: Se mantiene el nombre de tabla "Competency" en la BD para compatibilidad
+model Area {
   id          String  @id @default(cuid())
   name        String  @unique // 'lectura_critica', 'matematicas', etc.
   displayName String
@@ -153,9 +155,11 @@ model Competency {
   modules       Module[]
   lessons       Lesson[]
   liveClasses   LiveClass[]
-  examQuestions ExamQuestion[] @relation("ExamQuestionCompetency")
+  examQuestions ExamQuestion[] @relation("ExamQuestionArea")
 
   createdAt DateTime @default(now())
+
+  @@map("Competency") // Mantener nombre de tabla en BD para compatibilidad
 }
 
 model Course {
@@ -164,7 +168,7 @@ model Course {
   description     String?
   thumbnailUrl    String?
   competencyId    String
-  competency      Competency @relation(fields: [competencyId], references: [id])
+  competency      Area @relation(fields: [competencyId], references: [id])
   academicGrade   String? // 'sexto', 'septimo', etc. (opcional para cursos generales)
   durationHours   Int?
   difficultyLevel String     @default("intermedio") // 'facil', 'intermedio', 'dificil', 'variable'
@@ -198,9 +202,9 @@ model Module {
   createdById          String?
   createdBy            User?   @relation(fields: [createdById], references: [id])
 
-  // Competencia asociada
+  // Área asociada (ICFES)
   competencyId String?
-  competency   Competency? @relation(fields: [competencyId], references: [id])
+  competency   Area? @relation(fields: [competencyId], references: [id])
 
   // Tipo de módulo y año escolar
   isIcfesModule Boolean @default(false)
@@ -256,9 +260,9 @@ model Lesson {
   videoDescription String?
   theoryContent    String?
 
-  // Competencia directa (opcional)
+  // Área directa (opcional, ICFES)
   competencyId String?
-  competency   Competency? @relation(fields: [competencyId], references: [id])
+  competency   Area? @relation(fields: [competencyId], references: [id])
 
   // Año escolar (opcional, solo para lecciones ICFES)
   academicGrade String? // 'sexto', 'septimo', etc. (opcional, solo para lecciones ICFES)
@@ -343,7 +347,7 @@ model Exam {
   courseId         String?
   course           Course?     @relation(fields: [courseId], references: [id])
   competencyId     String?
-  competency       Competency? @relation(fields: [competencyId], references: [id])
+  competency       Area? @relation(fields: [competencyId], references: [id])
   academicGrade    String? // 'sexto', 'septimo', 'octavo', 'noveno', 'decimo', 'once'
   timeLimitMinutes Int?
   passingScore     Int         @default(70)
@@ -418,9 +422,9 @@ model ExamQuestion {
   tema         String? // Tema de la pregunta
   subtema      String? // Subtema de la pregunta
   componente   String? // Componente ICFES (ej: "Lectura Crítica - Comprensión")
-  competencia  String? // Competencia (texto libre)
-  competencyId String? // Competencia directa (opcional, puede venir de Exam)
-  competency   Competency? @relation("ExamQuestionCompetency", fields: [competencyId], references: [id])
+  competencia  String? // Competencia (texto libre ingresado por el usuario)
+  competencyId String? // Área ICFES (opcional, puede venir de Exam)
+  competency   Area? @relation("ExamQuestionArea", fields: [competencyId], references: [id])
 
   // Relaciones inversas
   examQuestionAnswers ExamQuestionAnswer[]
@@ -655,7 +659,7 @@ model LiveClass {
 
   // Relaciones con contenido educativo
   competencyId String?
-  competency   Competency? @relation(fields: [competencyId], references: [id], onDelete: SetNull)
+  competency   Area? @relation(fields: [competencyId], references: [id], onDelete: SetNull)
   moduleId     String?
   module       Module?     @relation(fields: [moduleId], references: [id], onDelete: SetNull)
   lessonId     String?

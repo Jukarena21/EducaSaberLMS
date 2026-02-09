@@ -133,7 +133,7 @@ async function main() {
   await prisma.goal.deleteMany()
   await prisma.user.deleteMany()
   await prisma.school.deleteMany()
-  await prisma.competency.deleteMany()
+  await prisma.area.deleteMany()
   
   console.log('  ✅ Base de datos limpiada\n')
 
@@ -144,7 +144,7 @@ async function main() {
   const competencies: any[] = []
 
   for (const comp of ICFES_COMPETENCIES) {
-    const created = await prisma.competency.create({
+    const created = await prisma.area.create({
       data: {
         name: comp.name,
         displayName: comp.displayName,
@@ -160,7 +160,7 @@ async function main() {
   // Competencias generales para empresas
   console.log('\n📚 Creando competencias generales...')
   for (const comp of GENERAL_COMPETENCIES) {
-    const created = await prisma.competency.create({
+    const created = await prisma.area.create({
       data: {
         name: comp.name,
         displayName: comp.displayName,

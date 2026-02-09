@@ -42,14 +42,43 @@ export async function GET(
           orderBy: {
             orderIndex: 'asc'
           },
-          include: {
+          select: {
+            id: true,
+            examId: true,
+            questionText: true,
+            questionImage: true,
+            questionType: true,
+            optionA: true,
+            optionB: true,
+            optionC: true,
+            optionD: true,
+            optionAImage: true,
+            optionBImage: true,
+            optionCImage: true,
+            optionDImage: true,
+            correctOption: true,
+            explanation: true,
+            explanationImage: true,
+            difficultyLevel: true,
+            points: true,
+            orderIndex: true,
+            timeLimit: true,
+            lessonId: true,
+            lessonUrl: true,
+            tema: true,
+            subtema: true,
+            componente: true,
+            competencia: true,
+            competencyId: true,
             competency: {
               select: {
                 id: true,
                 name: true,
                 displayName: true
               }
-            }
+            },
+            createdAt: true,
+            updatedAt: true,
           }
         },
         examSchools: {
@@ -108,16 +137,7 @@ export async function GET(
       return NextResponse.json({ error: gate.error }, { status: gate.status })
     }
 
-    // Agregar competencia como null a todas las preguntas (temporal hasta que se ejecute la migración)
-    const examWithCompetencia = {
-      ...exam,
-      examQuestions: exam.examQuestions.map((q: any) => ({
-        ...q,
-        competencia: null // Temporal hasta que se ejecute la migración
-      }))
-    }
-
-    return NextResponse.json(examWithCompetencia)
+    return NextResponse.json(exam)
   } catch (error) {
     console.error('Error fetching manual simulacro:', error)
     return NextResponse.json(
@@ -215,6 +235,7 @@ export async function PUT(
             tema: true,
             subtema: true,
             componente: true,
+            competencia: true,
             competencyId: true,
             competency: {
               select: {
@@ -256,16 +277,7 @@ export async function PUT(
       }
     })
 
-    // Agregar competencia como null a todas las preguntas (temporal hasta que se ejecute la migración)
-    const updatedExamWithCompetencia = {
-      ...updatedExam,
-      examQuestions: updatedExam.examQuestions.map((q: any) => ({
-        ...q,
-        competencia: null // Temporal hasta que se ejecute la migración
-      }))
-    }
-
-    return NextResponse.json(updatedExamWithCompetencia)
+    return NextResponse.json(updatedExam)
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

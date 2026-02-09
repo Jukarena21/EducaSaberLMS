@@ -257,7 +257,7 @@ export async function PUT(
     }
 
     // Verificar que la competencia existe
-    const competency = await prisma.competency.findUnique({
+    const competency = await prisma.area.findUnique({
       where: { id: validatedData.competencyId }
     });
 

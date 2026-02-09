@@ -86,11 +86,8 @@ export async function PUT(
           // Guardar el enunciado en lessonUrl (campo interno no usado en otros flujos)
           updateData.lessonUrl = validatedData.contextText
         } else if (key === 'competencia') {
-          // Solo incluir competencia si tiene un valor (evita errores si la columna no existe aún)
-          const competenciaValue = validatedData.competencia
-          if (competenciaValue !== undefined && competenciaValue !== null && competenciaValue.trim() !== '') {
-            updateData.competencia = competenciaValue
-          }
+          // Guardar competencia (texto libre) - permitir valores vacíos para poder limpiar el campo
+          updateData.competencia = validatedData.competencia !== undefined ? validatedData.competencia : null
         } else {
           updateData[key] = validatedData[key as keyof typeof validatedData]
         }
@@ -137,6 +134,7 @@ export async function PUT(
         tema: true,
         subtema: true,
         componente: true,
+        competencia: true,
         competencyId: true,
         competency: {
           select: {
@@ -150,13 +148,7 @@ export async function PUT(
       }
     })
 
-    // Agregar competencia como null si no existe (para compatibilidad con el frontend)
-    const updatedQuestionWithCompetencia = {
-      ...updatedQuestion,
-      competencia: (updatedQuestion as any).competencia ?? null
-    }
-
-    return NextResponse.json(updatedQuestionWithCompetencia)
+    return NextResponse.json(updatedQuestion)
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

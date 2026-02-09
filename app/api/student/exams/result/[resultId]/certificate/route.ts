@@ -50,7 +50,7 @@ export async function POST(
     }
 
     // Obtener datos de desempeño por competencia para el gráfico radar (solo ICFES, excluir "otros")
-    const competencies = await prisma.competency.findMany({
+    const competencies = await prisma.area.findMany({
       where: {
         name: { not: 'otros' }
       },

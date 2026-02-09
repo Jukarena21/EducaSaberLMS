@@ -389,7 +389,7 @@ export class AchievementService {
    */
   private static async getAllCompetenciesHigh(userId: string): Promise<number> {
     // Obtener el promedio por competencia
-    const competencies = await prisma.competency.findMany()
+    const competencies = await prisma.area.findMany()
     let highCompetencies = 0
 
     for (const competency of competencies) {
