@@ -165,7 +165,8 @@ export async function POST(
     }
 
     // Crear la pregunta (siempre opción múltiple para simulacros manuales)
-    // Construir el objeto de datos dinámicamente para manejar el caso donde competencia no existe en la BD
+    // NO incluir competencia en el objeto de datos hasta que la columna exista en la BD
+    // (aunque esté en el schema de Prisma, si no existe físicamente en la BD, causará error)
     const questionData: any = {
       examId: id,
       // Usamos lessonUrl como campo interno para almacenar el enunciado estilo ICFES
@@ -192,11 +193,9 @@ export async function POST(
       subtema: validatedData.subtema,
       componente: validatedData.componente,
       competencyId: validatedData.competencyId,
-    }
-
-    // Solo incluir competencia si está presente (evita errores si la columna no existe aún)
-    if (validatedData.competencia !== undefined && validatedData.competencia !== null && validatedData.competencia.trim() !== '') {
-      questionData.competencia = validatedData.competencia
+      // NOTA: competencia NO se incluye aquí porque la columna aún no existe en la BD
+      // Una vez que se ejecute la migración, se puede agregar:
+      // competencia: validatedData.competencia || null,
     }
 
     const question = await prisma.examQuestion.create({
