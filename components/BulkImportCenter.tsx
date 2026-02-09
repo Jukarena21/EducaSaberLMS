@@ -138,7 +138,8 @@ export function BulkImportCenter() {
         }
         
         // Primera fila son los headers
-        headers = (data[0] || []).map((h: any) => String(h || '').trim()).filter(Boolean)
+        // Limpiar headers: remover asteriscos y espacios extra
+        headers = (data[0] || []).map((h: any) => String(h || '').trim().replace(/\s*\*\s*$/, '').trim()).filter(Boolean)
         
         // Filtrar filas de ejemplo y convertir a strings
         const esEjemploIndex = headers.indexOf('_ES_EJEMPLO')
@@ -190,7 +191,8 @@ export function BulkImportCenter() {
       }
 
       // Parsear CSV simple (separado por comas)
-      headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
+      // Limpiar headers: remover comillas, asteriscos y espacios extra
+      headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').replace(/\s*\*\s*$/, '').trim())
       const esEjemploIndex = headers.indexOf('_ES_EJEMPLO')
       
       rows = lines.slice(1).map(line => {
