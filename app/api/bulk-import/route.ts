@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import * as XLSX from 'xlsx'
+import bcrypt from 'bcryptjs'
 
 type ImportType = 'students' | 'schools' | 'lessons' | 'questions'
 
@@ -28,12 +29,12 @@ function parseCSV(content: string): Array<Record<string, string>> {
   
   if (headerIndex >= lines.length) return []
   
-  // Extraer headers y limpiar el asterisco (*) si existe
+  // Extraer headers y limpiar el asterisco (*) si existe, normalizar a minúsculas
   const headerLine = splitCsvLine(lines[headerIndex])
-  const headers = headerLine.map(h => h.trim().replace(/\s*\*\s*$/, '').trim())
+  const headers = headerLine.map(h => h.trim().replace(/\s*\*\s*$/, '').trim().toLowerCase())
   
   const rows: Array<Record<string, string>> = []
-  const esEjemploIndex = headers.indexOf('_ES_EJEMPLO')
+  const esEjemploIndex = headers.indexOf('_es_ejemplo')
   
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const line = lines[i].trim()
@@ -47,7 +48,7 @@ function parseCSV(content: string): Array<Record<string, string>> {
     
     const cols = splitCsvLine(line)
     
-    // Verificar si es fila de ejemplo (columna _ES_EJEMPLO)
+    // Verificar si es fila de ejemplo (columna _es_ejemplo)
     if (esEjemploIndex >= 0) {
       const esEjemplo = (cols[esEjemploIndex] || '').trim().toUpperCase()
       if (esEjemplo === 'SI' || esEjemplo === 'YES' || esEjemplo === 'TRUE' || esEjemplo === '1') {
@@ -57,8 +58,8 @@ function parseCSV(content: string): Array<Record<string, string>> {
     
     const row: Record<string, string> = {}
     headers.forEach((h, idx) => {
-      // No incluir _ES_EJEMPLO en los datos finales
-      if (h !== '_ES_EJEMPLO') {
+      // No incluir _es_ejemplo en los datos finales
+      if (h !== '_es_ejemplo') {
         row[h] = (cols[idx] ?? '').trim()
       }
     })
@@ -133,7 +134,8 @@ export async function POST(req: NextRequest) {
       }
       
       // Primera fila son los headers
-      const headers = (data[0] || []).map((h: any) => String(h || '').trim()).filter(Boolean)
+      // Limpiar headers: remover asteriscos y espacios extra, normalizar a minúsculas
+      const headers = (data[0] || []).map((h: any) => String(h || '').trim().replace(/\s*\*\s*$/, '').trim().toLowerCase()).filter(Boolean)
       
       // Filtrar filas de ejemplo y convertir a objetos
       for (let i = 1; i < data.length; i++) {
@@ -141,7 +143,7 @@ export async function POST(req: NextRequest) {
         const rowObj: Record<string, string> = {}
         
         // Verificar si es una fila de ejemplo
-        const esEjemploCol = headers.indexOf('_ES_EJEMPLO')
+        const esEjemploCol = headers.indexOf('_es_ejemplo')
         if (esEjemploCol >= 0) {
           const esEjemplo = String(row[esEjemploCol] || '').trim().toUpperCase()
           if (esEjemplo === 'SI' || esEjemplo === 'YES' || esEjemplo === 'TRUE' || esEjemplo === '1') {
@@ -149,9 +151,9 @@ export async function POST(req: NextRequest) {
           }
         }
         
-        // Convertir fila a objeto
+        // Convertir fila a objeto (normalizado a minúsculas)
         headers.forEach((header, idx) => {
-          if (header !== '_ES_EJEMPLO') { // No incluir la columna de ejemplo en los datos
+          if (header !== '_es_ejemplo') { // No incluir la columna de ejemplo en los datos
             rowObj[header] = String(row[idx] || '').trim()
           }
         })
@@ -189,72 +191,93 @@ export async function POST(req: NextRequest) {
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
         try {
-          const email = r.email
-          const firstName = r.firstName
-          const lastName = r.lastName
-          const documentType = r.documentType
-          const documentNumber = r.documentNumber
-          const contactPhone = r.contactPhone
+          const email = (r.email || '').trim()
+          const firstName = (r.firstname || '').trim()
+          const lastName = (r.lastname || '').trim()
+          const documentType = (r.documenttype || '').trim()
+          const documentNumber = (r.documentnumber || '').trim()
+          const contactPhone = (r.contactphone || '').trim()
           
+          // Validar campos requeridos
           if (!email || !firstName || !lastName || !documentType || !documentNumber || !contactPhone) {
             throw new Error('email, firstName, lastName, documentType, documentNumber y contactPhone son requeridos')
           }
           
+          // Validar formato de email
+          if (!isValidEmail(email)) {
+            throw new Error(`El email "${email}" no tiene un formato válido`)
+          }
+          
+          // Validar que documentNumber no esté vacío (se usará como contraseña inicial)
+          if (!documentNumber) {
+            throw new Error('documentNumber es requerido (se usará como contraseña inicial)')
+          }
+          
+          // Generar hash de contraseña usando el documento como contraseña inicial
+          const initialPassword = documentNumber
+          const passwordHash = await bcrypt.hash(initialPassword, 12)
+          
           // Usar schoolId forzado si es school_admin, sino usar el del CSV
-          const finalSchoolId = forcedSchoolId || r.schoolId || undefined
+          const finalSchoolId = forcedSchoolId || r.schoolid || undefined
           
           await prisma.user.upsert({
             where: { email },
             update: {
               firstName, lastName, role: 'student',
               // Información personal
-              dateOfBirth: r.dateOfBirth ? new Date(r.dateOfBirth) : undefined,
+              dateOfBirth: r.dateofbirth ? new Date(r.dateofbirth) : undefined,
               gender: r.gender || undefined,
-              documentType: r.documentType || undefined,
-              documentNumber: r.documentNumber || undefined,
+              documentType: documentType || undefined,
+              documentNumber: documentNumber || undefined,
               address: r.address || undefined,
               neighborhood: r.neighborhood || undefined,
               city: r.city || undefined,
-              socioeconomicStratum: parseIntOrU(r.socioeconomicStratum) as any,
-              housingType: r.housingType || undefined,
+              contactPhone: contactPhone || undefined,
+              socioeconomicStratum: parseIntOrU(r.socioeconomicstratum) as any,
+              housingType: r.housingtype || undefined,
               // Educativa
               schoolId: finalSchoolId,
-              schoolEntryYear: parseIntOrU(r.schoolEntryYear) as any,
-              academicAverage: parseFloatOrU(r.academicAverage) as any,
-              areasOfDifficulty: r.areasOfDifficulty || undefined,
-              areasOfStrength: r.areasOfStrength || undefined,
-              repetitionHistory: parseBool(r.repetitionHistory),
-              schoolSchedule: r.schoolSchedule || undefined,
+              schoolEntryYear: parseIntOrU(r.schoolentryyear) as any,
+              academicAverage: parseFloatOrU(r.academicaverage) as any,
+              areasOfDifficulty: r.areasofdifficulty || undefined,
+              areasOfStrength: r.areasofstrength || undefined,
+              repetitionHistory: parseBool(r.repetitionhistory),
+              schoolSchedule: r.schoolschedule || undefined,
               // Condiciones
               disabilities: r.disabilities || undefined,
-              specialEducationalNeeds: r.specialEducationalNeeds || undefined,
-              medicalConditions: r.medicalConditions || undefined,
-              homeTechnologyAccess: parseBool(r.homeTechnologyAccess),
-              homeInternetAccess: parseBool(r.homeInternetAccess),
+              specialEducationalNeeds: r.specialeducationalneeds || undefined,
+              medicalConditions: r.medicalconditions || undefined,
+              homeTechnologyAccess: parseBool(r.hometechnologyaccess),
+              homeInternetAccess: parseBool(r.homeinternetaccess),
             },
             create: {
-              email, passwordHash: 'changeme', role: 'student', firstName, lastName,
-              dateOfBirth: r.dateOfBirth ? new Date(r.dateOfBirth) : undefined,
+              email, 
+              passwordHash, // Hash bcrypt del documento como contraseña inicial
+              role: 'student', 
+              firstName, 
+              lastName,
+              dateOfBirth: r.dateofbirth ? new Date(r.dateofbirth) : undefined,
               gender: r.gender || undefined,
-              documentType: r.documentType || undefined,
-              documentNumber: r.documentNumber || undefined,
+              documentType: documentType || undefined,
+              documentNumber: documentNumber || undefined,
               address: r.address || undefined,
               neighborhood: r.neighborhood || undefined,
               city: r.city || undefined,
-              socioeconomicStratum: parseIntOrU(r.socioeconomicStratum) as any,
-              housingType: r.housingType || undefined,
+              contactPhone: contactPhone || undefined,
+              socioeconomicStratum: parseIntOrU(r.socioeconomicstratum) as any,
+              housingType: r.housingtype || undefined,
               schoolId: finalSchoolId,
-              schoolEntryYear: parseIntOrU(r.schoolEntryYear) as any,
-              academicAverage: parseFloatOrU(r.academicAverage) as any,
-              areasOfDifficulty: r.areasOfDifficulty || undefined,
-              areasOfStrength: r.areasOfStrength || undefined,
-              repetitionHistory: parseBool(r.repetitionHistory),
-              schoolSchedule: r.schoolSchedule || undefined,
+              schoolEntryYear: parseIntOrU(r.schoolentryyear) as any,
+              academicAverage: parseFloatOrU(r.academicaverage) as any,
+              areasOfDifficulty: r.areasofdifficulty || undefined,
+              areasOfStrength: r.areasofstrength || undefined,
+              repetitionHistory: parseBool(r.repetitionhistory),
+              schoolSchedule: r.schoolschedule || undefined,
               disabilities: r.disabilities || undefined,
-              specialEducationalNeeds: r.specialEducationalNeeds || undefined,
-              medicalConditions: r.medicalConditions || undefined,
-              homeTechnologyAccess: parseBool(r.homeTechnologyAccess),
-              homeInternetAccess: parseBool(r.homeInternetAccess),
+              specialEducationalNeeds: r.specialeducationalneeds || undefined,
+              medicalConditions: r.medicalconditions || undefined,
+              homeTechnologyAccess: parseBool(r.hometechnologyaccess),
+              homeInternetAccess: parseBool(r.homeinternetaccess),
             }
           })
           created++
