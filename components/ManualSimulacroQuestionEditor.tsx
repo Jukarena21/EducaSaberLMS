@@ -125,6 +125,7 @@ export function ManualSimulacroQuestionEditor({
       tema: '',
       subtema: '',
       componente: '',
+      competencia: '',
       competencyId: '',
     })
     setShowForm(true)

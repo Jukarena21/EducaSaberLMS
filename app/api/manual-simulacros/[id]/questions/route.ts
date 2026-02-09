@@ -165,45 +165,86 @@ export async function POST(
     }
 
     // Crear la pregunta (siempre opción múltiple para simulacros manuales)
+    // Construir el objeto de datos dinámicamente para manejar el caso donde competencia no existe en la BD
+    const questionData: any = {
+      examId: id,
+      // Usamos lessonUrl como campo interno para almacenar el enunciado estilo ICFES
+      lessonUrl: validatedData.contextText,
+      questionText: validatedData.questionText,
+      questionImage: validatedData.questionImage || null,
+      questionType: 'multiple_choice', // Forzar siempre opción múltiple
+      optionA: validatedData.optionA,
+      optionB: validatedData.optionB,
+      optionC: validatedData.optionC || '',
+      optionD: validatedData.optionD || '',
+      optionAImage: validatedData.optionAImage || null,
+      optionBImage: validatedData.optionBImage || null,
+      optionCImage: validatedData.optionCImage || null,
+      optionDImage: validatedData.optionDImage || null,
+      correctOption: validatedData.correctOption,
+      explanation: validatedData.explanation || null,
+      explanationImage: validatedData.explanationImage || null,
+      difficultyLevel: validatedData.difficultyLevel,
+      points: validatedData.points,
+      orderIndex: validatedData.orderIndex,
+      // Metadatos específicos
+      tema: validatedData.tema,
+      subtema: validatedData.subtema,
+      componente: validatedData.componente,
+      competencyId: validatedData.competencyId,
+    }
+
+    // Solo incluir competencia si está presente (evita errores si la columna no existe aún)
+    if (validatedData.competencia !== undefined && validatedData.competencia !== null && validatedData.competencia.trim() !== '') {
+      questionData.competencia = validatedData.competencia
+    }
+
     const question = await prisma.examQuestion.create({
-      data: {
-        examId: id,
-        // Usamos lessonUrl como campo interno para almacenar el enunciado estilo ICFES
-        lessonUrl: validatedData.contextText,
-        questionText: validatedData.questionText,
-        questionImage: validatedData.questionImage || null,
-        questionType: 'multiple_choice', // Forzar siempre opción múltiple
-        optionA: validatedData.optionA,
-        optionB: validatedData.optionB,
-        optionC: validatedData.optionC || '',
-        optionD: validatedData.optionD || '',
-        optionAImage: validatedData.optionAImage || null,
-        optionBImage: validatedData.optionBImage || null,
-        optionCImage: validatedData.optionCImage || null,
-        optionDImage: validatedData.optionDImage || null,
-        correctOption: validatedData.correctOption,
-        explanation: validatedData.explanation || null,
-        explanationImage: validatedData.explanationImage || null,
-        difficultyLevel: validatedData.difficultyLevel,
-        points: validatedData.points,
-        orderIndex: validatedData.orderIndex,
-        // Metadatos específicos
-        tema: validatedData.tema,
-        subtema: validatedData.subtema,
-        componente: validatedData.componente,
-        competencia: validatedData.competencia || null,
-        competencyId: validatedData.competencyId,
-      },
-      include: {
+      data: questionData,
+      select: {
+        id: true,
+        examId: true,
+        questionText: true,
+        questionImage: true,
+        questionType: true,
+        optionA: true,
+        optionB: true,
+        optionC: true,
+        optionD: true,
+        optionAImage: true,
+        optionBImage: true,
+        optionCImage: true,
+        optionDImage: true,
+        correctOption: true,
+        explanation: true,
+        explanationImage: true,
+        difficultyLevel: true,
+        points: true,
+        orderIndex: true,
+        timeLimit: true,
+        lessonId: true,
+        lessonUrl: true,
+        tema: true,
+        subtema: true,
+        componente: true,
+        competencyId: true,
         competency: {
           select: {
             id: true,
             name: true,
             displayName: true
           }
-        }
+        },
+        createdAt: true,
+        updatedAt: true,
       }
     })
+
+    // Agregar competencia como null si no existe (para compatibilidad con el frontend)
+    const questionWithCompetencia = {
+      ...question,
+      competencia: (question as any).competencia ?? null
+    }
 
     // Actualizar el total de preguntas del simulacro
     await prisma.exam.update({
@@ -213,7 +254,7 @@ export async function POST(
       }
     })
 
-    return NextResponse.json(question, { status: 201 })
+    return NextResponse.json(questionWithCompetencia, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

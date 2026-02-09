@@ -85,6 +85,12 @@ export async function PUT(
         if (key === 'contextText') {
           // Guardar el enunciado en lessonUrl (campo interno no usado en otros flujos)
           updateData.lessonUrl = validatedData.contextText
+        } else if (key === 'competencia') {
+          // Solo incluir competencia si tiene un valor (evita errores si la columna no existe aún)
+          const competenciaValue = validatedData.competencia
+          if (competenciaValue !== undefined && competenciaValue !== null && competenciaValue.trim() !== '') {
+            updateData.competencia = competenciaValue
+          }
         } else {
           updateData[key] = validatedData[key as keyof typeof validatedData]
         }
@@ -105,18 +111,52 @@ export async function PUT(
     const updatedQuestion = await prisma.examQuestion.update({
       where: { id: questionId },
       data: updateData,
-      include: {
+      select: {
+        id: true,
+        examId: true,
+        questionText: true,
+        questionImage: true,
+        questionType: true,
+        optionA: true,
+        optionB: true,
+        optionC: true,
+        optionD: true,
+        optionAImage: true,
+        optionBImage: true,
+        optionCImage: true,
+        optionDImage: true,
+        correctOption: true,
+        explanation: true,
+        explanationImage: true,
+        difficultyLevel: true,
+        points: true,
+        orderIndex: true,
+        timeLimit: true,
+        lessonId: true,
+        lessonUrl: true,
+        tema: true,
+        subtema: true,
+        componente: true,
+        competencyId: true,
         competency: {
           select: {
             id: true,
             name: true,
             displayName: true
           }
-        }
+        },
+        createdAt: true,
+        updatedAt: true,
       }
     })
 
-    return NextResponse.json(updatedQuestion)
+    // Agregar competencia como null si no existe (para compatibilidad con el frontend)
+    const updatedQuestionWithCompetencia = {
+      ...updatedQuestion,
+      competencia: (updatedQuestion as any).competencia ?? null
+    }
+
+    return NextResponse.json(updatedQuestionWithCompetencia)
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
