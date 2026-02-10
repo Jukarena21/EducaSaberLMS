@@ -794,10 +794,10 @@ export function StudentsManagement() {
                           <Mail className="h-3 w-3 text-gray-400" />
                           <span>{student.email}</span>
                         </div>
-                        {(student as any).phone && (
+                        {(student as any).contactPhone && (
                           <div className="flex items-center space-x-2 text-sm">
                             <Phone className="h-3 w-3 text-gray-400" />
-                            <span>{(student as any).phone}</span>
+                            <span>{(student as any).contactPhone}</span>
                           </div>
                         )}
                       </div>
@@ -937,7 +937,15 @@ export function StudentsManagement() {
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Teléfono</Label>
-                  <p className="text-sm">{(selectedUser as any).phone || 'No registrado'}</p>
+                  <p className="text-sm">{(selectedUser as any).contactPhone || 'No registrado'}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-500">Tipo de Documento</Label>
+                  <p className="text-sm">{(selectedUser as any).documentType || 'No registrado'}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-500">Número de Documento</Label>
+                  <p className="text-sm">{(selectedUser as any).documentNumber || 'No registrado'}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Grado</Label>

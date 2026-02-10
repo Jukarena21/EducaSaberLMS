@@ -120,6 +120,8 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
         address: student.address ?? '',
         neighborhood: student.neighborhood ?? '',
         city: student.city ?? '',
+        documentType: student.documentType || '',
+        documentNumber: student.documentNumber || '',
       });
     }
   }, [student]);
