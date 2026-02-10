@@ -170,11 +170,11 @@ export function RichTextEditor({
       }),
       TextStyle,
       Color,
+      FontSize, // Extensión personalizada para fontSize
+      UnderlineExtension,
       // FontFamily.configure({
       //   types: ['textStyle'],
       // }), // Temporalmente comentado por error de importación
-      FontSize, // Extensión personalizada para fontSize
-      UnderlineExtension,
       TextAlign.configure({
         types: ['heading', 'paragraph'],
         defaultAlignment: 'left',
