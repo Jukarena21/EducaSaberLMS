@@ -561,36 +561,30 @@ export function ManualSimulacroQuestionEditor({
                   <SelectContent>
                     {competencies
                       .filter((comp) => {
-                        // Normalizar nombres para comparación (sin acentos, minúsculas)
-                        const normalize = (str: string) => 
-                          str.toLowerCase()
-                             .normalize('NFD')
-                             .replace(/[\u0300-\u036f]/g, '')
-                             .replace(/\s+/g, ' ')
-                             .trim()
+                        // Filtrar solo las 5 competencias ICFES que están en la BD
+                        // Basado en los nombres reales de la base de datos que viste
+                        const allowedIds = [
+                          'comp-lectura-critica',              // Lectura Crítica
+                          'comp-razonamiento-cuantitativo',     // Razonamiento Cuantitativo (Matemáticas)
+                          'comp-competencias-ciudadanas',       // Competencias Ciudadanas (Ciencias Sociales)
+                          'comp-comunicacion-escrita',          // Comunicación Escrita
+                          'comp-ingles'                         // Inglés
+                        ]
                         
-                        const displayNameNorm = normalize(comp.displayName || '')
-                        const nameNorm = normalize(comp.name || '')
-                        
-                        // Lista de nombres permitidos (normalizados)
+                        // También verificar por nombre (más robusto)
                         const allowedNames = [
-                          'lectura critica',
                           'lectura_critica',
-                          'matematicas',
-                          'ciencias naturales',
-                          'ciencias_naturales',
-                          'ciencias sociales',
-                          'ciencias_sociales',
+                          'razonamiento_cuantitativo',
+                          'competencias_ciudadanas',
+                          'comunicacion_escrita',
                           'ingles'
                         ]
                         
-                        // Verificar si coincide con algún nombre permitido
-                        return allowedNames.some(allowed => 
-                          displayNameNorm.includes(allowed) || 
-                          nameNorm.includes(allowed) ||
-                          allowed.includes(displayNameNorm) ||
-                          allowed.includes(nameNorm)
-                        )
+                        const compName = comp.name?.toLowerCase() || ''
+                        const compId = comp.id || ''
+                        
+                        return allowedIds.includes(compId) || 
+                               allowedNames.includes(compName)
                       })
                       .map((comp) => (
                         <SelectItem key={comp.id} value={comp.id}>
