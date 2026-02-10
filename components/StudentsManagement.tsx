@@ -78,9 +78,11 @@ export function StudentsManagement() {
           page: currentPage,
           limit: 10, // 10 estudiantes por página
           role: 'student', // Filtrar solo estudiantes en el backend
+          // Solo pasar schoolId al API si no es 'none' y no es school_admin
+          // Si es 'none', no pasamos schoolId y filtramos en el frontend
           schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
             ? session.user.schoolId 
-            : (filters.schoolId || ''),
+            : (filters.schoolId && filters.schoolId !== 'none' ? filters.schoolId : undefined),
           search: searchTerm || undefined,
         };
         
@@ -291,34 +293,37 @@ export function StudentsManagement() {
     try {
       setIsProcessing(true);
       
-      // Construir filtros para la API
-      const apiFilters: any = {
-        role: 'student',
-        limit: 10000, // Límite alto para obtener todos
-        page: 1,
-        schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
-          ? session.user.schoolId 
-          : (filters.schoolId === 'none' ? null : (filters.schoolId || '')),
-        search: searchTerm || undefined,
-      };
-
-      // Hacer llamada al API para obtener todos los estudiantes que cumplan los filtros
-      const response = await fetch(`/api/users?${new URLSearchParams({
+      // Construir parámetros de URL correctamente
+      const params = new URLSearchParams({
         role: 'student',
         limit: '10000',
         page: '1',
-        ...(apiFilters.schoolId !== '' && apiFilters.schoolId !== null ? { schoolId: apiFilters.schoolId } : {}),
-        ...(apiFilters.search ? { search: apiFilters.search } : {}),
-      }).toString()}`);
+      });
+
+      // Solo agregar schoolId si no es 'none' y no es school_admin
+      if (session?.user?.role === 'school_admin' && session?.user?.schoolId) {
+        params.append('schoolId', session.user.schoolId);
+      } else if (filters.schoolId && filters.schoolId !== 'none') {
+        params.append('schoolId', filters.schoolId);
+      }
+
+      // Agregar búsqueda si existe
+      if (searchTerm) {
+        params.append('search', searchTerm);
+      }
+
+      // Hacer llamada al API para obtener todos los estudiantes que cumplan los filtros
+      const response = await fetch(`/api/users?${params.toString()}`);
       
       if (!response.ok) {
-        throw new Error('Error al obtener estudiantes');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Error al obtener estudiantes');
       }
       
       const data = await response.json();
       const allFilteredStudents = data.users || [];
       
-      // Aplicar filtros adicionales en el frontend (academicGrade, status)
+      // Aplicar filtros adicionales en el frontend (academicGrade, status, schoolId='none')
       const finalFiltered = allFilteredStudents.filter((student: any) => {
         // Filtro por grado
         if (filters.academicGrade) {
@@ -329,11 +334,15 @@ export function StudentsManagement() {
           }
         }
         
-        // Filtro por institución
-        if (filters.schoolId === 'none') {
-          if (student.schoolId) return false;
-        } else if (filters.schoolId && session?.user?.role !== 'school_admin') {
-          if (student.schoolId !== filters.schoolId) return false;
+        // Filtro por institución (solo si no es school_admin)
+        if (session?.user?.role !== 'school_admin') {
+          if (filters.schoolId === 'none') {
+            // Sin institución asignada
+            if (student.schoolId) return false;
+          } else if (filters.schoolId && filters.schoolId !== 'all') {
+            // Institución específica
+            if (student.schoolId !== filters.schoolId) return false;
+          }
         }
         
         // Filtro por estado
@@ -352,10 +361,11 @@ export function StudentsManagement() {
         title: "Selección completada",
         description: `${allIds.size} estudiante${allIds.size !== 1 ? 's' : ''} seleccionado${allIds.size !== 1 ? 's' : ''}`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error al seleccionar todos:', error);
       toast({
         title: "Error",
-        description: "No se pudieron seleccionar todos los estudiantes",
+        description: error.message || "No se pudieron seleccionar todos los estudiantes",
         variant: "destructive",
       });
     } finally {
