@@ -645,8 +645,12 @@ export function RichTextEditor({
             variant={editor.isActive({ textAlign: 'left' }) ? 'default' : 'ghost'}
             size="sm"
             onClick={() => {
-              if (editor.can().setTextAlign('left')) {
-                editor.chain().focus().setTextAlign('left').run();
+              try {
+                if (editor.can().setTextAlign && editor.can().setTextAlign('left')) {
+                  editor.chain().focus().setTextAlign('left').run();
+                }
+              } catch (error) {
+                console.error('Error setting text align:', error);
               }
             }}
             title="Alinear a la izquierda"
@@ -659,8 +663,12 @@ export function RichTextEditor({
             variant={editor.isActive({ textAlign: 'center' }) ? 'default' : 'ghost'}
             size="sm"
             onClick={() => {
-              if (editor.can().setTextAlign('center')) {
-                editor.chain().focus().setTextAlign('center').run();
+              try {
+                if (editor.can().setTextAlign && editor.can().setTextAlign('center')) {
+                  editor.chain().focus().setTextAlign('center').run();
+                }
+              } catch (error) {
+                console.error('Error setting text align:', error);
               }
             }}
             title="Centrar"
@@ -673,8 +681,12 @@ export function RichTextEditor({
             variant={editor.isActive({ textAlign: 'right' }) ? 'default' : 'ghost'}
             size="sm"
             onClick={() => {
-              if (editor.can().setTextAlign('right')) {
-                editor.chain().focus().setTextAlign('right').run();
+              try {
+                if (editor.can().setTextAlign && editor.can().setTextAlign('right')) {
+                  editor.chain().focus().setTextAlign('right').run();
+                }
+              } catch (error) {
+                console.error('Error setting text align:', error);
               }
             }}
             title="Alinear a la derecha"
@@ -687,8 +699,12 @@ export function RichTextEditor({
             variant={editor.isActive({ textAlign: 'justify' }) ? 'default' : 'ghost'}
             size="sm"
             onClick={() => {
-              if (editor.can().setTextAlign('justify')) {
-                editor.chain().focus().setTextAlign('justify').run();
+              try {
+                if (editor.can().setTextAlign && editor.can().setTextAlign('justify')) {
+                  editor.chain().focus().setTextAlign('justify').run();
+                }
+              } catch (error) {
+                console.error('Error setting text align:', error);
               }
             }}
             title="Justificar"
@@ -724,8 +740,12 @@ export function RichTextEditor({
             variant={editor.isActive('taskList') ? 'default' : 'ghost'}
             size="sm"
             onClick={() => {
-              if (editor.can().toggleTaskList()) {
-                editor.chain().focus().toggleTaskList().run();
+              try {
+                if (editor.can().toggleTaskList && editor.can().toggleTaskList()) {
+                  editor.chain().focus().toggleTaskList().run();
+                }
+              } catch (error) {
+                console.error('Error toggling task list:', error);
               }
             }}
             title="Lista de tareas (Checklist)"
@@ -741,8 +761,12 @@ export function RichTextEditor({
             variant="ghost"
             size="sm"
             onClick={() => {
-              if (editor.can().insertTable({ rows: 3, cols: 3, withHeaderRow: true })) {
-                editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+              try {
+                if (editor.can().insertTable && editor.can().insertTable({ rows: 3, cols: 3, withHeaderRow: true })) {
+                  editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+                }
+              } catch (error) {
+                console.error('Error inserting table:', error);
               }
             }}
             title="Insertar tabla"
