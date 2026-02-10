@@ -9,7 +9,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-// import { FontFamily } from '@tiptap/extension-font-family'; // Temporalmente comentado por error de importación
+import { FontFamily } from '@tiptap/extension-font-family';
 import LinkExtension from '@tiptap/extension-link';
 import UnderlineExtension from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
@@ -145,7 +145,7 @@ export function RichTextEditor({
   const [imageAlt, setImageAlt] = useState('');
   const [fontSizePopoverOpen, setFontSizePopoverOpen] = useState(false);
   const [textColorPopoverOpen, setTextColorPopoverOpen] = useState(false);
-  // const [fontFamilyPopoverOpen, setFontFamilyPopoverOpen] = useState(false); // Temporalmente comentado
+  const [fontFamilyPopoverOpen, setFontFamilyPopoverOpen] = useState(false);
 
   // Construir extensiones de manera defensiva para evitar errores en producción
   const buildExtensions = () => {
@@ -184,6 +184,17 @@ export function RichTextEditor({
     if (Color) extensions.push(Color);
     if (FontSize) extensions.push(FontSize);
     if (UnderlineExtension) extensions.push(UnderlineExtension);
+    
+    // FontFamily - agregar solo si existe y se puede configurar
+    if (FontFamily && typeof FontFamily.configure === 'function') {
+      try {
+        extensions.push(FontFamily.configure({
+          types: ['textStyle'],
+        }));
+      } catch (error) {
+        console.warn('FontFamily extension failed to configure:', error);
+      }
+    }
     
     // Extensiones de alineación, tabla y checklist - agregar solo si existen
     if (TextAlign && typeof TextAlign.configure === 'function') {
@@ -340,29 +351,29 @@ export function RichTextEditor({
     }
   };
 
-  // Obtener la familia de fuente actual - Temporalmente comentado
-  // const getCurrentFontFamily = () => {
-  //   try {
-  //     const attrs = editor.getAttributes('textStyle');
-  //     return attrs.fontFamily || 'Arial';
-  //   } catch {
-  //     return 'Arial';
-  //   }
-  // };
+  // Obtener la familia de fuente actual
+  const getCurrentFontFamily = () => {
+    try {
+      const attrs = editor.getAttributes('textStyle');
+      return attrs.fontFamily || 'Arial';
+    } catch {
+      return 'Arial';
+    }
+  };
 
-  // Opciones de familias de fuente comunes - Temporalmente comentado
-  // const fontFamilyOptions = [
-  //   { value: 'Arial', label: 'Arial' },
-  //   { value: 'Times New Roman', label: 'Times New Roman' },
-  //   { value: 'Courier New', label: 'Courier New' },
-  //   { value: 'Georgia', label: 'Georgia' },
-  //   { value: 'Verdana', label: 'Verdana' },
-  //   { value: 'Calibri', label: 'Calibri' },
-  //   { value: 'Comic Sans MS', label: 'Comic Sans MS' },
-  //   { value: 'Impact', label: 'Impact' },
-  //   { value: 'Trebuchet MS', label: 'Trebuchet MS' },
-  //   { value: 'Tahoma', label: 'Tahoma' },
-  // ];
+  // Opciones de familias de fuente comunes
+  const fontFamilyOptions = [
+    { value: 'Arial', label: 'Arial' },
+    { value: 'Times New Roman', label: 'Times New Roman' },
+    { value: 'Courier New', label: 'Courier New' },
+    { value: 'Georgia', label: 'Georgia' },
+    { value: 'Verdana', label: 'Verdana' },
+    { value: 'Calibri', label: 'Calibri' },
+    { value: 'Comic Sans MS', label: 'Comic Sans MS' },
+    { value: 'Impact', label: 'Impact' },
+    { value: 'Trebuchet MS', label: 'Trebuchet MS' },
+    { value: 'Tahoma', label: 'Tahoma' },
+  ];
 
   return (
     <div className={`border rounded-lg bg-white ${className}`}>
@@ -586,8 +597,8 @@ export function RichTextEditor({
           </Popover>
         </div>
 
-        {/* Font Family - Temporalmente comentado por error de importación */}
-        {/* <div className="flex items-center gap-1 border-r pr-2 mr-1">
+        {/* Font Family */}
+        <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Popover open={fontFamilyPopoverOpen} onOpenChange={setFontFamilyPopoverOpen} modal={false}>
             <PopoverTrigger asChild>
               <Button
@@ -629,7 +640,9 @@ export function RichTextEditor({
                       if (!editor) return;
                       
                       try {
-                        editor.chain().focus().setFontFamily(option.value).run();
+                        if (editor.can().setFontFamily && editor.can().setFontFamily(option.value)) {
+                          editor.chain().focus().setFontFamily(option.value).run();
+                        }
                       } catch (error) {
                         console.error('Error applying font family:', error);
                       }
@@ -652,7 +665,13 @@ export function RichTextEditor({
                   size="sm"
                   className="w-full justify-start text-xs mt-1 border-t pt-1"
                   onClick={() => {
-                    editor.chain().focus().unsetFontFamily().run();
+                    try {
+                      if (editor.can().unsetFontFamily && editor.can().unsetFontFamily()) {
+                        editor.chain().focus().unsetFontFamily().run();
+                      }
+                    } catch (error) {
+                      console.error('Error unsetting font family:', error);
+                    }
                     setFontFamilyPopoverOpen(false);
                     setTimeout(() => editor?.commands.focus(), 50);
                   }}
@@ -663,7 +682,7 @@ export function RichTextEditor({
               </div>
             </PopoverContent>
           </Popover>
-        </div> */}
+        </div>
 
         {/* Subscript / Superscript */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
