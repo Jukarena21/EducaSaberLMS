@@ -7,7 +7,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Typography from '@tiptap/extension-typography';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
-import TextStyle from '@tiptap/extension-text-style';
+import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 // import { FontFamily } from '@tiptap/extension-font-family'; // Temporalmente comentado por error de importación
 import LinkExtension from '@tiptap/extension-link';
@@ -15,7 +15,7 @@ import UnderlineExtension from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
-import Table from '@tiptap/extension-table';
+import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
@@ -147,60 +147,109 @@ export function RichTextEditor({
   const [textColorPopoverOpen, setTextColorPopoverOpen] = useState(false);
   // const [fontFamilyPopoverOpen, setFontFamilyPopoverOpen] = useState(false); // Temporalmente comentado
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
+  // Construir extensiones de manera defensiva para evitar errores en producción
+  const buildExtensions = () => {
+    const extensions: any[] = [];
+    
+    // Extensiones básicas que siempre deben funcionar
+    if (StarterKit) {
+      extensions.push(StarterKit.configure({
         heading: {
           levels: [1, 2, 3],
         },
-        // Deshabilitar link y underline porque los agregamos por separado
         link: false,
         underline: false,
-      }),
-      Typography,
-      Placeholder.configure({
+      }));
+    }
+    
+    if (Typography) extensions.push(Typography);
+    
+    if (Placeholder) {
+      extensions.push(Placeholder.configure({
         placeholder,
-      }),
-      Image.configure({
+      }));
+    }
+    
+    if (Image) {
+      extensions.push(Image.configure({
         inline: true,
         allowBase64: true,
         HTMLAttributes: {
           class: 'max-w-full h-auto rounded-lg',
         },
-      }),
-      TextStyle,
-      Color,
-      FontSize, // Extensión personalizada para fontSize
-      UnderlineExtension,
-      // FontFamily.configure({
-      //   types: ['textStyle'],
-      // }), // Temporalmente comentado por error de importación
-      TextAlign.configure({
-        types: ['heading', 'paragraph'],
-        defaultAlignment: 'left',
-      }),
-      Subscript,
-      Superscript,
-      Table.configure({
-        resizable: true,
-        HTMLAttributes: {
-          class: 'border-collapse border border-gray-300',
-        },
-      }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      TaskList,
-      TaskItem.configure({
-        nested: true,
-      }),
-      LinkExtension.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: 'text-blue-600 underline',
-        },
-      }),
-    ],
+      }));
+    }
+    
+    if (TextStyle) extensions.push(TextStyle);
+    if (Color) extensions.push(Color);
+    if (FontSize) extensions.push(FontSize);
+    if (UnderlineExtension) extensions.push(UnderlineExtension);
+    
+    // Extensiones de alineación, tabla y checklist - agregar solo si existen
+    if (TextAlign && typeof TextAlign.configure === 'function') {
+      try {
+        extensions.push(TextAlign.configure({
+          types: ['heading', 'paragraph'],
+          defaultAlignment: 'left',
+        }));
+      } catch (error) {
+        console.warn('TextAlign extension failed to configure:', error);
+      }
+    }
+    
+    if (Subscript) extensions.push(Subscript);
+    if (Superscript) extensions.push(Superscript);
+    
+    // Extensiones de tabla - agregar solo si todas existen
+    if (Table && TableRow && TableHeader && TableCell) {
+      try {
+        if (typeof Table.configure === 'function') {
+          extensions.push(Table.configure({
+            resizable: true,
+            HTMLAttributes: {
+              class: 'border-collapse border border-gray-300',
+            },
+          }));
+        }
+        extensions.push(TableRow);
+        extensions.push(TableHeader);
+        extensions.push(TableCell);
+      } catch (error) {
+        console.warn('Table extensions failed to configure:', error);
+      }
+    }
+    
+    // Extensiones de checklist
+    if (TaskList) extensions.push(TaskList);
+    
+    if (TaskItem && typeof TaskItem.configure === 'function') {
+      try {
+        extensions.push(TaskItem.configure({
+          nested: true,
+        }));
+      } catch (error) {
+        console.warn('TaskItem extension failed to configure:', error);
+      }
+    }
+    
+    if (LinkExtension && typeof LinkExtension.configure === 'function') {
+      try {
+        extensions.push(LinkExtension.configure({
+          openOnClick: false,
+          HTMLAttributes: {
+            class: 'text-blue-600 underline',
+          },
+        }));
+      } catch (error) {
+        console.warn('LinkExtension failed to configure:', error);
+      }
+    }
+    
+    return extensions;
+  };
+
+  const editor = useEditor({
+    extensions: buildExtensions(),
     content,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
