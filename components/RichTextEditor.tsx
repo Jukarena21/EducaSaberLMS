@@ -12,6 +12,8 @@ import { Color } from '@tiptap/extension-color';
 import LinkExtension from '@tiptap/extension-link';
 import UnderlineExtension from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
+import Subscript from '@tiptap/extension-subscript';
+import Superscript from '@tiptap/extension-superscript';
 import { Extension, Mark } from '@tiptap/core';
 import { Button } from '@/components/ui/button';
 import { 
@@ -126,6 +128,7 @@ export function RichTextEditor({
   const [imageUrl, setImageUrl] = useState('');
   const [imageAlt, setImageAlt] = useState('');
   const [fontSizePopoverOpen, setFontSizePopoverOpen] = useState(false);
+  const [textColorPopoverOpen, setTextColorPopoverOpen] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -156,6 +159,8 @@ export function RichTextEditor({
         types: ['heading', 'paragraph'],
         defaultAlignment: 'left',
       }),
+      Subscript,
+      Superscript,
       LinkExtension.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -241,6 +246,15 @@ export function RichTextEditor({
       return attrs.fontSize || '16px';
     } catch {
       return '16px';
+    }
+  };
+
+  const getCurrentTextColor = () => {
+    try {
+      const attrs = editor.getAttributes('textStyle');
+      return attrs.color || '#000000';
+    } catch {
+      return '#000000';
     }
   };
 
@@ -387,6 +401,85 @@ export function RichTextEditor({
           </Popover>
         </div>
 
+        {/* Text Color */}
+        <div className="flex items-center gap-1 border-r pr-2 mr-1">
+          <Popover open={textColorPopoverOpen} onOpenChange={setTextColorPopoverOpen} modal={false}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-xs"
+                type="button"
+                title="Color de texto"
+              >
+                <span
+                  className="inline-block h-3 w-3 rounded border"
+                  style={{ backgroundColor: getCurrentTextColor() }}
+                />
+                <span className="ml-2">Color</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-48 p-2 z-[9999]"
+              align="start"
+              side="bottom"
+              sideOffset={4}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onCloseAutoFocus={(e) => {
+                e.preventDefault();
+                setTimeout(() => editor?.commands.focus(), 50);
+              }}
+            >
+              <div className="space-y-2">
+                <Label className="text-xs">Color de texto</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="color"
+                    value={getCurrentTextColor()}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      editor.chain().focus().setColor(value).run();
+                    }}
+                    className="h-8 w-12 p-1"
+                  />
+                  <Input
+                    value={getCurrentTextColor()}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Aceptar hex básico (sin validar demasiado)
+                      editor.chain().focus().setColor(value).run();
+                    }}
+                    className="h-8 text-xs"
+                    placeholder="#000000"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {['#000000', '#1f2937', '#dc2626', '#2563eb', '#16a34a', '#a855f7', '#f59e0b'].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      className="h-6 w-6 rounded border"
+                      style={{ backgroundColor: c }}
+                      onClick={() => editor.chain().focus().setColor(c).run()}
+                      title={c}
+                    />
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    onClick={() => editor.chain().focus().unsetColor().run()}
+                    title="Quitar color"
+                  >
+                    Reset
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+
         {/* Headings */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Button
@@ -417,6 +510,28 @@ export function RichTextEditor({
             title="Título 3"
           >
             <Heading3 className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Subscript / Superscript */}
+        <div className="flex items-center gap-1 border-r pr-2 mr-1">
+          <Button
+            type="button"
+            variant={editor.isActive('subscript') ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => editor.chain().focus().toggleSubscript().run()}
+            title="Subíndice"
+          >
+            <span className="text-xs font-semibold leading-none">x₂</span>
+          </Button>
+          <Button
+            type="button"
+            variant={editor.isActive('superscript') ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => editor.chain().focus().toggleSuperscript().run()}
+            title="Superíndice"
+          >
+            <span className="text-xs font-semibold leading-none">x²</span>
           </Button>
         </div>
 
