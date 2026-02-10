@@ -562,16 +562,14 @@ export function ManualSimulacroQuestionEditor({
                     {competencies
                       .filter((comp) => {
                         // Filtrar solo las 5 competencias ICFES que están en la BD
-                        // Basado en los nombres reales de la base de datos que viste
                         const allowedIds = [
                           'comp-lectura-critica',              // Lectura Crítica
-                          'comp-razonamiento-cuantitativo',     // Razonamiento Cuantitativo (Matemáticas)
-                          'comp-competencias-ciudadanas',       // Competencias Ciudadanas (Ciencias Sociales)
-                          'comp-comunicacion-escrita',          // Comunicación Escrita
+                          'comp-razonamiento-cuantitativo',     // Razonamiento Cuantitativo → Matemáticas
+                          'comp-competencias-ciudadanas',       // Competencias Ciudadanas → Ciencias Sociales
+                          'comp-comunicacion-escrita',          // Comunicación Escrita → Ciencias Naturales
                           'comp-ingles'                         // Inglés
                         ]
                         
-                        // También verificar por nombre (más robusto)
                         const allowedNames = [
                           'lectura_critica',
                           'razonamiento_cuantitativo',
@@ -586,11 +584,29 @@ export function ManualSimulacroQuestionEditor({
                         return allowedIds.includes(compId) || 
                                allowedNames.includes(compName)
                       })
-                      .map((comp) => (
-                        <SelectItem key={comp.id} value={comp.id}>
-                          {comp.displayName || comp.name}
-                        </SelectItem>
-                      ))}
+                      .map((comp) => {
+                        // Mapeo de nombres para mostrar en el dropdown
+                        const nameMapping: Record<string, string> = {
+                          'comp-razonamiento-cuantitativo': 'Matemáticas',
+                          'razonamiento_cuantitativo': 'Matemáticas',
+                          'comp-competencias-ciudadanas': 'Ciencias Sociales',
+                          'competencias_ciudadanas': 'Ciencias Sociales',
+                          'comp-comunicacion-escrita': 'Ciencias Naturales',
+                          'comunicacion_escrita': 'Ciencias Naturales',
+                        }
+                        
+                        // Usar el nombre mapeado si existe, sino el displayName original
+                        const displayName = nameMapping[comp.id] || 
+                                          nameMapping[comp.name?.toLowerCase() || ''] || 
+                                          comp.displayName || 
+                                          comp.name
+                        
+                        return (
+                          <SelectItem key={comp.id} value={comp.id}>
+                            {displayName}
+                          </SelectItem>
+                        )
+                      })}
                   </SelectContent>
                 </Select>
               </div>
