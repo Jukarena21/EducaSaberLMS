@@ -644,7 +644,11 @@ export function RichTextEditor({
             type="button"
             variant={editor.isActive({ textAlign: 'left' }) ? 'default' : 'ghost'}
             size="sm"
-            onClick={() => editor.chain().focus().setTextAlign('left').run()}
+            onClick={() => {
+              if (editor.can().setTextAlign('left')) {
+                editor.chain().focus().setTextAlign('left').run();
+              }
+            }}
             title="Alinear a la izquierda"
           >
             <AlignLeft className="w-4 h-4" />
@@ -654,7 +658,11 @@ export function RichTextEditor({
             type="button"
             variant={editor.isActive({ textAlign: 'center' }) ? 'default' : 'ghost'}
             size="sm"
-            onClick={() => editor.chain().focus().setTextAlign('center').run()}
+            onClick={() => {
+              if (editor.can().setTextAlign('center')) {
+                editor.chain().focus().setTextAlign('center').run();
+              }
+            }}
             title="Centrar"
           >
             <AlignCenter className="w-4 h-4" />
@@ -664,7 +672,11 @@ export function RichTextEditor({
             type="button"
             variant={editor.isActive({ textAlign: 'right' }) ? 'default' : 'ghost'}
             size="sm"
-            onClick={() => editor.chain().focus().setTextAlign('right').run()}
+            onClick={() => {
+              if (editor.can().setTextAlign('right')) {
+                editor.chain().focus().setTextAlign('right').run();
+              }
+            }}
             title="Alinear a la derecha"
           >
             <AlignRight className="w-4 h-4" />
@@ -674,7 +686,11 @@ export function RichTextEditor({
             type="button"
             variant={editor.isActive({ textAlign: 'justify' }) ? 'default' : 'ghost'}
             size="sm"
-            onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+            onClick={() => {
+              if (editor.can().setTextAlign('justify')) {
+                editor.chain().focus().setTextAlign('justify').run();
+              }
+            }}
             title="Justificar"
           >
             <AlignJustify className="w-4 h-4" />
@@ -707,7 +723,11 @@ export function RichTextEditor({
             type="button"
             variant={editor.isActive('taskList') ? 'default' : 'ghost'}
             size="sm"
-            onClick={() => editor.chain().focus().toggleTaskList().run()}
+            onClick={() => {
+              if (editor.can().toggleTaskList()) {
+                editor.chain().focus().toggleTaskList().run();
+              }
+            }}
             title="Lista de tareas (Checklist)"
           >
             <CheckSquare className="w-4 h-4" />
@@ -721,7 +741,9 @@ export function RichTextEditor({
             variant="ghost"
             size="sm"
             onClick={() => {
-              editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+              if (editor.can().insertTable({ rows: 3, cols: 3, withHeaderRow: true })) {
+                editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+              }
             }}
             title="Insertar tabla"
           >
