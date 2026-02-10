@@ -9,7 +9,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import TextStyle from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import { FontFamily } from '@tiptap/extension-font-family';
+// import { FontFamily } from '@tiptap/extension-font-family'; // Temporalmente comentado por error de importación
 import LinkExtension from '@tiptap/extension-link';
 import UnderlineExtension from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
@@ -145,7 +145,7 @@ export function RichTextEditor({
   const [imageAlt, setImageAlt] = useState('');
   const [fontSizePopoverOpen, setFontSizePopoverOpen] = useState(false);
   const [textColorPopoverOpen, setTextColorPopoverOpen] = useState(false);
-  const [fontFamilyPopoverOpen, setFontFamilyPopoverOpen] = useState(false);
+  // const [fontFamilyPopoverOpen, setFontFamilyPopoverOpen] = useState(false); // Temporalmente comentado
 
   const editor = useEditor({
     extensions: [
@@ -170,9 +170,9 @@ export function RichTextEditor({
       }),
       TextStyle,
       Color,
-      FontFamily.configure({
-        types: ['textStyle'],
-      }),
+      // FontFamily.configure({
+      //   types: ['textStyle'],
+      // }), // Temporalmente comentado por error de importación
       FontSize, // Extensión personalizada para fontSize
       UnderlineExtension,
       TextAlign.configure({
@@ -537,8 +537,8 @@ export function RichTextEditor({
           </Popover>
         </div>
 
-        {/* Font Family */}
-        <div className="flex items-center gap-1 border-r pr-2 mr-1">
+        {/* Font Family - Temporalmente comentado por error de importación */}
+        {/* <div className="flex items-center gap-1 border-r pr-2 mr-1">
           <Popover open={fontFamilyPopoverOpen} onOpenChange={setFontFamilyPopoverOpen} modal={false}>
             <PopoverTrigger asChild>
               <Button
@@ -614,7 +614,7 @@ export function RichTextEditor({
               </div>
             </PopoverContent>
           </Popover>
-        </div>
+        </div> */}
 
         {/* Subscript / Superscript */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
