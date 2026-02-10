@@ -45,7 +45,7 @@ import {
   AlignRight,
   AlignJustify,
   Link,
-  Table,
+  Table as TableIcon,
   CheckSquare,
   Square,
   Plus,
@@ -725,7 +725,7 @@ export function RichTextEditor({
             }}
             title="Insertar tabla"
           >
-            <Table className="w-4 h-4" />
+            <TableIcon className="w-4 h-4" />
           </Button>
           
           {editor.isActive('table') && (
