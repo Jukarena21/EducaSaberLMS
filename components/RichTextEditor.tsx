@@ -14,6 +14,12 @@ import UnderlineExtension from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import { Extension, Mark } from '@tiptap/core';
 import { Button } from '@/components/ui/button';
 import { 
@@ -37,7 +43,16 @@ import {
   AlignCenter,
   AlignRight,
   AlignJustify,
-  Link
+  Link,
+  Table,
+  CheckSquare,
+  Square,
+  Plus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -161,6 +176,19 @@ export function RichTextEditor({
       }),
       Subscript,
       Superscript,
+      Table.configure({
+        resizable: true,
+        HTMLAttributes: {
+          class: 'border-collapse border border-gray-300',
+        },
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
       LinkExtension.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -480,38 +508,6 @@ export function RichTextEditor({
           </Popover>
         </div>
 
-        {/* Headings */}
-        <div className="flex items-center gap-1 border-r pr-2 mr-1">
-          <Button
-            type="button"
-            variant={editor.isActive('heading', { level: 1 }) ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            title="Título 1"
-          >
-            <Heading1 className="w-4 h-4" />
-          </Button>
-          
-          <Button
-            type="button"
-            variant={editor.isActive('heading', { level: 2 }) ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            title="Título 2"
-          >
-            <Heading2 className="w-4 h-4" />
-          </Button>
-          
-          <Button
-            type="button"
-            variant={editor.isActive('heading', { level: 3 }) ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-            title="Título 3"
-          >
-            <Heading3 className="w-4 h-4" />
-          </Button>
-        </div>
 
         {/* Subscript / Superscript */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
@@ -599,6 +595,99 @@ export function RichTextEditor({
           >
             <ListOrdered className="w-4 h-4" />
           </Button>
+
+          <Button
+            type="button"
+            variant={editor.isActive('taskList') ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => editor.chain().focus().toggleTaskList().run()}
+            title="Lista de tareas (Checklist)"
+          >
+            <CheckSquare className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Table */}
+        <div className="flex items-center gap-1 border-r pr-2 mr-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+            }}
+            title="Insertar tabla"
+          >
+            <Table className="w-4 h-4" />
+          </Button>
+          
+          {editor.isActive('table') && (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().addColumnBefore().run()}
+                title="Agregar columna antes"
+              >
+                <ArrowLeft className="w-3 h-3" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().addColumnAfter().run()}
+                title="Agregar columna después"
+              >
+                <ArrowRight className="w-3 h-3" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().deleteColumn().run()}
+                title="Eliminar columna"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().addRowBefore().run()}
+                title="Agregar fila antes"
+              >
+                <ArrowUp className="w-3 h-3" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().addRowAfter().run()}
+                title="Agregar fila después"
+              >
+                <ArrowDown className="w-3 h-3" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().deleteRow().run()}
+                title="Eliminar fila"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => editor.chain().focus().deleteTable().run()}
+                title="Eliminar tabla"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </>
+          )}
         </div>
 
         {/* Block elements */}
@@ -636,16 +725,6 @@ export function RichTextEditor({
 
         {/* Media */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowImageDialog(true)}
-            title="Insertar imagen"
-          >
-            <ImageIcon className="w-4 h-4" />
-          </Button>
-
           <Button
             type="button"
             variant={editor.isActive('link') ? 'default' : 'ghost'}
@@ -687,7 +766,7 @@ export function RichTextEditor({
       <div className="p-4 min-h-[300px]">
         <EditorContent 
           editor={editor} 
-          className="prose prose-sm max-w-none focus:outline-none [&_.ProseMirror]:min-h-[250px] [&_.ProseMirror]:outline-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-muted-foreground [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]"
+          className="prose prose-sm max-w-none focus:outline-none [&_.ProseMirror]:min-h-[250px] [&_.ProseMirror]:outline-none [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-muted-foreground [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:border [&_.ProseMirror_table]:border-gray-300 [&_.ProseMirror_table_td]:border [&_.ProseMirror_table_td]:border-gray-300 [&_.ProseMirror_table_td]:p-2 [&_.ProseMirror_table_th]:border [&_.ProseMirror_table_th]:border-gray-300 [&_.ProseMirror_table_th]:p-2 [&_.ProseMirror_table_th]:bg-gray-100 [&_.ProseMirror_ul[data-type='taskList']]:list-none [&_.ProseMirror_ul[data-type='taskList']]:pl-0 [&_.ProseMirror_li[data-type='taskItem']]:flex [&_.ProseMirror_li[data-type='taskItem']]:items-start [&_.ProseMirror_li[data-type='taskItem']]:gap-2 [&_.ProseMirror_li[data-type='taskItem']_input[type='checkbox']]:mt-1 [&_.ProseMirror_li[data-type='taskItem']_input[type='checkbox']]:cursor-pointer"
         />
       </div>
 
