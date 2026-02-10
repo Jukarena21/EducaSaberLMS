@@ -9,6 +9,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import TextStyle from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
+import { FontFamily } from '@tiptap/extension-font-family';
 import LinkExtension from '@tiptap/extension-link';
 import UnderlineExtension from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
@@ -144,6 +145,7 @@ export function RichTextEditor({
   const [imageAlt, setImageAlt] = useState('');
   const [fontSizePopoverOpen, setFontSizePopoverOpen] = useState(false);
   const [textColorPopoverOpen, setTextColorPopoverOpen] = useState(false);
+  const [fontFamilyPopoverOpen, setFontFamilyPopoverOpen] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -168,6 +170,9 @@ export function RichTextEditor({
       }),
       TextStyle,
       Color,
+      FontFamily.configure({
+        types: ['textStyle'],
+      }),
       FontSize, // Extensión personalizada para fontSize
       UnderlineExtension,
       TextAlign.configure({
@@ -285,6 +290,30 @@ export function RichTextEditor({
       return '#000000';
     }
   };
+
+  // Obtener la familia de fuente actual
+  const getCurrentFontFamily = () => {
+    try {
+      const attrs = editor.getAttributes('textStyle');
+      return attrs.fontFamily || 'Arial';
+    } catch {
+      return 'Arial';
+    }
+  };
+
+  // Opciones de familias de fuente comunes
+  const fontFamilyOptions = [
+    { value: 'Arial', label: 'Arial' },
+    { value: 'Times New Roman', label: 'Times New Roman' },
+    { value: 'Courier New', label: 'Courier New' },
+    { value: 'Georgia', label: 'Georgia' },
+    { value: 'Verdana', label: 'Verdana' },
+    { value: 'Calibri', label: 'Calibri' },
+    { value: 'Comic Sans MS', label: 'Comic Sans MS' },
+    { value: 'Impact', label: 'Impact' },
+    { value: 'Trebuchet MS', label: 'Trebuchet MS' },
+    { value: 'Tahoma', label: 'Tahoma' },
+  ];
 
   return (
     <div className={`border rounded-lg bg-white ${className}`}>
@@ -508,6 +537,84 @@ export function RichTextEditor({
           </Popover>
         </div>
 
+        {/* Font Family */}
+        <div className="flex items-center gap-1 border-r pr-2 mr-1">
+          <Popover open={fontFamilyPopoverOpen} onOpenChange={setFontFamilyPopoverOpen} modal={false}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-xs justify-start min-w-[120px]"
+                type="button"
+                title="Familia de fuente"
+              >
+                <span style={{ fontFamily: getCurrentFontFamily() }}>
+                  {getCurrentFontFamily()}
+                </span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-48 p-1 z-[9999] max-h-[300px] overflow-y-auto"
+              align="start"
+              side="bottom"
+              sideOffset={4}
+              onOpenAutoFocus={(e) => e.preventDefault()}
+              onCloseAutoFocus={(e) => {
+                e.preventDefault();
+                setTimeout(() => editor?.commands.focus(), 50);
+              }}
+            >
+              <div className="flex flex-col gap-1">
+                {fontFamilyOptions.map(option => (
+                  <Button
+                    key={option.value}
+                    variant={getCurrentFontFamily() === option.value ? "default" : "ghost"}
+                    size="sm"
+                    className="w-full justify-start text-xs"
+                    type="button"
+                    style={{ fontFamily: option.value }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      
+                      if (!editor) return;
+                      
+                      try {
+                        editor.chain().focus().setFontFamily(option.value).run();
+                      } catch (error) {
+                        console.error('Error applying font family:', error);
+                      }
+                      
+                      setFontFamilyPopoverOpen(false);
+                      
+                      setTimeout(() => {
+                        if (editor) {
+                          editor.commands.focus();
+                        }
+                      }, 100);
+                    }}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-xs mt-1 border-t pt-1"
+                  onClick={() => {
+                    editor.chain().focus().unsetFontFamily().run();
+                    setFontFamilyPopoverOpen(false);
+                    setTimeout(() => editor?.commands.focus(), 50);
+                  }}
+                  title="Restaurar fuente por defecto"
+                >
+                  Restaurar
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
 
         {/* Subscript / Superscript */}
         <div className="flex items-center gap-1 border-r pr-2 mr-1">
