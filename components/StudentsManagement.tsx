@@ -72,7 +72,11 @@ export function StudentsManagement() {
 
   // Cargar usuarios al montar el componente y cuando cambien los filtros/página
   // NOTA: Solo recargar del API cuando cambie schoolId a un valor específico (no 'none' ni 'all')
-  // Si es 'none' o 'all', el filtrado se hace en el frontend
+  // Si es 'none' o 'all', el filtrado se hace en el frontend sin recargar
+  const effectiveSchoolId = session?.user?.role === 'school_admin' && session?.user?.schoolId 
+    ? session.user.schoolId 
+    : (filters.schoolId && filters.schoolId !== 'none' && filters.schoolId !== 'all' ? filters.schoolId : undefined);
+
   useEffect(() => {
     if (session?.user) {
       const loadUsers = async () => {
@@ -80,11 +84,7 @@ export function StudentsManagement() {
           page: currentPage,
           limit: 10, // 10 estudiantes por página
           role: 'student', // Filtrar solo estudiantes en el backend
-          // Solo pasar schoolId al API si no es 'none' y no es school_admin
-          // Si es 'none' o 'all', no pasamos schoolId y filtramos en el frontend
-          schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
-            ? session.user.schoolId 
-            : (filters.schoolId && filters.schoolId !== 'none' && filters.schoolId !== 'all' ? filters.schoolId : undefined),
+          schoolId: effectiveSchoolId,
           search: searchTerm || undefined,
         };
         
@@ -94,9 +94,7 @@ export function StudentsManagement() {
       loadUsers();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }
-  }, [session?.user?.role, session?.user?.schoolId, currentPage, searchTerm, 
-      // Solo incluir filters.schoolId en las dependencias si no es 'none' ni 'all'
-      filters.schoolId && filters.schoolId !== 'none' && filters.schoolId !== 'all' ? filters.schoolId : 'all']);
+  }, [session?.user?.role, session?.user?.schoolId, currentPage, searchTerm, effectiveSchoolId]);
 
   // Resetear a página 1 cuando cambian los filtros de búsqueda
   useEffect(() => {
