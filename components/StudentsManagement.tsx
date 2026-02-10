@@ -97,9 +97,23 @@ export function StudentsManagement() {
   }, [session?.user?.role, session?.user?.schoolId, currentPage, searchTerm, effectiveSchoolId]);
 
   // Resetear a página 1 cuando cambian los filtros de búsqueda
+  // Solo resetear si el filtro realmente requiere recarga del API
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filters.schoolId]);
+    // Solo resetear si es un filtro que requiere recarga del API (no 'none' ni 'all')
+    if (filters.schoolId && filters.schoolId !== 'none' && filters.schoolId !== 'all') {
+      setCurrentPage(1);
+    } else if (!filters.schoolId || filters.schoolId === 'all' || filters.schoolId === 'none') {
+      // Si cambia a 'all' o 'none', también resetear pero no recargar del API
+      setCurrentPage(1);
+    }
+  }, [searchTerm, filters.academicGrade, filters.status]);
+  
+  // Resetear página cuando cambia schoolId a un valor específico (que requiere recarga)
+  useEffect(() => {
+    if (effectiveSchoolId !== undefined) {
+      setCurrentPage(1);
+    }
+  }, [effectiveSchoolId]);
 
   // Filtrar usuarios por rol de estudiante (ya viene filtrado del backend, pero por si acaso)
   const students = users?.filter(user => {
@@ -548,6 +562,157 @@ export function StudentsManagement() {
 
   const deselectAllCourses = () => {
     setSelectedCourseIds(new Set());
+  };
+
+  // Funciones para asignación masiva de institución y grado
+  const handleBulkAssignSchool = () => {
+    if (selectedStudentIds.size === 0) {
+      toast({
+        title: "No hay estudiantes seleccionados",
+        description: "Por favor selecciona al menos un estudiante.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSelectedBulkSchoolId('');
+    setShowBulkSchoolDialog(true);
+  };
+
+  const handleBulkAssignGrade = () => {
+    if (selectedStudentIds.size === 0) {
+      toast({
+        title: "No hay estudiantes seleccionados",
+        description: "Por favor selecciona al menos un estudiante.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSelectedBulkGrade('');
+    setShowBulkGradeDialog(true);
+  };
+
+  const handleConfirmBulkAssignSchool = async () => {
+    if (!selectedBulkSchoolId) {
+      toast({
+        title: "Error",
+        description: "Por favor selecciona una institución",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      const studentIdsArray = Array.from(selectedStudentIds);
+      
+      // Actualizar todos los estudiantes seleccionados
+      const updatePromises = studentIdsArray.map(studentId =>
+        fetch(`/api/users/${studentId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            schoolId: selectedBulkSchoolId === 'none' ? null : selectedBulkSchoolId,
+          }),
+        })
+      );
+
+      const results = await Promise.allSettled(updatePromises);
+      const successful = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+      const failed = results.length - successful;
+
+      if (successful > 0) {
+        toast({
+          title: "Actualización completada",
+          description: `${successful} estudiante${successful !== 1 ? 's' : ''} actualizado${successful !== 1 ? 's' : ''}${failed > 0 ? `. ${failed} fallaron` : ''}`,
+        });
+        
+        // Recargar estudiantes
+        const apiFilters: any = {
+          page: currentPage,
+          limit: 10,
+          role: 'student',
+          schoolId: effectiveSchoolId,
+          search: searchTerm || undefined,
+        };
+        await fetchUsers(apiFilters);
+        
+        // Limpiar selección
+        setSelectedStudentIds(new Set());
+        setShowBulkSchoolDialog(false);
+      } else {
+        throw new Error('No se pudo actualizar ningún estudiante');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron actualizar los estudiantes",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleConfirmBulkAssignGrade = async () => {
+    if (!selectedBulkGrade) {
+      toast({
+        title: "Error",
+        description: "Por favor selecciona un grado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      const studentIdsArray = Array.from(selectedStudentIds);
+      
+      // Actualizar todos los estudiantes seleccionados
+      const updatePromises = studentIdsArray.map(studentId =>
+        fetch(`/api/users/${studentId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            academicGrade: selectedBulkGrade === 'none' ? null : selectedBulkGrade,
+          }),
+        })
+      );
+
+      const results = await Promise.allSettled(updatePromises);
+      const successful = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+      const failed = results.length - successful;
+
+      if (successful > 0) {
+        toast({
+          title: "Actualización completada",
+          description: `${successful} estudiante${successful !== 1 ? 's' : ''} actualizado${successful !== 1 ? 's' : ''}${failed > 0 ? `. ${failed} fallaron` : ''}`,
+        });
+        
+        // Recargar estudiantes
+        const apiFilters: any = {
+          page: currentPage,
+          limit: 10,
+          role: 'student',
+          schoolId: effectiveSchoolId,
+          search: searchTerm || undefined,
+        };
+        await fetchUsers(apiFilters);
+        
+        // Limpiar selección
+        setSelectedStudentIds(new Set());
+        setShowBulkGradeDialog(false);
+      } else {
+        throw new Error('No se pudo actualizar ningún estudiante');
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron actualizar los estudiantes",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (usersLoading) {
