@@ -120,7 +120,8 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
         address: student.address ?? '',
         neighborhood: student.neighborhood ?? '',
         city: student.city ?? '',
-        documentType: student.documentType || '',
+        // Normalizar documentType a minúsculas para que coincida con los valores del Select
+        documentType: student.documentType ? student.documentType.toLowerCase() : '',
         documentNumber: student.documentNumber || '',
       });
     }

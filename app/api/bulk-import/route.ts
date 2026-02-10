@@ -200,7 +200,13 @@ export async function POST(req: NextRequest) {
           const email = (r.email || '').trim()
           const firstName = (r.firstname || '').trim()
           const lastName = (r.lastname || '').trim()
-          const documentType = (r.documenttype || '').trim()
+          // Normalizar documentType a minúsculas para consistencia con el formulario
+          const documentTypeRaw = (r.documenttype || '').trim()
+          const documentType = documentTypeRaw.toLowerCase() === 'ti' ? 'ti' :
+                              documentTypeRaw.toLowerCase() === 'cc' ? 'cc' :
+                              documentTypeRaw.toLowerCase() === 'ce' ? 'ce' :
+                              documentTypeRaw.toLowerCase() === 'rc' ? 'rc' :
+                              documentTypeRaw.toLowerCase()
           const documentNumber = (r.documentnumber || '').trim()
           const contactPhone = (r.contactphone || '').trim()
           
