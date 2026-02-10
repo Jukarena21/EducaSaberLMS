@@ -65,6 +65,10 @@ export function StudentsManagement() {
   const [courseDialogMode, setCourseDialogMode] = useState<'enroll' | 'unenroll'>('enroll');
   const [selectedCourseIds, setSelectedCourseIds] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showBulkSchoolDialog, setShowBulkSchoolDialog] = useState(false);
+  const [showBulkGradeDialog, setShowBulkGradeDialog] = useState(false);
+  const [selectedBulkSchoolId, setSelectedBulkSchoolId] = useState<string>('');
+  const [selectedBulkGrade, setSelectedBulkGrade] = useState<string>('');
 
   // Cargar usuarios al montar el componente y cuando cambien los filtros/página
   useEffect(() => {
@@ -106,10 +110,36 @@ export function StudentsManagement() {
     return true;
   }) || [];
 
-  // Aplicar filtros adicionales (academicGrade, status)
+  // Aplicar filtros adicionales (academicGrade, status, schoolId)
   const filteredStudents = students.filter(student => {
-    if (filters.academicGrade && (student as any).academicGrade !== filters.academicGrade) {
-      return false;
+    // Filtro por grado
+    if (filters.academicGrade) {
+      if (filters.academicGrade === 'none') {
+        // Sin grado asignado
+        if ((student as any).academicGrade) {
+          return false;
+        }
+      } else {
+        // Grado específico
+        if ((student as any).academicGrade !== filters.academicGrade) {
+          return false;
+        }
+      }
+    }
+    
+    // Filtro por institución (solo si no es school_admin, porque ellos ya están filtrados)
+    if (filters.schoolId && session?.user?.role !== 'school_admin') {
+      if (filters.schoolId === 'none') {
+        // Sin institución asignada
+        if (student.schoolId) {
+          return false;
+        }
+      } else {
+        // Institución específica
+        if (student.schoolId !== filters.schoolId) {
+          return false;
+        }
+      }
     }
     
     if (filters.status && (student as any).status !== filters.status) {
@@ -254,6 +284,83 @@ export function StudentsManagement() {
       newSelection.add(student.id);
     });
     setSelectedStudentIds(newSelection);
+  };
+
+  // Seleccionar todos los estudiantes que cumplan con los filtros aplicados (de todas las páginas)
+  const selectAllFilteredStudents = async () => {
+    try {
+      setIsProcessing(true);
+      
+      // Construir filtros para la API
+      const apiFilters: any = {
+        role: 'student',
+        limit: 10000, // Límite alto para obtener todos
+        page: 1,
+        schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
+          ? session.user.schoolId 
+          : (filters.schoolId === 'none' ? null : (filters.schoolId || '')),
+        search: searchTerm || undefined,
+      };
+
+      // Hacer llamada al API para obtener todos los estudiantes que cumplan los filtros
+      const response = await fetch(`/api/users?${new URLSearchParams({
+        role: 'student',
+        limit: '10000',
+        page: '1',
+        ...(apiFilters.schoolId !== '' && apiFilters.schoolId !== null ? { schoolId: apiFilters.schoolId } : {}),
+        ...(apiFilters.search ? { search: apiFilters.search } : {}),
+      }).toString()}`);
+      
+      if (!response.ok) {
+        throw new Error('Error al obtener estudiantes');
+      }
+      
+      const data = await response.json();
+      const allFilteredStudents = data.users || [];
+      
+      // Aplicar filtros adicionales en el frontend (academicGrade, status)
+      const finalFiltered = allFilteredStudents.filter((student: any) => {
+        // Filtro por grado
+        if (filters.academicGrade) {
+          if (filters.academicGrade === 'none') {
+            if (student.academicGrade) return false;
+          } else {
+            if (student.academicGrade !== filters.academicGrade) return false;
+          }
+        }
+        
+        // Filtro por institución
+        if (filters.schoolId === 'none') {
+          if (student.schoolId) return false;
+        } else if (filters.schoolId && session?.user?.role !== 'school_admin') {
+          if (student.schoolId !== filters.schoolId) return false;
+        }
+        
+        // Filtro por estado
+        if (filters.status && student.status !== filters.status) {
+          return false;
+        }
+        
+        return true;
+      });
+      
+      // Seleccionar todos los IDs
+      const allIds = new Set(finalFiltered.map((s: any) => s.id));
+      setSelectedStudentIds(allIds);
+      
+      toast({
+        title: "Selección completada",
+        description: `${allIds.size} estudiante${allIds.size !== 1 ? 's' : ''} seleccionado${allIds.size !== 1 ? 's' : ''}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudieron seleccionar todos los estudiantes",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const deselectAllStudents = () => {
@@ -571,6 +678,7 @@ export function StudentsManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="none">Sin institución</SelectItem>
                   {schools.map(school => (
                     <SelectItem key={school.id} value={school.id || ''}>
                       {school.name}
@@ -591,6 +699,7 @@ export function StudentsManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="none">Sin grado</SelectItem>
                   <SelectItem value="6">Grado 6</SelectItem>
                   <SelectItem value="7">Grado 7</SelectItem>
                   <SelectItem value="8">Grado 8</SelectItem>
@@ -619,17 +728,27 @@ export function StudentsManagement() {
               </Select>
             </div>
             
-            <div className="flex items-end">
+            <div className="flex items-end gap-2">
               <Button 
                 variant="outline" 
                 onClick={() => {
                   setFilters({});
                   setSearchTerm('');
                 }}
-                className="w-full"
+                className="flex-1"
               >
                 Limpiar Filtros
               </Button>
+              {(session?.user?.role === 'teacher_admin' || session?.user?.role === 'school_admin') && (
+                <Button 
+                  variant="default" 
+                  onClick={selectAllFilteredStudents}
+                  className="bg-blue-600 hover:bg-blue-700 flex-1"
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? 'Cargando...' : 'Seleccionar Todos'}
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -658,6 +777,30 @@ export function StudentsManagement() {
                 </Button>
               </div>
               <div className="flex items-center gap-2">
+                {session?.user?.role === 'teacher_admin' && (
+                  <>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleBulkAssignSchool}
+                      className="bg-purple-600 hover:bg-purple-700"
+                      disabled={isProcessing}
+                    >
+                      <Building className="h-4 w-4 mr-2" />
+                      Asignar Institución
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleBulkAssignGrade}
+                      className="bg-indigo-600 hover:bg-indigo-700"
+                      disabled={isProcessing}
+                    >
+                      <GraduationCap className="h-4 w-4 mr-2" />
+                      Asignar Grado
+                    </Button>
+                  </>
+                )}
                 <Button
                   variant="default"
                   size="sm"
@@ -1151,6 +1294,87 @@ export function StudentsManagement() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Assign School Dialog */}
+      {showBulkSchoolDialog && (
+        <Dialog open={showBulkSchoolDialog} onOpenChange={setShowBulkSchoolDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Asignar Institución</DialogTitle>
+              <DialogDescription>
+                Asignar institución a {totalSelectedCount} estudiante{totalSelectedCount !== 1 ? 's' : ''} seleccionado{totalSelectedCount !== 1 ? 's' : ''}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Institución</Label>
+                <Select value={selectedBulkSchoolId} onValueChange={setSelectedBulkSchoolId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar institución" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin institución</SelectItem>
+                    {schools.map(school => (
+                      <SelectItem key={school.id} value={school.id || ''}>
+                        {school.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowBulkSchoolDialog(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleConfirmBulkAssignSchool} disabled={isProcessing || !selectedBulkSchoolId}>
+                  {isProcessing ? 'Actualizando...' : 'Confirmar'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Bulk Assign Grade Dialog */}
+      {showBulkGradeDialog && (
+        <Dialog open={showBulkGradeDialog} onOpenChange={setShowBulkGradeDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Asignar Grado</DialogTitle>
+              <DialogDescription>
+                Asignar grado a {totalSelectedCount} estudiante{totalSelectedCount !== 1 ? 's' : ''} seleccionado{totalSelectedCount !== 1 ? 's' : ''}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Grado</Label>
+                <Select value={selectedBulkGrade} onValueChange={setSelectedBulkGrade}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar grado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin grado</SelectItem>
+                    <SelectItem value="6">Grado 6</SelectItem>
+                    <SelectItem value="7">Grado 7</SelectItem>
+                    <SelectItem value="8">Grado 8</SelectItem>
+                    <SelectItem value="9">Grado 9</SelectItem>
+                    <SelectItem value="10">Grado 10</SelectItem>
+                    <SelectItem value="11">Grado 11</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowBulkGradeDialog(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleConfirmBulkAssignGrade} disabled={isProcessing || !selectedBulkGrade}>
+                  {isProcessing ? 'Actualizando...' : 'Confirmar'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
