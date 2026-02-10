@@ -291,29 +291,29 @@ export function RichTextEditor({
     }
   };
 
-  // Obtener la familia de fuente actual
-  const getCurrentFontFamily = () => {
-    try {
-      const attrs = editor.getAttributes('textStyle');
-      return attrs.fontFamily || 'Arial';
-    } catch {
-      return 'Arial';
-    }
-  };
+  // Obtener la familia de fuente actual - Temporalmente comentado
+  // const getCurrentFontFamily = () => {
+  //   try {
+  //     const attrs = editor.getAttributes('textStyle');
+  //     return attrs.fontFamily || 'Arial';
+  //   } catch {
+  //     return 'Arial';
+  //   }
+  // };
 
-  // Opciones de familias de fuente comunes
-  const fontFamilyOptions = [
-    { value: 'Arial', label: 'Arial' },
-    { value: 'Times New Roman', label: 'Times New Roman' },
-    { value: 'Courier New', label: 'Courier New' },
-    { value: 'Georgia', label: 'Georgia' },
-    { value: 'Verdana', label: 'Verdana' },
-    { value: 'Calibri', label: 'Calibri' },
-    { value: 'Comic Sans MS', label: 'Comic Sans MS' },
-    { value: 'Impact', label: 'Impact' },
-    { value: 'Trebuchet MS', label: 'Trebuchet MS' },
-    { value: 'Tahoma', label: 'Tahoma' },
-  ];
+  // Opciones de familias de fuente comunes - Temporalmente comentado
+  // const fontFamilyOptions = [
+  //   { value: 'Arial', label: 'Arial' },
+  //   { value: 'Times New Roman', label: 'Times New Roman' },
+  //   { value: 'Courier New', label: 'Courier New' },
+  //   { value: 'Georgia', label: 'Georgia' },
+  //   { value: 'Verdana', label: 'Verdana' },
+  //   { value: 'Calibri', label: 'Calibri' },
+  //   { value: 'Comic Sans MS', label: 'Comic Sans MS' },
+  //   { value: 'Impact', label: 'Impact' },
+  //   { value: 'Trebuchet MS', label: 'Trebuchet MS' },
+  //   { value: 'Tahoma', label: 'Tahoma' },
+  // ];
 
   return (
     <div className={`border rounded-lg bg-white ${className}`}>
