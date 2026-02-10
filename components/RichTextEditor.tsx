@@ -175,25 +175,25 @@ export function RichTextEditor({
       // }), // Temporalmente comentado por error de importación
       FontSize, // Extensión personalizada para fontSize
       UnderlineExtension,
-      // TextAlign.configure({
-      //   types: ['heading', 'paragraph'],
-      //   defaultAlignment: 'left',
-      // }), // Temporalmente comentado para debug
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+        defaultAlignment: 'left',
+      }),
       Subscript,
       Superscript,
-      // Table.configure({
-      //   resizable: true,
-      //   HTMLAttributes: {
-      //     class: 'border-collapse border border-gray-300',
-      //   },
-      // }), // Temporalmente comentado para debug
-      // TableRow, // Temporalmente comentado para debug
-      // TableHeader, // Temporalmente comentado para debug
-      // TableCell, // Temporalmente comentado para debug
-      // TaskList, // Temporalmente comentado para debug
-      // TaskItem.configure({
-      //   nested: true,
-      // }), // Temporalmente comentado para debug
+      Table.configure({
+        resizable: true,
+        HTMLAttributes: {
+          class: 'border-collapse border border-gray-300',
+        },
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
       LinkExtension.configure({
         openOnClick: false,
         HTMLAttributes: {
