@@ -206,10 +206,28 @@ export function ManualSimulacroQuestionEditor({
       return
     }
 
-    if (!formData.competencyId) {
+    if (!formData.competencia || !formData.competencia.trim()) {
       toast({
         title: "Error",
         description: "La competencia es requerida",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!formData.competencyId) {
+      toast({
+        title: "Error",
+        description: "El área es requerida",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!formData.points || formData.points < 1) {
+      toast({
+        title: "Error",
+        description: "Los puntos son requeridos (mínimo 1)",
         variant: "destructive"
       })
       return
@@ -542,11 +560,38 @@ export function ManualSimulacroQuestionEditor({
                   </SelectTrigger>
                   <SelectContent>
                     {competencies
-                      .filter((comp) =>
-                        ['Lectura Crítica', 'Matemáticas', 'Ciencias Naturales', 'Ciencias Sociales', 'Inglés'].includes(
-                          comp.displayName || comp.name
+                      .filter((comp) => {
+                        // Normalizar nombres para comparación (sin acentos, minúsculas)
+                        const normalize = (str: string) => 
+                          str.toLowerCase()
+                             .normalize('NFD')
+                             .replace(/[\u0300-\u036f]/g, '')
+                             .replace(/\s+/g, ' ')
+                             .trim()
+                        
+                        const displayNameNorm = normalize(comp.displayName || '')
+                        const nameNorm = normalize(comp.name || '')
+                        
+                        // Lista de nombres permitidos (normalizados)
+                        const allowedNames = [
+                          'lectura critica',
+                          'lectura_critica',
+                          'matematicas',
+                          'ciencias naturales',
+                          'ciencias_naturales',
+                          'ciencias sociales',
+                          'ciencias_sociales',
+                          'ingles'
+                        ]
+                        
+                        // Verificar si coincide con algún nombre permitido
+                        return allowedNames.some(allowed => 
+                          displayNameNorm.includes(allowed) || 
+                          nameNorm.includes(allowed) ||
+                          allowed.includes(displayNameNorm) ||
+                          allowed.includes(nameNorm)
                         )
-                      )
+                      })
                       .map((comp) => (
                         <SelectItem key={comp.id} value={comp.id}>
                           {comp.displayName || comp.name}
@@ -590,21 +635,23 @@ export function ManualSimulacroQuestionEditor({
               </div>
 
               <div>
-                <Label htmlFor="competencia">Competencia</Label>
+                <Label htmlFor="competencia">Competencia *</Label>
                 <Input
                   id="competencia"
                   value={formData.competencia || ''}
                   onChange={(e) => setFormData({ ...formData, competencia: e.target.value })}
+                  required
                   placeholder="Ej: Competencia específica"
                 />
               </div>
 
               <div>
-                <Label htmlFor="points">Puntos</Label>
+                <Label htmlFor="points">Puntos *</Label>
                 <Input
                   id="points"
                   type="number"
                   min="1"
+                  required
                   value={formData.points}
                   onChange={(e) => setFormData({ ...formData, points: parseInt(e.target.value) || 1 })}
                 />

@@ -28,8 +28,8 @@ const questionSchema = z.object({
   tema: z.string().min(1, 'El tema es requerido'),
   subtema: z.string().min(1, 'El subtema es requerido'),
   componente: z.string().min(1, 'El componente es requerido'),
-  competencia: z.string().optional(),
-  competencyId: z.string().min(1, 'La competencia es requerida'),
+  competencia: z.string().min(1, 'La competencia es requerida'),
+  competencyId: z.string().min(1, 'El área es requerida'),
 })
 
 export async function GET(
