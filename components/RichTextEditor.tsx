@@ -11,6 +11,7 @@ import TextStyle from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import LinkExtension from '@tiptap/extension-link';
 import UnderlineExtension from '@tiptap/extension-underline';
+import TextAlign from '@tiptap/extension-text-align';
 import { Extension, Mark } from '@tiptap/core';
 import { Button } from '@/components/ui/button';
 import { 
@@ -33,6 +34,7 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  AlignJustify,
   Link
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -150,6 +152,10 @@ export function RichTextEditor({
       Color,
       FontSize, // Extensión personalizada para fontSize
       UnderlineExtension,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+        defaultAlignment: 'left',
+      }),
       LinkExtension.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -411,6 +417,49 @@ export function RichTextEditor({
             title="Título 3"
           >
             <Heading3 className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* Text Alignment */}
+        <div className="flex items-center gap-1 border-r pr-2 mr-1">
+          <Button
+            type="button"
+            variant={editor.isActive({ textAlign: 'left' }) ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => editor.chain().focus().setTextAlign('left').run()}
+            title="Alinear a la izquierda"
+          >
+            <AlignLeft className="w-4 h-4" />
+          </Button>
+          
+          <Button
+            type="button"
+            variant={editor.isActive({ textAlign: 'center' }) ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => editor.chain().focus().setTextAlign('center').run()}
+            title="Centrar"
+          >
+            <AlignCenter className="w-4 h-4" />
+          </Button>
+          
+          <Button
+            type="button"
+            variant={editor.isActive({ textAlign: 'right' }) ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => editor.chain().focus().setTextAlign('right').run()}
+            title="Alinear a la derecha"
+          >
+            <AlignRight className="w-4 h-4" />
+          </Button>
+          
+          <Button
+            type="button"
+            variant={editor.isActive({ textAlign: 'justify' }) ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+            title="Justificar"
+          >
+            <AlignJustify className="w-4 h-4" />
           </Button>
         </div>
 
