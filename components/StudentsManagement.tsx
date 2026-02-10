@@ -71,6 +71,8 @@ export function StudentsManagement() {
   const [selectedBulkGrade, setSelectedBulkGrade] = useState<string>('');
 
   // Cargar usuarios al montar el componente y cuando cambien los filtros/página
+  // NOTA: Solo recargar del API cuando cambie schoolId a un valor específico (no 'none' ni 'all')
+  // Si es 'none' o 'all', el filtrado se hace en el frontend
   useEffect(() => {
     if (session?.user) {
       const loadUsers = async () => {
@@ -79,10 +81,10 @@ export function StudentsManagement() {
           limit: 10, // 10 estudiantes por página
           role: 'student', // Filtrar solo estudiantes en el backend
           // Solo pasar schoolId al API si no es 'none' y no es school_admin
-          // Si es 'none', no pasamos schoolId y filtramos en el frontend
+          // Si es 'none' o 'all', no pasamos schoolId y filtramos en el frontend
           schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
             ? session.user.schoolId 
-            : (filters.schoolId && filters.schoolId !== 'none' ? filters.schoolId : undefined),
+            : (filters.schoolId && filters.schoolId !== 'none' && filters.schoolId !== 'all' ? filters.schoolId : undefined),
           search: searchTerm || undefined,
         };
         
@@ -92,7 +94,9 @@ export function StudentsManagement() {
       loadUsers();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }
-  }, [session?.user?.role, session?.user?.schoolId, currentPage, searchTerm, filters.schoolId]);
+  }, [session?.user?.role, session?.user?.schoolId, currentPage, searchTerm, 
+      // Solo incluir filters.schoolId en las dependencias si no es 'none' ni 'all'
+      filters.schoolId && filters.schoolId !== 'none' && filters.schoolId !== 'all' ? filters.schoolId : 'all']);
 
   // Resetear a página 1 cuando cambian los filtros de búsqueda
   useEffect(() => {
@@ -300,10 +304,10 @@ export function StudentsManagement() {
         page: '1',
       });
 
-      // Solo agregar schoolId si no es 'none' y no es school_admin
+      // Solo agregar schoolId si no es 'none' ni 'all' y no es school_admin
       if (session?.user?.role === 'school_admin' && session?.user?.schoolId) {
         params.append('schoolId', session.user.schoolId);
-      } else if (filters.schoolId && filters.schoolId !== 'none') {
+      } else if (filters.schoolId && filters.schoolId !== 'none' && filters.schoolId !== 'all') {
         params.append('schoolId', filters.schoolId);
       }
 
@@ -316,11 +320,23 @@ export function StudentsManagement() {
       const response = await fetch(`/api/users?${params.toString()}`);
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Error al obtener estudiantes');
+        let errorMessage = 'Error al obtener estudiantes';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // Si no se puede parsear el error, usar el mensaje por defecto
+        }
+        throw new Error(errorMessage);
       }
       
       const data = await response.json();
+      // Verificar que la respuesta tenga la estructura esperada
+      if (!data || !Array.isArray(data.users)) {
+        console.error('Respuesta del API inesperada:', data);
+        throw new Error('Formato de respuesta del servidor inválido');
+      }
+      
       const allFilteredStudents = data.users || [];
       
       // Aplicar filtros adicionales en el frontend (academicGrade, status, schoolId='none')
@@ -365,7 +381,7 @@ export function StudentsManagement() {
       console.error('Error al seleccionar todos:', error);
       toast({
         title: "Error",
-        description: error.message || "No se pudieron seleccionar todos los estudiantes",
+        description: error.message || "No se pudieron seleccionar todos los estudiantes. Por favor, intenta de nuevo.",
         variant: "destructive",
       });
     } finally {
