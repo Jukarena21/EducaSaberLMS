@@ -36,7 +36,7 @@ export function ImageUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -69,36 +69,40 @@ export function ImageUpload({
 
     setIsUploading(true);
 
-    try {
-      // Crear preview local
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+    // Leer el archivo como Data URL y usar ese valor como URL persistente
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) {
+        toast({
+          title: 'Error al procesar imagen',
+          description: 'No se pudo leer el archivo de imagen. Inténtalo de nuevo.',
+          variant: 'destructive',
+        });
+        setIsUploading(false);
+        return;
+      }
 
-      // Simular subida de archivo (aquí integrarías con tu servicio de almacenamiento)
-      // Por ahora, usamos una URL temporal
-      const mockUrl = URL.createObjectURL(file);
-      
-      // Simular delay de subida
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      onChange(mockUrl);
-      
+      setPreview(dataUrl);
+      onChange(dataUrl);
+
       toast({
-        title: 'Imagen subida',
-        description: 'La imagen se ha subido correctamente.',
+        title: 'Imagen preparada',
+        description: 'La imagen se ha cargado correctamente.',
       });
-    } catch (error) {
+      setIsUploading(false);
+    };
+
+    reader.onerror = () => {
       toast({
         title: 'Error al subir imagen',
-        description: 'Hubo un problema al subir la imagen. Inténtalo de nuevo.',
+        description: 'Hubo un problema al leer la imagen. Inténtalo de nuevo.',
         variant: 'destructive',
       });
-    } finally {
       setIsUploading(false);
-    }
+    };
+
+    reader.readAsDataURL(file);
   };
 
   const handleRemove = () => {
