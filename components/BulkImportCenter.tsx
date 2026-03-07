@@ -42,7 +42,7 @@ const importTypes: ImportTypeConfig[] = [
     icon: <Users className="h-6 w-6" />,
     description: 'Información personal, académica y condiciones especiales',
     requiredFields: ['email', 'firstName', 'lastName', 'documentType', 'documentNumber', 'contactPhone'],
-    optionalFields: ['dateOfBirth', 'gender', 'schoolId', 'city', 'neighborhood', 'address']
+    optionalFields: ['dateOfBirth', 'gender', 'schoolId', 'academicGrade', 'city', 'neighborhood', 'address']
   },
   {
     id: 'schools',
@@ -386,30 +386,30 @@ export function BulkImportCenter() {
           '7. academicAverage debe ser un número entre 0.0 y 5.0',
           '',
           'CAMPOS OBLIGATORIOS (*): email, firstName, lastName, documentType, documentNumber, contactPhone',
-          'CAMPOS OPCIONALES: dateOfBirth, gender, city, neighborhood, address, schoolEntryYear, academicAverage, schoolSchedule',
+          'CAMPOS OPCIONALES: dateOfBirth, gender, schoolId, academicGrade, city, neighborhood, address, schoolEntryYear, academicAverage, schoolSchedule',
           '',
           '=== INICIO DE DATOS ==='
         ]
         
         const headers = [
           'email *', 'firstName *', 'lastName *', 'documentType *', 'documentNumber *', 'contactPhone *',
-          'dateOfBirth', 'gender',
+          'dateOfBirth', 'gender', 'schoolId', 'academicGrade',
           'city', 'neighborhood', 'address',
           'schoolEntryYear', 'academicAverage', 'schoolSchedule'
         ]
         const example1 = [
           'juan.perez@colegio.edu', 'Juan', 'Pérez', 'TI', '1234567890', '3001234567',
-          '2008-03-15', 'male', 'Bogotá', 'Chapinero', 'Cra 7 # 45-23',
+          '2008-03-15', 'male', 'sch_123', 'septimo', 'Bogotá', 'Chapinero', 'Cra 7 # 45-23',
           '2022', '4.2', 'diurno'
         ]
         const example2 = [
           'maria.garcia@colegio.edu', 'María', 'García', 'CC', '9876543210', '3009876543',
-          '2009-07-20', 'female', 'Medellín', 'El Poblado', 'Cll 10 # 30-15',
+          '2009-07-20', 'female', 'sch_456', 'octavo', 'Medellín', 'El Poblado', 'Cll 10 # 30-15',
           '2021', '4.5', 'diurno'
         ]
         const example3 = [
           'carlos.rodriguez@colegio.edu', 'Carlos', 'Rodríguez', 'TI', '1122334455', '3001122334',
-          '2008-11-10', 'male', 'Cali', 'San Fernando', 'Av 5N # 20-30',
+          '2008-11-10', 'male', 'sch_789', 'noveno', 'Cali', 'San Fernando', 'Av 5N # 20-30',
           '2022', '4.0', 'diurno'
         ]
         

@@ -16,6 +16,15 @@ export async function POST(request: NextRequest) {
       where: { email: email.toLowerCase() },
     })
 
+    // No permitir cambio de contraseña para estudiantes
+    // Los estudiantes deben usar su documento como contraseña
+    if (user && user.role === 'student') {
+      return NextResponse.json(
+        { error: "Los estudiantes no pueden cambiar su contraseña. Usa tu documento como contraseña." },
+        { status: 403 }
+      )
+    }
+
     // Generar contraseña temporal y actualizar si existe
     let tempPassword: string | null = null
     if (user) {

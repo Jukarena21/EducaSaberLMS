@@ -54,6 +54,7 @@ export function StudentsManagement() {
   const [filters, setFilters] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showAddUser, setShowAddUser] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -82,7 +83,7 @@ export function StudentsManagement() {
       const loadUsers = async () => {
         const apiFilters: any = {
           page: currentPage,
-          limit: 10, // 10 estudiantes por página
+          limit: pageSize, // Tamaño de página configurable
           role: 'student', // Filtrar solo estudiantes en el backend
           schoolId: effectiveSchoolId,
           search: searchTerm || undefined,
@@ -94,7 +95,7 @@ export function StudentsManagement() {
       loadUsers();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }
-  }, [session?.user?.role, session?.user?.schoolId, currentPage, searchTerm, effectiveSchoolId]);
+  }, [session?.user?.role, session?.user?.schoolId, currentPage, pageSize, searchTerm, effectiveSchoolId]);
 
   // Resetear a página 1 cuando cambian los filtros de búsqueda
   // Solo resetear si el filtro realmente requiere recarga del API
@@ -1187,13 +1188,37 @@ export function StudentsManagement() {
           )}
 
           {/* Paginación */}
-          {pagination && pagination.pages > 1 && (
+          {pagination && (
             <div className="flex items-center justify-between mt-4 pt-4 border-t">
-              <div className="text-sm text-gray-600">
-                Mostrando {((pagination.page - 1) * pagination.limit) + 1} a{' '}
-                {Math.min(pagination.page * pagination.limit, pagination.total)} de{' '}
-                {pagination.total} estudiantes
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-gray-600">
+                  Mostrando {((pagination.page - 1) * pagination.limit) + 1} a{' '}
+                  {Math.min(pagination.page * pagination.limit, pagination.total)} de{' '}
+                  {pagination.total} estudiantes
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="pageSize" className="text-sm text-gray-600">
+                    Mostrar:
+                  </Label>
+                  <Select value={pageSize.toString()} onValueChange={(value) => {
+                    setPageSize(parseInt(value));
+                    setCurrentPage(1); // Resetear a página 1 al cambiar tamaño
+                  }}>
+                    <SelectTrigger className="w-[80px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="30">30</SelectItem>
+                      <SelectItem value="40">40</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+              {pagination.pages > 1 && (
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -1241,6 +1266,7 @@ export function StudentsManagement() {
                   <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
               </div>
+              )}
             </div>
           )}
         </CardContent>
