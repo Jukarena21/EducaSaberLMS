@@ -1,19 +1,45 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle } from "lucide-react"
 import { ParticleBackground } from "@/components/ParticleBackground"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function ForgotPasswordPage() {
+  const router = useRouter()
   const [email, setEmail] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Verificar si el usuario es estudiante antes de permitir el uso
+  useEffect(() => {
+    const checkUserRole = async () => {
+      try {
+        // Intentar obtener el email del usuario si está logueado
+        const res = await fetch("/api/auth/session")
+        if (res.ok) {
+          const session = await res.json()
+          if (session?.user?.role === 'student') {
+            // Si es estudiante, mostrar mensaje y redirigir después de 3 segundos
+            setError("Los estudiantes no pueden cambiar su contraseña. Usa tu documento como contraseña.")
+            setTimeout(() => {
+              router.push("/")
+            }, 3000)
+          }
+        }
+      } catch (err) {
+        // Si no hay sesión, continuar normalmente (puede ser admin o teacher)
+      }
+    }
+    checkUserRole()
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,44 +99,57 @@ export default function ForgotPasswordPage() {
             </div>
 
             <CardContent className="p-6 space-y-4">
-              <form className="space-y-4" onSubmit={handleSubmit}>
-                <div className="space-y-2">
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Correo electrónico"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="bg-gray-50 border-gray-200"
-                  />
-                </div>
-
-                {success && (
-                  <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-                    {success}
+              {error && error.includes("estudiantes no pueden cambiar") ? (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <div className="space-y-2">
+                      <p className="font-semibold">{error}</p>
+                      <p className="text-sm">Serás redirigido a la página principal en unos segundos...</p>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <form className="space-y-4" onSubmit={handleSubmit}>
+                  <div className="space-y-2">
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Correo electrónico"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="bg-gray-50 border-gray-200"
+                      disabled={error?.includes("estudiantes no pueden cambiar")}
+                    />
                   </div>
-                )}
-                {error && (
-                  <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                    {error}
-                  </div>
-                )}
 
-                <Button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-[#C00102] to-[#a00102] hover:from-[#a00102] hover:to-[#800001] text-white font-semibold"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enviando…
-                    </>
-                  ) : (
-                    "Enviar instrucciones"
+                  {success && (
+                    <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+                      {success}
+                    </div>
                   )}
-                </Button>
-              </form>
+                  {error && !error.includes("estudiantes no pueden cambiar") && (
+                    <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      {error}
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-[#C00102] to-[#a00102] hover:from-[#a00102] hover:to-[#800001] text-white font-semibold"
+                    disabled={isLoading || error?.includes("estudiantes no pueden cambiar")}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Enviando…
+                      </>
+                    ) : (
+                      "Enviar instrucciones"
+                    )}
+                  </Button>
+                </form>
+              )}
 
               <div className="text-sm text-center text-gray-600">
                 ¿Recuerdas tu contraseña?

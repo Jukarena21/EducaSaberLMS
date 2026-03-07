@@ -553,10 +553,6 @@ export default function LMSPlatform() {
                         {loginError}
                       </div>
                     )}
-                    
-                    <Link href="/auth/forgot" className="text-sm text-[#C00102] hover:underline font-medium">
-                      ¿Olvidaste tu contraseña?
-                    </Link>
 
                     <div>
                       <Button 
