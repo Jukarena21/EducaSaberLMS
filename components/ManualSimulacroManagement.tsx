@@ -48,6 +48,7 @@ import {
 import { ManualSimulacroForm } from "@/components/ManualSimulacroForm"
 import { ManualSimulacroQuestionEditor } from "@/components/ManualSimulacroQuestionEditor"
 import { SimulacroAssignment } from "@/components/SimulacroAssignment"
+import { ExamPreviewInterface } from "@/components/ExamPreviewInterface"
 import { useToast } from "@/hooks/use-toast"
 import { ManualSimulacroData, ManualSimulacroFilters } from "@/types/manual-simulacro"
 import { format } from "date-fns"
@@ -65,6 +66,7 @@ export function ManualSimulacroManagement() {
   const [selectedSimulacro, setSelectedSimulacro] = useState<ManualSimulacroData | null>(null)
   const [showQuestionsDialog, setShowQuestionsDialog] = useState(false)
   const [showAssignmentDialog, setShowAssignmentDialog] = useState(false)
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false)
   const [isPredefinedFilter, setIsPredefinedFilter] = useState<string>("all")
   const [isPublishedFilter, setIsPublishedFilter] = useState<string>("all")
 
@@ -270,6 +272,11 @@ export function ManualSimulacroManagement() {
     setShowAssignmentDialog(true)
   }
 
+  const handlePreview = (simulacro: ManualSimulacroData) => {
+    setSelectedSimulacro(simulacro)
+    setShowPreviewDialog(true)
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -453,6 +460,14 @@ export function ManualSimulacroManagement() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => handlePreview(simulacro)}
+                          title="Vista previa del examen"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleManageAssignments(simulacro)}
                           title="Asignar a colegios/estudiantes"
                         >
@@ -530,6 +545,29 @@ export function ManualSimulacroManagement() {
                 fetchSimulacros()
               }}
             />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Dialog para vista previa */}
+      {selectedSimulacro && (
+        <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+          <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-hidden p-0">
+            <DialogHeader className="p-6 pb-4">
+              <DialogTitle>Vista Previa del Examen</DialogTitle>
+              <DialogDescription>
+                Vista del simulacro "{selectedSimulacro.title}" tal como lo verán los estudiantes
+              </DialogDescription>
+            </DialogHeader>
+            <div className="overflow-y-auto max-h-[calc(95vh-120px)]">
+              <ExamPreviewInterface
+                simulacroId={selectedSimulacro.id}
+                onClose={() => {
+                  setShowPreviewDialog(false)
+                  setSelectedSimulacro(null)
+                }}
+              />
+            </div>
           </DialogContent>
         </Dialog>
       )}

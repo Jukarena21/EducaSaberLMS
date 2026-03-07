@@ -57,9 +57,10 @@ interface ExamInterfaceProps {
   attemptId: string
   startedAt: string
   existingAnswers?: Record<string, any>
+  previewMode?: boolean // Si es true, no guarda respuestas y deshabilita submit
 }
 
-export function ExamInterface({ exam, questions, attemptId, startedAt, existingAnswers }: ExamInterfaceProps) {
+export function ExamInterface({ exam, questions, attemptId, startedAt, existingAnswers, previewMode = false }: ExamInterfaceProps) {
   const router = useRouter()
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, any>>({})
@@ -117,6 +118,11 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
 
   // Auto-save answers
   const saveAnswer = useCallback(async (questionId: string, answer: any) => {
+    // En modo preview, no guardar respuestas
+    if (previewMode) {
+      return
+    }
+    
     try {
       // Adaptar la respuesta al formato esperado por el API
       const payload: any = { questionId }
@@ -145,7 +151,7 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
     } catch (error) {
       console.error('Error saving answer:', error)
     }
-  }, [attemptId])
+  }, [attemptId, previewMode])
 
   const handleAnswerChange = (questionId: string, answer: any) => {
     setAnswers(prev => ({ ...prev, [questionId]: answer }))
@@ -165,6 +171,12 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
   }
 
   const handleSubmitExam = async () => {
+    // En modo preview, no permitir submit
+    if (previewMode) {
+      alert('Esta es una vista previa. No se puede enviar el examen.')
+      return
+    }
+    
     setIsSubmitting(true)
     try {
       const response = await fetch(`/api/student/exams/${attemptId}/submit`, {
@@ -292,6 +304,13 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
               
               <CardContent className="space-y-6">
                 {/* Renderizar pregunta usando QuestionRenderer */}
+                {/* Mostrar enunciado (lessonUrl) si existe, antes de la pregunta */}
+                {(currentQuestion as any).lessonUrl && (
+                  <div 
+                    className="mb-4 p-4 bg-gray-50 rounded-lg border prose max-w-none"
+                    dangerouslySetInnerHTML={{ __html: (currentQuestion as any).lessonUrl }}
+                  />
+                )}
                 <QuestionRenderer
                   question={{
                     id: currentQuestion.id,
@@ -338,14 +357,16 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
                   <span>Anterior</span>
                 </Button>
                 
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/estudiante')}
-                  className="flex items-center space-x-2 text-orange-600 border-orange-300 hover:bg-orange-50"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  <span>Salir del Examen</span>
-                </Button>
+                {!previewMode && (
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push('/estudiante')}
+                    className="flex items-center space-x-2 text-orange-600 border-orange-300 hover:bg-orange-50"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span>Salir del Examen</span>
+                  </Button>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">
