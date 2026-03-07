@@ -46,6 +46,7 @@ export function ManualSimulacroQuestionEditor({
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState<ManualSimulacroQuestionData | null>(null)
+  const [selectedAreaFilter, setSelectedAreaFilter] = useState<string>('all')
   const [formData, setFormData] = useState<ManualSimulacroQuestionFormData>({
     contextText: '',
     questionText: '',
@@ -304,13 +305,41 @@ export function ManualSimulacroQuestionEditor({
     }
   }
 
+  // Filtrar preguntas por área seleccionada
+  const filteredQuestions = selectedAreaFilter === 'all' 
+    ? questions 
+    : questions.filter(q => q.competencyId === selectedAreaFilter)
+
+  // Obtener el nombre de área para mostrar en el filtro
+  const getAreaDisplayName = (competencyId: string) => {
+    const comp = competencies.find(c => c.id === competencyId)
+    if (!comp) return 'Sin área'
+    
+    const nameMapping: Record<string, string> = {
+      'comp-razonamiento-cuantitativo': 'Matemáticas',
+      'razonamiento_cuantitativo': 'Matemáticas',
+      'comp-competencias-ciudadanas': 'Ciencias Sociales',
+      'competencias_ciudadanas': 'Ciencias Sociales',
+      'comp-comunicacion-escrita': 'Ciencias Naturales',
+      'comunicacion_escrita': 'Ciencias Naturales',
+    }
+    
+    return nameMapping[comp.id] || 
+           nameMapping[comp.name?.toLowerCase() || ''] || 
+           comp.displayName || 
+           comp.name
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-lg font-semibold">Preguntas del Simulacro</h3>
           <p className="text-sm text-gray-500">
-            Total: {questions.length} pregunta(s)
+            {selectedAreaFilter === 'all' 
+              ? `Total: ${questions.length} pregunta(s)`
+              : `Mostrando: ${filteredQuestions.length} de ${questions.length} pregunta(s)`
+            }
           </p>
         </div>
         <Button onClick={handleCreate}>
@@ -319,15 +348,107 @@ export function ManualSimulacroQuestionEditor({
         </Button>
       </div>
 
+      {/* Filtro por Área */}
+      {questions.length > 0 && (
+        <div className="flex items-center gap-4">
+          <Label htmlFor="areaFilter" className="text-sm font-medium">
+            Filtrar por Área:
+          </Label>
+          <Select value={selectedAreaFilter} onValueChange={setSelectedAreaFilter}>
+            <SelectTrigger className="w-[250px]">
+              <SelectValue placeholder="Todas las áreas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las áreas</SelectItem>
+              {competencies
+                .filter((comp) => {
+                  // Filtrar solo las 5 competencias ICFES que están en la BD
+                  const allowedIds = [
+                    'comp-lectura-critica',
+                    'comp-razonamiento-cuantitativo',
+                    'comp-competencias-ciudadanas',
+                    'comp-comunicacion-escrita',
+                    'comp-ingles'
+                  ]
+                  
+                  const allowedNames = [
+                    'lectura_critica',
+                    'razonamiento_cuantitativo',
+                    'competencias_ciudadanas',
+                    'comunicacion_escrita',
+                    'ingles'
+                  ]
+                  
+                  const compName = comp.name?.toLowerCase() || ''
+                  const compId = comp.id || ''
+                  
+                  return allowedIds.includes(compId) || 
+                         allowedNames.includes(compName)
+                })
+                .filter(comp => {
+                  // Solo mostrar áreas que tienen preguntas asignadas
+                  return questions.some(q => q.competencyId === comp.id)
+                })
+                .map((comp) => {
+                  const nameMapping: Record<string, string> = {
+                    'comp-razonamiento-cuantitativo': 'Matemáticas',
+                    'razonamiento_cuantitativo': 'Matemáticas',
+                    'comp-competencias-ciudadanas': 'Ciencias Sociales',
+                    'competencias_ciudadanas': 'Ciencias Sociales',
+                    'comp-comunicacion-escrita': 'Ciencias Naturales',
+                    'comunicacion_escrita': 'Ciencias Naturales',
+                  }
+                  
+                  const displayName = nameMapping[comp.id] || 
+                                    nameMapping[comp.name?.toLowerCase() || ''] || 
+                                    comp.displayName || 
+                                    comp.name
+                  
+                  const questionCount = questions.filter(q => q.competencyId === comp.id).length
+                  
+                  return (
+                    <SelectItem key={comp.id} value={comp.id}>
+                      {displayName} ({questionCount})
+                    </SelectItem>
+                  )
+                })}
+            </SelectContent>
+          </Select>
+          {selectedAreaFilter !== 'all' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedAreaFilter('all')}
+              className="text-sm"
+            >
+              Limpiar filtro
+            </Button>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-8">Cargando preguntas...</div>
       ) : questions.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
           No hay preguntas. Agrega la primera pregunta.
         </div>
+      ) : filteredQuestions.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          No hay preguntas para el área seleccionada. 
+          {selectedAreaFilter !== 'all' && (
+            <Button
+              variant="link"
+              onClick={() => setSelectedAreaFilter('all')}
+              className="ml-2"
+            >
+              Ver todas las preguntas
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="space-y-2">
-          {questions.map((question, index) => (
+          {filteredQuestions.map((question, index) => (
             <Card key={question.id}>
               <CardHeader>
                 <div className="flex justify-between items-start">
