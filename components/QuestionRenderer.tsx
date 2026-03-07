@@ -183,7 +183,10 @@ export function QuestionRenderer({
                   </div>
                   <div className="flex-1">
                     <span className="font-medium text-gray-700 mr-2">{option.key}.</span>
-                    <span className="text-gray-800 text-sm">{option.text}</span>
+                    <span 
+                      className="text-gray-800 text-sm prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: option.text }}
+                    />
                   </div>
                   {showCorrectAnswer && (
                     <div className="ml-2">
@@ -258,7 +261,10 @@ export function QuestionRenderer({
                       <div className="w-2 h-2 bg-white rounded-full"></div>
                     )}
                   </div>
-                  <span className="font-medium text-gray-800">{option.text}</span>
+                  <span 
+                    className="font-medium text-gray-800 prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: option.text }}
+                  />
                 </div>
                 {showCorrectAnswer && (
                   <div>
@@ -345,7 +351,10 @@ export function QuestionRenderer({
                         )}
                       </div>
                       <span className="font-medium text-gray-700 mr-2">{optionKey}.</span>
-                      <span className="text-gray-800">{option}</span>
+                      <span 
+                        className="text-gray-800 prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: option }}
+                      />
                     </div>
                     {showCorrectAnswer && (
                       <div>
@@ -391,7 +400,10 @@ export function QuestionRenderer({
                     </p>
                     {!isCorrect && (
                       <p className="text-sm text-gray-700 mt-1">
-                        La respuesta correcta es: <strong className="text-green-700">{correctAnswer}</strong>
+                        La respuesta correcta es: <strong 
+                          className="text-green-700 prose prose-sm max-w-none"
+                          dangerouslySetInnerHTML={{ __html: correctAnswer }}
+                        />
                       </p>
                     )}
                   </div>
@@ -528,7 +540,10 @@ export function QuestionRenderer({
                     <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-medium flex-shrink-0">
                       {leftItem.key}
                     </div>
-                    <span className="font-medium text-gray-800 flex-1">{leftItem.text}</span>
+                    <span 
+                      className="font-medium text-gray-800 flex-1 prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: leftItem.text }}
+                    />
                     {isMatched && !isDragging && (
                       <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
                     )}
@@ -570,7 +585,10 @@ export function QuestionRenderer({
                         <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-medium flex-shrink-0">
                           {getLeftItemKey(matchedLeftId)}
                         </div>
-                        <span className="font-medium text-gray-800 flex-1">{rightItem.text}</span>
+                        <span 
+                          className="font-medium text-gray-800 flex-1 prose prose-sm max-w-none"
+                          dangerouslySetInnerHTML={{ __html: rightItem.text }}
+                        />
                         {showCorrectAnswer && (
                           <div className="flex-shrink-0">
                             {isCorrect ? (
@@ -688,9 +706,10 @@ export function QuestionRenderer({
     <div className="space-y-4">
       {/* Enunciado de la pregunta */}
       <div className="space-y-3">
-        <h3 className="text-lg font-medium leading-relaxed">
-          {question.questionText}
-        </h3>
+        <div 
+          className="text-lg font-medium leading-relaxed prose max-w-none"
+          dangerouslySetInnerHTML={{ __html: question.questionText }}
+        />
         {renderQuestionImage()}
       </div>
 
