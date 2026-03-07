@@ -91,8 +91,8 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
   }, [existingAnswers])
 
   const currentQuestion = questions[currentQuestionIndex]
-  const progress = ((currentQuestionIndex + 1) / questions.length) * 100
   const answeredQuestions = Object.keys(answers).length
+  const progress = questions.length > 0 ? (answeredQuestions / questions.length) * 100 : 0
 
   // Timer effect
   useEffect(() => {
