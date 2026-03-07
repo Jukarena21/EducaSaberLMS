@@ -267,7 +267,7 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
             <Progress value={progress} className="h-2" />
             <div className="flex justify-between text-sm text-gray-600 mt-1">
               <span>Pregunta {currentQuestionIndex + 1} de {questions.length}</span>
-              <span>{Math.round(progress)}% completado</span>
+              <span>{answeredQuestions}/{questions.length} respondidas ({Math.round(progress)}%)</span>
             </div>
           </div>
         </div>
