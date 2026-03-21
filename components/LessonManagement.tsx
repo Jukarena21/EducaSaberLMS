@@ -72,7 +72,7 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
     for (const l of toUpdate) {
       await updateLesson(l.id, { title: l.title, description: l.description, estimatedTimeMinutes: l.estimatedTimeMinutes, videoUrl: l.videoUrl, videoDescription: l.videoDescription, theoryContent: l.theoryContent, competencyId: targetId });
     }
-    toast({ title: 'Competencias asignadas', description: `Actualizadas ${toUpdate.length} lecciones.` })
+    toast({ title: 'Áreas asignadas', description: `Actualizadas ${toUpdate.length} lecciones.` })
   }
 
   const handleCreateLesson = async (data: LessonFormData, id?: string) => {
@@ -215,18 +215,18 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
               </div>
             </div>
 
-            {/* Filtro por competencia */}
+            {/* Filtro por área */}
             <div className="space-y-2">
-              <Label htmlFor="competency">Competencia</Label>
+              <Label htmlFor="competency">Área</Label>
               <Select
                 value={selectedCompetency}
                 onValueChange={setSelectedCompetency}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas las competencias" />
+                <SelectTrigger id="competency">
+                  <SelectValue placeholder="Todas las áreas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Todas las competencias</SelectItem>
+                  <SelectItem value="none">Todas las áreas</SelectItem>
                   {competencies.map((c:any) => (
                     <SelectItem key={c.id} value={c.id}>{c.displayName}</SelectItem>
                   ))}
@@ -269,14 +269,14 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
             <div className="mt-4 pt-4 border-t">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="text-sm text-muted-foreground">
-                  Lecciones sin competencia: <strong className="text-foreground">{unassignedCount}</strong>
+                  Lecciones sin área: <strong className="text-foreground">{unassignedCount}</strong>
                 </div>
                 <Select value={bulkComp} onValueChange={setBulkComp}>
                   <SelectTrigger className="w-56">
-                    <SelectValue placeholder="Asignar competencia" />
+                    <SelectValue placeholder="Asignar área" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Sin competencia</SelectItem>
+                    <SelectItem value="none">Sin área</SelectItem>
                     {competencies.map((c:any) => (
                       <SelectItem key={c.id} value={c.id}>{c.displayName}</SelectItem>
                     ))}
@@ -320,7 +320,7 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Lección</TableHead>
-                    <TableHead>Competencia</TableHead>
+                    <TableHead>Área</TableHead>
                     <TableHead>Año Escolar</TableHead>
                     <TableHead>Tiempo</TableHead>
                     <TableHead>Multimedia</TableHead>
@@ -345,7 +345,7 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
                       
                       <TableCell>
                         <Badge variant="outline">
-                          {lesson.modules[0]?.competency?.name || 'Sin competencia'}
+                          {lesson.modules[0]?.competency?.name || 'Sin área'}
                         </Badge>
                       </TableCell>
                       
