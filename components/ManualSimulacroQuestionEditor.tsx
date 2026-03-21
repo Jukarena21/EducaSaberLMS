@@ -330,22 +330,22 @@ export function ManualSimulacroQuestionEditor({
     const areaName = getAreaDisplayName(competencyId || '').toLowerCase()
 
     if (areaName.includes('matem')) {
-      return 'border-l-4 border-l-blue-400 bg-blue-50/55'
+      return 'border-l-4 border-l-blue-500 !bg-blue-50'
     }
     if (areaName.includes('social') || areaName.includes('ciudadan')) {
-      return 'border-l-4 border-l-amber-400 bg-amber-50/55'
+      return 'border-l-4 border-l-amber-500 !bg-amber-50'
     }
     if (areaName.includes('natural') || areaName.includes('escrita')) {
-      return 'border-l-4 border-l-emerald-400 bg-emerald-50/55'
+      return 'border-l-4 border-l-emerald-500 !bg-emerald-50'
     }
     if (areaName.includes('lectura')) {
-      return 'border-l-4 border-l-violet-400 bg-violet-50/55'
+      return 'border-l-4 border-l-violet-500 !bg-violet-50'
     }
     if (areaName.includes('ingles') || areaName.includes('inglés')) {
-      return 'border-l-4 border-l-cyan-400 bg-cyan-50/55'
+      return 'border-l-4 border-l-cyan-500 !bg-cyan-50'
     }
 
-    return 'border-l-4 border-l-slate-300 bg-slate-50/50'
+    return 'border-l-4 border-l-slate-400 !bg-slate-50'
   }
 
   // Ordenar preguntas por área y luego por el orden de la pregunta
