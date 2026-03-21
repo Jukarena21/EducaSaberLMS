@@ -305,23 +305,6 @@ export function ManualSimulacroQuestionEditor({
     }
   }
 
-  // Ordenar preguntas por área y luego por el orden de la pregunta
-  const sortedQuestions = [...questions].sort((a, b) => {
-    const areaA = getAreaDisplayName(a.competencyId || '').toLowerCase()
-    const areaB = getAreaDisplayName(b.competencyId || '').toLowerCase()
-
-    if (areaA !== areaB) {
-      return areaA.localeCompare(areaB, 'es', { sensitivity: 'base' })
-    }
-
-    return (a.orderIndex ?? 0) - (b.orderIndex ?? 0)
-  })
-
-  // Filtrar preguntas por área seleccionada (manteniendo el orden por área)
-  const filteredQuestions = selectedAreaFilter === 'all'
-    ? sortedQuestions
-    : sortedQuestions.filter((q) => q.competencyId === selectedAreaFilter)
-
   // Obtener el nombre de área para mostrar en el filtro
   const getAreaDisplayName = (competencyId: string) => {
     const comp = competencies.find(c => c.id === competencyId)
@@ -341,6 +324,23 @@ export function ManualSimulacroQuestionEditor({
            comp.displayName || 
            comp.name
   }
+
+  // Ordenar preguntas por área y luego por el orden de la pregunta
+  const sortedQuestions = [...questions].sort((a, b) => {
+    const areaA = getAreaDisplayName(a.competencyId || '').toLowerCase()
+    const areaB = getAreaDisplayName(b.competencyId || '').toLowerCase()
+
+    if (areaA !== areaB) {
+      return areaA.localeCompare(areaB, 'es', { sensitivity: 'base' })
+    }
+
+    return (a.orderIndex ?? 0) - (b.orderIndex ?? 0)
+  })
+
+  // Filtrar preguntas por área seleccionada (manteniendo el orden por área)
+  const filteredQuestions = selectedAreaFilter === 'all'
+    ? sortedQuestions
+    : sortedQuestions.filter((q) => q.competencyId === selectedAreaFilter)
 
   return (
     <div className="space-y-4">
