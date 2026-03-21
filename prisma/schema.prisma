@@ -278,6 +278,7 @@ model Lesson {
   liveClasses            LiveClass[]
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Tabla intermedia para relación muchos a muchos entre Module y Lesson

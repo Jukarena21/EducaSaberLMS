@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getLessonAreaLabel, getYoutubeEmbedUrl } from '@/lib/lessonDisplay';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -53,6 +54,7 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingLesson, setEditingLesson] = useState<LessonData | null>(null);
   const [previewLesson, setPreviewLesson] = useState<LessonData | null>(null);
+  const [previewDetail, setPreviewDetail] = useState<LessonData | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCompetency, setSelectedCompetency] = useState('none');
   const [selectedLessonType, setSelectedLessonType] = useState('all');
@@ -69,10 +71,31 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
   const assignBulk = async () => {
     const targetId = bulkComp === 'none' ? null : bulkComp;
     const toUpdate = lessons.filter(l => !l.competencyId && !(l.modules?.[0]?.competency?.id));
+    if (toUpdate.length === 0) return;
+    let ok = 0;
+    let failed = 0;
     for (const l of toUpdate) {
-      await updateLesson(l.id, { title: l.title, description: l.description, estimatedTimeMinutes: l.estimatedTimeMinutes, videoUrl: l.videoUrl, videoDescription: l.videoDescription, theoryContent: l.theoryContent, competencyId: targetId });
+      const result = await updateLesson(l.id, {
+        title: l.title,
+        description: l.description,
+        estimatedTimeMinutes: l.estimatedTimeMinutes,
+        videoUrl: l.videoUrl,
+        videoDescription: l.videoDescription,
+        theoryContent: l.theoryContent,
+        competencyId: targetId,
+      });
+      if (result) ok += 1;
+      else failed += 1;
     }
-    toast({ title: 'Áreas asignadas', description: `Actualizadas ${toUpdate.length} lecciones.` })
+    if (failed > 0) {
+      toast({
+        title: 'Asignación parcial',
+        description: `Actualizadas ${ok} de ${toUpdate.length} lecciones. ${failed} no se pudieron actualizar.`,
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Áreas asignadas', description: `Actualizadas ${ok} lecciones.` });
+    }
   }
 
   const handleCreateLesson = async (data: LessonFormData, id?: string) => {
@@ -167,10 +190,35 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
     }
   }, [lessons, currentPage]);
 
+  useEffect(() => {
+    if (!previewLesson) {
+      setPreviewDetail(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/lessons/${previewLesson.id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setPreviewDetail(data);
+      } catch {
+        if (!cancelled) setPreviewDetail(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [previewLesson]);
+
   const totalLessons = lessons.length;
   const startIndex = (currentPage - 1) * lessonsPerPage;
   const paginatedLessons = lessons.slice(startIndex, startIndex + lessonsPerPage);
   const totalPages = Math.max(1, Math.ceil(totalLessons / lessonsPerPage) || 1);
+
+  const previewVideoEmbedUrl = previewLesson?.videoUrl
+    ? getYoutubeEmbedUrl(previewLesson.videoUrl)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -345,7 +393,7 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
                       
                       <TableCell>
                         <Badge variant="outline">
-                          {lesson.modules[0]?.competency?.name || 'Sin área'}
+                          {getLessonAreaLabel(lesson)}
                         </Badge>
                       </TableCell>
                       
@@ -507,9 +555,22 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
                   </TabsList>
                   <TabsContent value="video" className="p-4 border rounded-lg bg-white min-h-[200px]">
                     {previewLesson.videoUrl ? (
-                      <div className="aspect-video w-full bg-black/5 flex items-center justify-center text-sm text-muted-foreground rounded-lg">
-                        Vista previa del video (URL: {previewLesson.videoUrl})
-                      </div>
+                      previewVideoEmbedUrl ? (
+                        <iframe
+                          title="Vista previa del video"
+                          src={previewVideoEmbedUrl}
+                          className="aspect-video w-full rounded-lg border bg-black"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      ) : (
+                        <div className="aspect-video w-full bg-black/5 flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground rounded-lg p-4 text-center">
+                          <p>No se pudo incrustar el reproductor (solo YouTube está soportado en vista previa).</p>
+                          <a href={previewLesson.videoUrl} className="text-primary underline break-all" target="_blank" rel="noreferrer">
+                            Abrir enlace del video
+                          </a>
+                        </div>
+                      )
                     ) : (
                       <div className="text-muted-foreground">Sin video configurado</div>
                     )}
@@ -521,7 +582,19 @@ export function LessonManagement({ userRole }: LessonManagementProps) {
                     <LessonContentViewer content={previewLesson.theoryContent || '<p>Sin contenido</p>'} />
                   </TabsContent>
                   <TabsContent value="exercises" className="p-4 border rounded-lg bg-white min-h-[200px]">
-                    <div className="text-muted-foreground text-sm">Sin ejercicios configurados</div>
+                    <div className="text-sm text-muted-foreground">
+                      {previewDetail && typeof previewDetail.lessonQuestionCount === 'number' ? (
+                        previewDetail.lessonQuestionCount > 0 ? (
+                          <span>
+                            Esta lección tiene <strong className="text-foreground">{previewDetail.lessonQuestionCount}</strong> pregunta(s) de práctica vinculadas (se muestran al estudiante en la pestaña correspondiente).
+                          </span>
+                        ) : (
+                          'No hay preguntas de práctica vinculadas a esta lección.'
+                        )
+                      ) : (
+                        'Cargando información de ejercicios…'
+                      )}
+                    </div>
                   </TabsContent>
                 </Tabs>
               </div>

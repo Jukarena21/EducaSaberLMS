@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { yearToAcademicGrade, academicGradeToYear } from '@/lib/academicGrades';
+import { buildLessonListWhere } from '@/lib/lessonQuery';
 
 // Schema de validación para lecciones
 const lessonSchema = z.object({
@@ -31,102 +32,30 @@ export async function GET(request: NextRequest) {
     const competencyId = searchParams.get('competencyId') || undefined;
     const isIcfesCourseParam = searchParams.get('isIcfesCourse');
 
-    // Construir filtros
-    const where: any = {};
-    
-    if (search) {
-      // PostgreSQL case-insensitive search
-      // Nota: mode: 'insensitive' requiere que los campos sean de tipo text/varchar
-      // y que PostgreSQL tenga soporte para collation case-insensitive
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    // Filtro por tipo ICFES vs Personalizado
-    // Las lecciones se consideran ICFES si pertenecen a módulos que están en cursos ICFES
-    if (isIcfesCourseParam !== null && isIcfesCourseParam !== undefined) {
-      const isIcfesCourse = isIcfesCourseParam === 'true' || isIcfesCourseParam === '1';
-      where.moduleLessons = {
-        some: {
-          module: {
-            courseModules: {
-              some: {
-                course: {
-                  isIcfesCourse: isIcfesCourse
-                }
-              }
-            }
-          }
-        }
-      };
-    }
-
-    // Si es admin de colegio, solo puede ver lecciones de módulos que pertenecen a cursos de su colegio o generales
-    if (session.user.role === 'school_admin') {
-      if (session.user.schoolId) {
-        where.moduleLessons = {
-          some: {
-            module: {
-              courseModules: {
-                some: {
-                  course: {
-                    OR: [
-                      {
-                        courseSchools: {
-                          some: {
-                            schoolId: session.user.schoolId
-                          }
-                        }
-                      },
-                      {
-                        courseSchools: {
-                          none: {} // Cursos generales
-                        }
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        };
+    let isIcfesFilter: boolean | undefined;
+    if (isIcfesCourseParam !== null && isIcfesCourseParam !== '') {
+      if (isIcfesCourseParam === 'true' || isIcfesCourseParam === '1') {
+        isIcfesFilter = true;
+      } else if (isIcfesCourseParam === 'false' || isIcfesCourseParam === '0') {
+        isIcfesFilter = false;
       }
     }
 
-    // Filtrar por módulo específico
-    if (moduleId) {
-      where.moduleLessons = {
-        some: {
-          moduleId: moduleId
-        }
-      };
-    }
-
-    // Filtrar por competencia
-    if (competencyId) {
-      where.AND = [
-        {
-          OR: [
-            { competencyId: competencyId },
-            {
-              moduleLessons: {
-                some: {
-                  module: {
-                    courseModules: { some: { course: { competencyId } } }
-                  }
-                }
-              }
-            }
-          ]
-        }
-      ]
-    }
+    const where = buildLessonListWhere({
+      search,
+      moduleId,
+      competencyId,
+      isIcfesCourse: isIcfesFilter,
+      role: session.user.role,
+      schoolId: session.user.schoolId ?? null,
+    });
 
     const lessons = await prisma.lesson.findMany({
       where,
       include: {
+        competency: {
+          select: { id: true, name: true, displayName: true },
+        },
         moduleLessons: {
           include: {
             module: {
@@ -167,13 +96,22 @@ export async function GET(request: NextRequest) {
     // Transformar datos para el frontend
     const transformedLessons = lessons.map(lesson => {
       // Obtener información de módulos y cursos
-      const moduleInfo = lesson.moduleLessons.map(ml => ({
-        moduleId: ml.module.id,
-        moduleTitle: ml.module.title,
-        orderIndex: ml.orderIndex,
-        course: ml.module.courseModules[0]?.course,
-        competency: ml.module.courseModules[0]?.course?.competency
-      }));
+      const moduleInfo = lesson.moduleLessons.map(ml => {
+        const c = ml.module.courseModules[0]?.course?.competency;
+        return {
+          moduleId: ml.module.id,
+          moduleTitle: ml.module.title,
+          orderIndex: ml.orderIndex,
+          course: ml.module.courseModules[0]?.course,
+          competency: c
+            ? {
+                id: c.id,
+                name: c.name,
+                displayName: c.displayName,
+              }
+            : undefined,
+        };
+      });
       const isIcfesCourse = moduleInfo.some(info => info.course?.isIcfesCourse);
 
       // Convertir academicGrade a year si existe
@@ -192,12 +130,19 @@ export async function GET(request: NextRequest) {
         theoryContent: lesson.theoryContent,
         isPublished: lesson.isPublished,
         competencyId: lesson.competencyId,
+        competency: lesson.competency
+          ? {
+              id: lesson.competency.id,
+              name: lesson.competency.name,
+              displayName: lesson.competency.displayName,
+            }
+          : null,
         academicGrade: lesson.academicGrade,
         year: year,
         isIcfesCourse,
         modules: moduleInfo,
         createdAt: lesson.createdAt,
-        updatedAt: lesson.createdAt, // Usar createdAt como updatedAt por ahora
+        updatedAt: lesson.updatedAt,
       };
     });
 
@@ -254,6 +199,9 @@ export async function POST(request: NextRequest) {
         isPublished: false,
       },
       include: {
+        competency: {
+          select: { id: true, name: true, displayName: true },
+        },
         moduleLessons: {
           include: {
             module: {
@@ -286,13 +234,22 @@ export async function POST(request: NextRequest) {
     });
 
     // Transformar respuesta
-    const createdModuleInfo = lesson.moduleLessons.map(ml => ({
-      moduleId: ml.module.id,
-      moduleTitle: ml.module.title,
-      orderIndex: ml.orderIndex,
-      course: ml.module.courseModules[0]?.course,
-      competency: ml.module.courseModules[0]?.course?.competency
-    }))
+    const createdModuleInfo = lesson.moduleLessons.map(ml => {
+      const c = ml.module.courseModules[0]?.course?.competency;
+      return {
+        moduleId: ml.module.id,
+        moduleTitle: ml.module.title,
+        orderIndex: ml.orderIndex,
+        course: ml.module.courseModules[0]?.course,
+        competency: c
+          ? {
+              id: c.id,
+              name: c.name,
+              displayName: c.displayName,
+            }
+          : undefined,
+      };
+    });
     const createdIsIcfesCourse = createdModuleInfo.some(info => info.course?.isIcfesCourse)
 
     // Convertir academicGrade a year si existe
@@ -311,12 +268,19 @@ export async function POST(request: NextRequest) {
       theoryContent: lesson.theoryContent,
       isPublished: lesson.isPublished,
       competencyId: lesson.competencyId,
+      competency: lesson.competency
+        ? {
+            id: lesson.competency.id,
+            name: lesson.competency.name,
+            displayName: lesson.competency.displayName,
+          }
+        : null,
       academicGrade: lesson.academicGrade,
       year: year,
       isIcfesCourse: createdIsIcfesCourse,
       modules: createdModuleInfo,
       createdAt: lesson.createdAt,
-      updatedAt: lesson.createdAt,
+      updatedAt: lesson.updatedAt,
     };
 
     return NextResponse.json(transformedLesson, { status: 201 });

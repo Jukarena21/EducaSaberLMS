@@ -95,8 +95,8 @@ export function useLessons() {
       }
       
       const newLesson = await response.json();
-      setLessons(prev => [...prev, newLesson]);
       invalidateLessonCache();
+      await fetchLessons(filters, { skipCache: true });
       return newLesson;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');

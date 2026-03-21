@@ -10,7 +10,10 @@ export interface LessonData {
   theoryContent: string; // teoría en texto
   isPublished: boolean;
   competencyId?: string | null;
+  /** Área directa en la lección (prioritaria para mostrar) */
   competency?: { id: string; name: string; displayName?: string } | null;
+  /** Preguntas de práctica vinculadas (detalle GET) */
+  lessonQuestionCount?: number;
   isIcfesCourse?: boolean;
   modules: Array<{
     moduleId: string;
@@ -27,6 +30,7 @@ export interface LessonData {
     competency?: {
       id: string;
       name: string;
+      displayName?: string;
     };
   }>;
   createdAt: Date;

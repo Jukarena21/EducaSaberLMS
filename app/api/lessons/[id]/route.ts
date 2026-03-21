@@ -33,6 +33,9 @@ export async function GET(
     const lesson = await prisma.lesson.findUnique({
       where: { id },
       include: {
+        competency: {
+          select: { id: true, name: true, displayName: true },
+        },
         moduleLessons: {
           include: {
             module: {
@@ -54,7 +57,10 @@ export async function GET(
               }
             }
           }
-        }
+        },
+        _count: {
+          select: { lessonQuestions: true },
+        },
       }
     });
 
@@ -104,8 +110,16 @@ export async function GET(
       theoryContent: lesson.theoryContent,
       isPublished: lesson.isPublished,
       competencyId: lesson.competencyId,
+      competency: lesson.competency
+        ? {
+            id: lesson.competency.id,
+            name: lesson.competency.name,
+            displayName: lesson.competency.displayName,
+          }
+        : null,
       academicGrade: lesson.academicGrade,
       year: year,
+      lessonQuestionCount: lesson._count.lessonQuestions,
       modules: lesson.moduleLessons.map(ml => ({
         moduleId: ml.module.id,
         moduleTitle: ml.module.title,
@@ -115,12 +129,14 @@ export async function GET(
           title: ml.module.courseModules[0].course.title,
           competency: ml.module.courseModules[0].course.competency ? {
             id: ml.module.courseModules[0].course.competency.id,
-            name: ml.module.courseModules[0].course.competency.name
+            name: ml.module.courseModules[0].course.competency.name,
+            displayName: ml.module.courseModules[0].course.competency.displayName,
           } : undefined
         } : undefined,
         competency: ml.module.courseModules[0]?.course?.competency ? {
           id: ml.module.courseModules[0].course.competency.id,
-          name: ml.module.courseModules[0].course.competency.name
+          name: ml.module.courseModules[0].course.competency.name,
+          displayName: ml.module.courseModules[0].course.competency.displayName,
         } : undefined
       })),
       createdAt: lesson.createdAt,
@@ -193,6 +209,9 @@ export async function PUT(
         academicGrade: academicGrade !== null ? academicGrade : undefined, // Solo actualizar si se proporciona
       },
       include: {
+        competency: {
+          select: { id: true, name: true, displayName: true },
+        },
         moduleLessons: {
           include: {
             module: {
@@ -230,6 +249,13 @@ export async function PUT(
       theoryContent: lesson.theoryContent,
       isPublished: lesson.isPublished,
       competencyId: lesson.competencyId,
+      competency: lesson.competency
+        ? {
+            id: lesson.competency.id,
+            name: lesson.competency.name,
+            displayName: lesson.competency.displayName,
+          }
+        : null,
       academicGrade: lesson.academicGrade,
       year: year,
       modules: lesson.moduleLessons.map(ml => ({
@@ -241,12 +267,14 @@ export async function PUT(
           title: ml.module.courseModules[0].course.title,
           competency: ml.module.courseModules[0].course.competency ? {
             id: ml.module.courseModules[0].course.competency.id,
-            name: ml.module.courseModules[0].course.competency.name
+            name: ml.module.courseModules[0].course.competency.name,
+            displayName: ml.module.courseModules[0].course.competency.displayName,
           } : undefined
         } : undefined,
         competency: ml.module.courseModules[0]?.course?.competency ? {
           id: ml.module.courseModules[0].course.competency.id,
-          name: ml.module.courseModules[0].course.competency.name
+          name: ml.module.courseModules[0].course.competency.name,
+          displayName: ml.module.courseModules[0].course.competency.displayName,
         } : undefined
       })),
       createdAt: lesson.createdAt,

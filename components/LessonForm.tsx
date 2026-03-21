@@ -179,7 +179,7 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
       if (!formData.competencyId) {
         toast({
           title: 'Error de validación',
-          description: 'La competencia es requerida',
+          description: 'El área es requerida',
           variant: 'destructive',
         });
         return;
@@ -189,7 +189,7 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
       if (!formData.competencyId) {
         toast({
           title: 'Error de validación',
-          description: 'La competencia es requerida',
+          description: 'El área es requerida',
           variant: 'destructive',
         });
         return;
@@ -251,7 +251,7 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
       label: 'Lección ICFES', 
       icon: Award, 
       color: 'blue',
-      description: 'Lección orientada a la preparación para el examen ICFES. Requiere año escolar y competencia ICFES.'
+      description: 'Lección orientada a la preparación para el examen ICFES. Requiere año escolar y área ICFES.'
     },
     { 
       value: false, 
@@ -457,7 +457,7 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
                 <div className="space-y-2">
                   <Label htmlFor="competencyId" className="flex items-center gap-2">
                     <Tag className="w-4 h-4" />
-                    Competencia *
+                    Área *
                   </Label>
                   <Select
                     value={formData.competencyId && formData.competencyId !== null ? formData.competencyId : 'none'}
@@ -469,16 +469,16 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
                     }}
                   >
                     <SelectTrigger disabled={isEditing}>
-                      <SelectValue placeholder="Seleccionar competencia">
+                      <SelectValue placeholder="Seleccionar área">
                         {formData.competencyId && currentLessonCompetency
                           ? (currentLessonCompetency.displayName || currentLessonCompetency.name)
                           : formData.competencyId && availableCompetencies.find(c => c.id === formData.competencyId)
                           ? (availableCompetencies.find(c => c.id === formData.competencyId)?.displayName || availableCompetencies.find(c => c.id === formData.competencyId)?.name)
-                          : 'Seleccionar competencia'}
+                          : 'Seleccionar área'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {!isEditing && <SelectItem value="none">Selecciona una competencia</SelectItem>}
+                      {!isEditing && <SelectItem value="none">Selecciona un área</SelectItem>}
                       {availableCompetencies.map((c: any) => (
                         <SelectItem key={c.id} value={c.id}>{c.displayName || c.name}</SelectItem>
                       ))}
@@ -486,8 +486,8 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
                   </Select>
                   <p className="text-xs text-muted-foreground">
                     {formData.isIcfesLesson 
-                      ? 'Solo se muestran competencias ICFES. Usada para filtrar lecciones en módulos y preguntas.'
-                      : 'Solo se muestran competencias NO ICFES. Usada para filtrar lecciones en módulos y preguntas.'}
+                      ? 'Solo se muestran áreas ICFES. Usada para filtrar lecciones en módulos y preguntas.'
+                      : 'Solo se muestran áreas NO ICFES. Usada para filtrar lecciones en módulos y preguntas.'}
                   </p>
                 </div>
               </CardContent>
@@ -621,7 +621,7 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Competencia:</span>
+                      <span className="text-muted-foreground">Área:</span>
                       <span className="font-medium">{availableCompetencies.find((c: any) => c.id === formData.competencyId)?.displayName || availableCompetencies.find((c: any) => c.id === formData.competencyId)?.name || 'Sin asignar'}</span>
                     </div>
                   </div>
