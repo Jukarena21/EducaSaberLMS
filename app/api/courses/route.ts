@@ -191,7 +191,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { title, description, year, competencyId, schoolIds, moduleIds, isIcfesCourse } = body
+    const { title, description, year, competencyId, moduleIds, isIcfesCourse } = body
+    /** IDs de colegio efectivos (el destructuring `schoolIds` no se actualiza si mutamos `body.schoolIds`) */
+    let effectiveSchoolIds: string[] = Array.isArray(body.schoolIds) ? [...body.schoolIds] : []
 
     // Validaciones
     if (!title || !description || !competencyId) {
@@ -216,14 +218,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verificar que la competencia existe
+    // Verificar que el área existe (modelo Area en BD)
     const competency = await prisma.area.findUnique({
       where: { id: competencyId }
     })
 
     if (!competency) {
       return NextResponse.json(
-        { error: 'La competencia especificada no existe' },
+        { error: 'La área especificada no existe' },
         { status: 400 }
       )
     }
@@ -237,9 +239,9 @@ export async function POST(request: NextRequest) {
         )
       }
       // Si no se especifican schoolIds, usar el colegio del admin
-      if (!schoolIds || schoolIds.length === 0) {
-        body.schoolIds = [session.user.schoolId]
-      } else if (!schoolIds.includes(session.user.schoolId)) {
+      if (!effectiveSchoolIds.length) {
+        effectiveSchoolIds = [session.user.schoolId]
+      } else if (!effectiveSchoolIds.includes(session.user.schoolId)) {
         return NextResponse.json(
           { error: 'Solo puedes asignar cursos a tu colegio' },
           { status: 403 }
@@ -248,12 +250,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar que los colegios existen (si se especificaron)
-    if (schoolIds && schoolIds.length > 0) {
+    if (effectiveSchoolIds.length > 0) {
       const schools = await prisma.school.findMany({
-        where: { id: { in: schoolIds } }
+        where: { id: { in: effectiveSchoolIds } }
       })
 
-      if (schools.length !== schoolIds.length) {
+      if (schools.length !== effectiveSchoolIds.length) {
         return NextResponse.json(
           { error: 'Uno o más colegios especificados no existen' },
           { status: 400 }
@@ -299,8 +301,8 @@ export async function POST(request: NextRequest) {
             orderIndex: index + 1
           }))
         },
-        courseSchools: schoolIds && schoolIds.length > 0 ? {
-          create: schoolIds.map((schoolId: string) => ({
+        courseSchools: effectiveSchoolIds.length > 0 ? {
+          create: effectiveSchoolIds.map((schoolId: string) => ({
             schoolId
           }))
         } : undefined

@@ -267,18 +267,18 @@ export function CourseManagement({
               </Select>
             </div>
 
-            {/* Filtro por competencia */}
+            {/* Filtro por área */}
             <div className="space-y-2">
-              <Label htmlFor="competency">Competencia</Label>
+              <Label htmlFor="competency">Área</Label>
               <Select
                 value={selectedCompetency}
                 onValueChange={setSelectedCompetency}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Todas las competencias" />
+                  <SelectValue placeholder="Todas las áreas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Todas las competencias</SelectItem>
+                  <SelectItem value="none">Todas las áreas</SelectItem>
                   {competencies.map((competency) => (
                     <SelectItem key={competency.id} value={competency.id}>
                       {competency.name}
@@ -371,7 +371,7 @@ export function CourseManagement({
                   <TableRow>
                     <TableHead>Curso</TableHead>
                     <TableHead>Grado</TableHead>
-                    <TableHead>Competencia</TableHead>
+                    <TableHead>Área</TableHead>
                     <TableHead>Colegio(s)</TableHead>
                     <TableHead>Módulos</TableHead>
                     <TableHead>Tipo</TableHead>
@@ -560,9 +560,9 @@ export function CourseManagement({
                       <div className="flex items-center gap-2">
                         <GraduationCap className="h-5 w-5 text-muted-foreground" />
                         <div>
-                          <p className="text-xs text-muted-foreground">Competencia</p>
+                          <p className="text-xs text-muted-foreground">Área</p>
                           <p className="font-medium text-sm">
-                            {previewCourse.competency?.displayName || previewCourse.competency?.name || 'Sin competencia'}
+                            {previewCourse.competency?.displayName || previewCourse.competency?.name || 'Sin área'}
                           </p>
                         </div>
                       </div>

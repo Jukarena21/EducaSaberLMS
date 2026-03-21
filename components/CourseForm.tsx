@@ -75,7 +75,7 @@ export function CourseForm({
   // Si está editando, ya tiene tipo seleccionado. Si está creando, necesita seleccionar tipo primero
   const [courseTypeSelected, setCourseTypeSelected] = useState(!!course);
   
-  // Estados para crear nueva competencia
+  // Estados para crear nueva área (API / competencias)
   const [showNewCompetencyInput, setShowNewCompetencyInput] = useState(false);
   const [newCompetencyName, setNewCompetencyName] = useState('');
   const [creatingCompetency, setCreatingCompetency] = useState(false);
@@ -99,7 +99,7 @@ export function CourseForm({
       // Asegurarse de que competencyId sea una cadena, incluso si es undefined
       const competencyId = course.competencyId || '';
       
-      // Verificar que la competencia existe en la lista
+      // Verificar que el área existe en la lista
       const competencyExists = competencies.some(c => c.id === competencyId);
       
       console.log('📝 [CourseForm] Cargando curso para edición:', {
@@ -112,7 +112,7 @@ export function CourseForm({
       });
       
       if (competencyId && !competencyExists) {
-        console.warn('⚠️ [CourseForm] La competencia del curso no está en la lista de competencias disponibles');
+        console.warn('⚠️ [CourseForm] El área del curso no está en la lista de áreas disponibles');
       }
       
       setFormData({
@@ -150,11 +150,11 @@ export function CourseForm({
       return;
     }
     
-    // Validar que la competencia esté seleccionada
+    // Validar que el área esté seleccionada
     if (!formData.competencyId || formData.competencyId === '') {
       toast({
         title: 'Error de validación',
-        description: 'Debes seleccionar una competencia',
+        description: 'Debes seleccionar una área',
         variant: 'destructive',
       });
       return;
@@ -447,7 +447,7 @@ export function CourseForm({
     setFormData(prev => ({
       ...prev,
       isIcfesCourse: isIcfes,
-      competencyId: '', // Limpiar competencia al cambiar tipo
+      competencyId: '', // Limpiar área al cambiar tipo
       moduleIds: [], // Limpiar módulos al cambiar tipo
     }));
     setCourseTypeSelected(true);
@@ -467,7 +467,7 @@ export function CourseForm({
     if (!newCompetencyName.trim()) {
       toast({
         title: 'Error',
-        description: 'El nombre de la competencia es requerido',
+        description: 'El nombre del área es requerido',
         variant: 'destructive',
       });
       return;
@@ -483,12 +483,12 @@ export function CourseForm({
         body: JSON.stringify({
           name: newCompetencyName.trim().toLowerCase().replace(/\s+/g, '_'),
           displayName: newCompetencyName.trim(),
-          description: `Competencia: ${newCompetencyName.trim()}`,
+          description: `Área: ${newCompetencyName.trim()}`,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Error al crear la competencia');
+        throw new Error('Error al crear el área');
       }
 
       const newCompetency = await response.json();
@@ -501,8 +501,8 @@ export function CourseForm({
       setNewCompetencyName('');
       
       toast({
-        title: 'Competencia creada',
-        description: `La competencia "${newCompetency.displayName}" se ha creado exitosamente.`,
+        title: 'Área creada',
+        description: `La área "${newCompetency.displayName}" se ha creado correctamente.`,
       });
       
       // Recargar la página para obtener las competencias actualizadas
@@ -510,7 +510,7 @@ export function CourseForm({
     } catch (error) {
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Error al crear la competencia',
+        description: error instanceof Error ? error.message : 'Error al crear el área',
         variant: 'destructive',
       });
     } finally {
@@ -525,14 +525,14 @@ export function CourseForm({
       label: 'Curso ICFES', 
       icon: Award, 
       color: 'blue',
-      description: 'Curso orientado a la preparación para el examen ICFES. Solo permite preguntas de opción múltiple y excluye la competencia "otros".'
+      description: 'Curso orientado a la preparación para el examen ICFES. Solo permite preguntas de opción múltiple y excluye la área "otros".'
     },
     { 
       value: false, 
       label: 'Curso General', 
       icon: BookMarked, 
       color: 'green',
-      description: 'Curso general para cualquier tipo de contenido educativo. Permite todos los tipos de preguntas y todas las competencias.'
+      description: 'Curso general para cualquier tipo de contenido educativo. Permite todos los tipos de preguntas y todas las áreas.'
     },
   ];
 
@@ -712,9 +712,9 @@ export function CourseForm({
                       </div>
                     )}
 
-                    {/* Competencia */}
+                    {/* Área (competencyId en API) */}
                     <div className="space-y-2">
-                      <Label htmlFor="competencyId">Competencia *</Label>
+                      <Label htmlFor="competencyId">Área *</Label>
                       {!showNewCompetencyInput ? (
                         <>
                           <div className="flex gap-2">
@@ -724,35 +724,35 @@ export function CourseForm({
                                 disabled={isEditing}
                                 onValueChange={(value) => {
                                   if (!isEditing) {
-                                    console.log('🔄 [CourseForm] Cambiando competencia:', { value, current: formData.competencyId });
+                                    console.log('🔄 [CourseForm] Cambiando área:', { value, current: formData.competencyId });
                                     if (value === 'new') {
                                       setShowNewCompetencyInput(true);
                                     } else {
                                       const newCompetencyId = value === 'none' ? '' : value;
                                       handleInputChange('competencyId', newCompetencyId);
-                                      console.log('✅ [CourseForm] Competencia actualizada:', newCompetencyId);
+                                      console.log('✅ [CourseForm] Área actualizada:', newCompetencyId);
                                     }
                                   }
                                 }}
                               >
                               <SelectTrigger disabled={isEditing}>
-                                <SelectValue placeholder="Selecciona una competencia">
+                                <SelectValue placeholder="Selecciona una área">
                                   {formData.competencyId && currentCourseCompetency
                                     ? (currentCourseCompetency.displayName || currentCourseCompetency.name)
                                     : formData.competencyId && availableCompetencies.find(c => c.id === formData.competencyId)
                                     ? (availableCompetencies.find(c => c.id === formData.competencyId)?.displayName || availableCompetencies.find(c => c.id === formData.competencyId)?.name)
-                                    : 'Selecciona una competencia'}
+                                    : 'Selecciona una área'}
                                 </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
-                                {!isEditing && <SelectItem value="none">Selecciona una competencia</SelectItem>}
+                                {!isEditing && <SelectItem value="none">Selecciona una área</SelectItem>}
                                 {availableCompetencies.map((competency) => (
                                   <SelectItem key={competency.id} value={competency.id}>
                                     {competency.displayName || competency.name}
                                   </SelectItem>
                                 ))}
                                 {!formData.isIcfesCourse && (
-                                  <SelectItem value="new">+ Crear nueva competencia</SelectItem>
+                                  <SelectItem value="new">+ Crear nueva área</SelectItem>
                                 )}
                               </SelectContent>
                             </Select>
@@ -765,12 +765,12 @@ export function CourseForm({
                           )}
                           {formData.isIcfesCourse && (
                             <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                              Solo se muestran competencias ICFES
+                              Solo se muestran áreas ICFES
                             </p>
                           )}
                           {!formData.isIcfesCourse && (
                             <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                              Solo se muestran competencias NO ICFES. Puedes crear una nueva competencia si no encuentras la que necesitas.
+                              Solo se muestran áreas NO ICFES. Puedes crear una nueva área si no encuentras la que necesitas.
                             </p>
                           )}
                         </>
@@ -778,7 +778,7 @@ export function CourseForm({
                         <div className="space-y-2">
                           <div className="flex gap-2">
                             <Input
-                              placeholder="Nombre de la nueva competencia"
+                              placeholder="Nombre de la nueva área"
                               value={newCompetencyName}
                               onChange={(e) => setNewCompetencyName(e.target.value)}
                               onKeyDown={(e) => {
@@ -850,7 +850,7 @@ export function CourseForm({
                             // Solo permitir cambiar si no está editando
                             if (!isEditing) {
                               handleInputChange('isIcfesCourse', checked);
-                              // Limpiar competencia y módulos al cambiar tipo solo si no hay competencia seleccionada
+                              // Limpiar área y módulos al cambiar tipo solo si no hay área seleccionada
                               if (checked && !formData.competencyId) {
                                 handleInputChange('competencyId', '');
                                 handleInputChange('moduleIds', []);
@@ -871,8 +871,8 @@ export function CourseForm({
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {formData.isIcfesCourse 
-                              ? 'Este curso está orientado a la preparación ICFES. Solo permite preguntas de opción múltiple y excluye la competencia "otros".'
-                              : 'Este curso permite todos los tipos de preguntas y todas las competencias.'}
+                              ? 'Este curso está orientado a la preparación ICFES. Solo permite preguntas de opción múltiple y excluye la área "otros".'
+                              : 'Este curso permite todos los tipos de preguntas y todas las áreas.'}
                           </p>
                         </div>
                         <Badge variant={formData.isIcfesCourse ? 'default' : 'secondary'}>
@@ -1097,10 +1097,10 @@ export function CourseForm({
 
                     {/* Filtros avanzados */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                      {/* Filtro por competencia - Solo mostrar si no hay competencia seleccionada */}
+                      {/* Filtro por área - Solo mostrar si no hay área seleccionada */}
                       {!formData.competencyId && (
                         <div className="space-y-2">
-                          <Label className="text-xs text-muted-foreground">Competencia</Label>
+                          <Label className="text-xs text-muted-foreground">Área</Label>
                           <Select
                             value={moduleCompetencyFilter}
                             onValueChange={setModuleCompetencyFilter}
@@ -1109,7 +1109,7 @@ export function CourseForm({
                               <SelectValue placeholder="Todas" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="all">Todas las competencias</SelectItem>
+                              <SelectItem value="all">Todas las áreas</SelectItem>
                               {availableCompetencies.map((competency) => (
                                 <SelectItem key={competency.id} value={competency.id}>
                                   {competency.displayName || competency.name}
@@ -1121,12 +1121,12 @@ export function CourseForm({
                       )}
                       {formData.competencyId && (
                         <div className="space-y-2">
-                          <Label className="text-xs text-muted-foreground">Competencia</Label>
+                          <Label className="text-xs text-muted-foreground">Área</Label>
                           <div className="h-9 flex items-center px-3 bg-muted rounded-md text-sm">
-                            {selectedCompetency?.displayName || selectedCompetency?.name || 'Competencia seleccionada'}
+                            {selectedCompetency?.displayName || selectedCompetency?.name || 'Área seleccionada'}
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            Solo se muestran módulos de la competencia seleccionada
+                            Solo se muestran módulos del área seleccionada
                           </p>
                         </div>
                       )}
@@ -1293,7 +1293,7 @@ export function CourseForm({
                   <p className="font-medium text-foreground">Recordatorios importantes:</p>
                   <ul className="list-disc list-inside space-y-1 ml-2">
                     <li>Puedes asignar un curso a múltiples colegios/entidades o dejarlo general (sin asignar)</li>
-                    <li>Solo puede haber 1 curso por año/competencia por colegio</li>
+                    <li>Solo puede haber 1 curso por año/área por colegio</li>
                     <li>Los módulos son creados por Profesores Administradores</li>
                     <li>Los Administradores de Colegio solo pueden asignar cursos a su institución</li>
                     <li>Los Profesores Administradores pueden asignar cursos a cualquier colegio/entidad</li>

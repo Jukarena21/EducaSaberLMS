@@ -10,7 +10,7 @@ const courseUpdateSchema = z.object({
   title: z.string().min(1, 'El título es requerido'),
   description: z.string().min(1, 'La descripción es requerida'),
   year: z.number().min(1, 'El año debe ser al menos 1').max(11, 'El año debe ser máximo 11').optional(),
-  competencyId: z.string().min(1, 'La competencia es requerida'),
+  competencyId: z.string().min(1, 'La área es obligatoria'),
   schoolIds: z.array(z.string()).optional(), // Array de IDs de colegios (puede estar vacío para curso general)
   moduleIds: z.array(z.string()).optional(), // Array de IDs de módulos (puede estar vacío)
   isIcfesCourse: z.boolean().optional(),
@@ -256,14 +256,14 @@ export async function PUT(
       }
     }
 
-    // Verificar que la competencia existe
+    // Verificar que el área existe (modelo Area en BD)
     const competency = await prisma.area.findUnique({
       where: { id: validatedData.competencyId }
     });
 
     if (!competency) {
       return NextResponse.json(
-        { error: 'La competencia especificada no existe' },
+        { error: 'La área especificada no existe' },
         { status: 400 }
       );
     }
@@ -309,7 +309,7 @@ export async function PUT(
           const yearText = validatedData.year ? `${validatedData.year}° grado` : 'este tipo';
           return NextResponse.json(
             { 
-              error: `Ya existe un curso de ${competency.displayName || competency.name} para ${yearText} en ${school?.name || 'este colegio'}. Solo se permite un curso por competencia/año por colegio.` 
+              error: `Ya existe un curso de ${competency.displayName || competency.name} para ${yearText} en ${school?.name || 'este colegio'}. Solo se permite un curso por área/año por colegio.` 
             },
             { status: 400 }
           );
@@ -418,12 +418,18 @@ export async function PUT(
       // Crear nuevas asociaciones si se especificaron módulos
       if (validatedData.moduleIds.length > 0) {
         await prisma.courseModule.createMany({
-          data: validatedData.moduleIds.map(moduleId => ({
+          data: validatedData.moduleIds.map((moduleId, index) => ({
             courseId: id,
-            moduleId: moduleId
+            moduleId: moduleId,
+            orderIndex: index + 1
           }))
         });
       }
+
+      await prisma.course.update({
+        where: { id },
+        data: { totalModules: validatedData.moduleIds.length }
+      });
 
       // Recargar el curso con los módulos actualizados
       const courseWithModules = await prisma.course.findUnique({
