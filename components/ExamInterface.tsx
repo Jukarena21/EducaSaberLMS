@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,7 +14,6 @@ import {
   AlertCircle, 
   ArrowLeft, 
   ArrowRight,
-  Flag,
   BookOpen
 } from "lucide-react"
 import { QuestionRenderer } from "@/components/QuestionRenderer"
@@ -41,6 +40,7 @@ interface Question {
     isCorrect: boolean
   }>
   competency: string
+  lessonUrl?: string
 }
 
 interface ExamData {
@@ -89,6 +89,21 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
       setAnswers(formattedAnswers)
     }
   }, [existingAnswers])
+
+  /** Agrupa índices por área (las preguntas ya vienen ordenadas por área desde API / vista previa). */
+  const navigationGroups = useMemo(() => {
+    const groups: { area: string; indices: number[] }[] = []
+    questions.forEach((q, idx) => {
+      const area = q.competency?.trim() || 'General'
+      const last = groups[groups.length - 1]
+      if (last && last.area === area) {
+        last.indices.push(idx)
+      } else {
+        groups.push({ area, indices: [idx] })
+      }
+    })
+    return groups
+  }, [questions])
 
   const currentQuestion = questions[currentQuestionIndex]
   const answeredQuestions = Object.keys(answers).length
@@ -398,21 +413,34 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
                 <CardTitle className="text-lg">Navegación</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-5 gap-2">
-                  {questions.map((_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setCurrentQuestionIndex(index)}
-                      className={`w-10 h-10 rounded-lg border text-sm font-medium transition-colors ${
-                        index === currentQuestionIndex
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : isAnswered(questions[index].id)
-                          ? 'bg-green-100 text-green-800 border-green-300'
-                          : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
-                      }`}
-                    >
-                      {index + 1}
-                    </button>
+                <div className="space-y-4 max-h-[min(70vh,520px)] overflow-y-auto pr-1">
+                  {navigationGroups.map((group) => (
+                    <div key={group.area}>
+                      <p
+                        className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 truncate"
+                        title={group.area}
+                      >
+                        {group.area}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {group.indices.map((index) => (
+                          <button
+                            key={questions[index].id}
+                            type="button"
+                            onClick={() => setCurrentQuestionIndex(index)}
+                            className={`w-10 h-10 rounded-lg border text-sm font-medium transition-colors shrink-0 ${
+                              index === currentQuestionIndex
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : isAnswered(questions[index].id)
+                                ? 'bg-green-100 text-green-800 border-green-300'
+                                : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
+                            }`}
+                          >
+                            {index + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
                 

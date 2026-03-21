@@ -704,13 +704,13 @@ export function QuestionRenderer({
 
   return (
     <div className="space-y-4">
-      {/* Enunciado de la pregunta */}
+      {/* Texto de la pregunta + imagen asociada: mismo orden que el gestor (imagen antes del enunciado de la pregunta cuando el enunciado base va aparte en lessonUrl) */}
       <div className="space-y-3">
+        {renderQuestionImage()}
         <div 
           className="text-lg font-medium leading-relaxed prose max-w-none"
           dangerouslySetInnerHTML={{ __html: question.questionText }}
         />
-        {renderQuestionImage()}
       </div>
 
       {/* Renderizar según el tipo de pregunta */}

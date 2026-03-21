@@ -38,6 +38,26 @@ export function ExamPreviewInterface({ simulacroId, onClose }: ExamPreviewInterf
         return
       }
 
+      // Mismo criterio que el examen estudiante: por área y luego por orderIndex
+      const sortedRaw = [...exam.examQuestions].sort((a: any, b: any) => {
+        const areaA = (
+          a.competency?.displayName ||
+          a.competency?.name ||
+          a.componente ||
+          'General'
+        ).toLowerCase()
+        const areaB = (
+          b.competency?.displayName ||
+          b.competency?.name ||
+          b.componente ||
+          'General'
+        ).toLowerCase()
+        if (areaA !== areaB) {
+          return areaA.localeCompare(areaB, 'es', { sensitivity: 'base' })
+        }
+        return (a.orderIndex ?? 0) - (b.orderIndex ?? 0)
+      })
+
       // Transformar datos al formato que espera ExamInterface
       const transformedExam = {
         id: exam.id,
@@ -47,7 +67,7 @@ export function ExamPreviewInterface({ simulacroId, onClose }: ExamPreviewInterf
         totalQuestions: exam.examQuestions.length
       }
 
-      const transformedQuestions = exam.examQuestions.map((q: any) => ({
+      const transformedQuestions = sortedRaw.map((q: any) => ({
         id: q.id,
         text: q.questionText || '', // Solo la pregunta específica
         type: q.questionType || 'multiple_choice',
@@ -70,7 +90,11 @@ export function ExamPreviewInterface({ simulacroId, onClose }: ExamPreviewInterf
           { id: 'C', text: q.optionC, isCorrect: false },
           { id: 'D', text: q.optionD, isCorrect: false }
         ],
-        competency: q.competency?.displayName || 'General'
+        competency:
+          q.competency?.displayName ||
+          q.competency?.name ||
+          q.componente ||
+          'General'
       }))
 
       setExamData({
