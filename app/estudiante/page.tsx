@@ -147,7 +147,7 @@ function EstudianteDashboardInner() {
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-3xl font-bold text-blue-700">{kpis ? kpis.activeCourses : '...'}</div>
-                            <div className="text-sm text-blue-600 font-medium">Cursos Activos</div>
+                            <div className="text-sm text-blue-600 font-medium">Cursos inscritos</div>
                           </div>
                           <div className="p-3 bg-blue-200 rounded-full">
                             <BookOpen className="h-6 w-6 text-blue-700" />
@@ -157,8 +157,7 @@ function EstudianteDashboardInner() {
                     </Card>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-xs text-xs leading-snug">
-                    Número de cursos en los que estás inscrito y activos actualmente.{" "}
-                    Se calcula a partir de tus inscripciones marcadas como activas por tu colegio.
+                    Número de cursos en los que estás inscrito (todas tus inscripciones).
                   </TooltipContent>
                 </Tooltip>
                 

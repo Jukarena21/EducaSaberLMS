@@ -28,8 +28,7 @@ export async function GET(
                   course: {
                     courseEnrollments: {
                       some: {
-                        userId,
-                        isActive: true
+                        userId
                       }
                     }
                   }

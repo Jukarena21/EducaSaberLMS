@@ -202,7 +202,7 @@ export async function GET(req: NextRequest) {
     ] = await Promise.all([
       // Cursos inscritos
       prisma.courseEnrollment.findMany({
-        where: { userId, isActive: true },
+        where: { userId },
         include: { course: { include: { competency: true } } }
       }),
       
@@ -347,7 +347,7 @@ export async function GET(req: NextRequest) {
         prisma.studentLessonProgress.findMany({
           where: { 
             userId,
-            status: 'completed'
+            status: { in: ['completed', 'completado'] }
           },
           include: { 
             lesson: {

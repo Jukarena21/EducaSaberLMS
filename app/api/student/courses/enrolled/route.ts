@@ -3,6 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+function lessonDone(status: string | null | undefined): boolean {
+  return status === 'completed' || status === 'completado'
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -12,14 +16,14 @@ export async function GET(request: NextRequest) {
 
     const userId = session.user.id
     const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status') || 'active'
+    /** Por defecto todas las inscripciones (alineado con detalle de curso). ?status=active solo activas */
+    const status = searchParams.get('status') || 'all'
 
-    // Obtener cursos inscritos
     const enrollments = await prisma.courseEnrollment.findMany({
-      where: { 
-        userId,
-        isActive: status === 'active'
-      },
+      where:
+        status === 'active'
+          ? { userId, isActive: true }
+          : { userId },
       include: {
         course: {
           include: {
@@ -65,7 +69,7 @@ export async function GET(request: NextRequest) {
       const completedLessons = lessonProgress.filter(lp => 
         course.courseModules.some(cm => 
           cm.module.moduleLessons.some(ml => ml.lessonId === lp.lessonId)
-        ) && lp.status === 'completed'
+        ) && lessonDone(lp.status)
       ).length
 
       // Calcular tiempo total invertido
@@ -87,7 +91,7 @@ export async function GET(request: NextRequest) {
       const modulesProgress = course.courseModules.map(cm => {
         const moduleLessons = cm.module.moduleLessons
         const completedModuleLessons = lessonProgress.filter(lp => 
-          moduleLessons.some(ml => ml.lessonId === lp.lessonId) && lp.status === 'completed'
+          moduleLessons.some(ml => ml.lessonId === lp.lessonId) && lessonDone(lp.status)
         ).length
         
         const moduleTimeMinutes = contentProgress
@@ -104,7 +108,7 @@ export async function GET(request: NextRequest) {
           description: cm.module.description,
           orderIndex: cm.module.orderIndex,
           totalLessons: moduleLessons.length,
-          completedLessons,
+          completedLessons: completedModuleLessons,
           progressPercentage: moduleProgressPercentage,
           timeSpentMinutes: moduleTimeMinutes,
           estimatedTimeMinutes: cm.module.estimatedTimeMinutes || 0,
@@ -120,7 +124,7 @@ export async function GET(request: NextRequest) {
       for (const cm of course.courseModules.sort((a, b) => a.module.orderIndex - b.module.orderIndex)) {
         for (const ml of cm.module.moduleLessons.sort((a, b) => a.orderIndex - b.orderIndex)) {
           const lessonProg = lessonProgress.find(lp => lp.lessonId === ml.lessonId)
-          if (!lessonProg || lessonProg.status !== 'completed') {
+          if (!lessonProg || !lessonDone(lessonProg.status)) {
             nextLesson = {
               id: ml.lesson.id,
               title: ml.lesson.title,
@@ -134,7 +138,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Calcular días desde última actividad
-      const lastActivityDate = enrollment.lastActivityAt || enrollment.enrolledAt
+      const lastActivityDate = enrollment.enrolledAt
       const daysSinceLastActivity = lastActivityDate
         ? Math.floor((new Date().getTime() - new Date(lastActivityDate).getTime()) / (1000 * 60 * 60 * 24))
         : null
@@ -159,8 +163,7 @@ export async function GET(request: NextRequest) {
         enrollment: {
           id: enrollment.id,
           status: enrollment.isActive ? 'active' : 'inactive',
-          enrolledAt: enrollment.enrolledAt,
-          lastActivityAt: enrollment.lastActivityAt
+          enrolledAt: enrollment.enrolledAt
         }
       }
     })

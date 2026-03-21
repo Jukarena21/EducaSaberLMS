@@ -76,7 +76,6 @@ export async function POST(
     const enrollment = await prisma.courseEnrollment.findFirst({
       where: {
         userId,
-        isActive: true,
         course: {
           courseModules: {
             some: {

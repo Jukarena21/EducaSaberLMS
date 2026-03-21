@@ -29,8 +29,7 @@ export async function GET(
             course: {
               courseEnrollments: {
                 some: {
-                  userId,
-                  isActive: true
+                  userId
                 }
               }
             }
@@ -189,8 +188,7 @@ export async function POST(
             course: {
               courseEnrollments: {
                 some: {
-                  userId,
-                  isActive: true
+                  userId
                 }
               }
             }
