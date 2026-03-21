@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useCallback } from "react"
+import { useRouter, useParams } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
 import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,8 +30,15 @@ interface CourseDetailPageProps {
   params: Promise<{ courseId: string }>
 }
 
-export default function CourseDetailPage({ params }: CourseDetailPageProps) {
+export default function CourseDetailPage({ params: _params }: CourseDetailPageProps) {
   const router = useRouter()
+  const routeParams = useParams()
+  const courseId =
+    typeof routeParams?.courseId === "string"
+      ? routeParams.courseId
+      : Array.isArray(routeParams?.courseId)
+        ? routeParams.courseId[0]
+        : ""
   const { data: session, status } = useSession()
   const [courseData, setCourseData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -40,61 +47,75 @@ export default function CourseDetailPage({ params }: CourseDetailPageProps) {
   const [moduleQuizzes, setModuleQuizzes] = useState<any[]>([])
   const [loadingQuizzes, setLoadingQuizzes] = useState(false)
 
+  const loadModuleQuizzes = useCallback(async (moduleId: string) => {
+    if (!moduleId) return
+
+    try {
+      setLoadingQuizzes(true)
+      const response = await fetch(`/api/student/modules/${moduleId}/quizzes`)
+
+      if (!response.ok) {
+        throw new Error("Error al cargar los quices")
+      }
+
+      const data = await response.json()
+      setModuleQuizzes(data.quizzes || [])
+    } catch (err) {
+      console.error("Error loading module quizzes:", err)
+      setModuleQuizzes([])
+    } finally {
+      setLoadingQuizzes(false)
+    }
+  }, [])
+
+  const loadCourseData = useCallback(async () => {
+    if (!courseId) {
+      setError("Curso no especificado")
+      setLoading(false)
+      return
+    }
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await fetch(`/api/student/courses/${courseId}`)
+      const data = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        const msg =
+          data && typeof data === "object" && data !== null && "error" in data
+            ? String((data as { error?: string }).error)
+            : "Error al cargar el curso"
+        throw new Error(msg)
+      }
+
+      if (!data) {
+        throw new Error("Respuesta vacía del servidor")
+      }
+
+      setCourseData(data)
+      setActiveModule(0)
+
+      if (data.modules && data.modules.length > 0) {
+        void loadModuleQuizzes(data.modules[0]?.id)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar el curso")
+      console.error("Error loading course:", err)
+    } finally {
+      setLoading(false)
+    }
+  }, [courseId, loadModuleQuizzes])
+
   useEffect(() => {
     if (status === "loading") return
-    
+
     if (!session || session.user?.role !== "student") {
       router.push("/")
       return
     }
 
     loadCourseData()
-  }, [session, status, router])
-
-  const loadCourseData = async () => {
-    try {
-      const resolvedParams = await params
-      const response = await fetch(`/api/student/courses/${resolvedParams.courseId}`)
-      
-      if (!response.ok) {
-        throw new Error('Error al cargar el curso')
-      }
-      
-      const data = await response.json()
-      setCourseData(data)
-      
-      // Cargar quices del módulo activo si existe
-      if (data.modules && data.modules.length > 0) {
-        loadModuleQuizzes(data.modules[activeModule]?.id)
-      }
-    } catch (err) {
-      setError('Error al cargar el curso')
-      console.error('Error loading course:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const loadModuleQuizzes = async (moduleId: string) => {
-    if (!moduleId) return
-    
-    try {
-      setLoadingQuizzes(true)
-      const response = await fetch(`/api/student/modules/${moduleId}/quizzes`)
-      
-      if (!response.ok) {
-        throw new Error('Error al cargar los quices')
-      }
-      
-      const data = await response.json()
-      setModuleQuizzes(data.quizzes || [])
-    } catch (err) {
-      console.error('Error loading module quizzes:', err)
-      setModuleQuizzes([])
-    } finally {
-      setLoadingQuizzes(false)
-    }
-  }
+  }, [session, status, router, loadCourseData])
 
   const handleModuleChange = (index: number) => {
     setActiveModule(index)

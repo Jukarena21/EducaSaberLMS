@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useCallback } from "react"
+import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -53,43 +53,64 @@ interface CourseData {
   modules: Module[]
 }
 
-export default function CourseModulesPage({ params }: { params: Promise<{ courseId: string }> }) {
+export default function CourseModulesPage({ params: _params }: { params: Promise<{ courseId: string }> }) {
   const router = useRouter()
+  const routeParams = useParams()
+  const courseId =
+    typeof routeParams?.courseId === "string"
+      ? routeParams.courseId
+      : Array.isArray(routeParams?.courseId)
+        ? routeParams.courseId[0]
+        : ""
   const { data: session, status } = useSession()
   const [courseData, setCourseData] = useState<CourseData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeModule, setActiveModule] = useState(0)
 
+  const loadCourseData = useCallback(async () => {
+    if (!courseId) {
+      setError("Curso no especificado")
+      setLoading(false)
+      return
+    }
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await fetch(`/api/student/courses/${courseId}`)
+      const data = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        const msg =
+          data && typeof data === "object" && data !== null && "error" in data
+            ? String((data as { error?: string }).error)
+            : "Error al cargar el curso"
+        throw new Error(msg)
+      }
+
+      if (!data) {
+        throw new Error("Respuesta vacía del servidor")
+      }
+
+      setCourseData(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar el curso")
+      console.error("Error loading course:", err)
+    } finally {
+      setLoading(false)
+    }
+  }, [courseId])
+
   useEffect(() => {
     if (status === "loading") return
-    
+
     if (!session || session.user?.role !== "student") {
       router.push("/")
       return
     }
 
     loadCourseData()
-  }, [session, status, router])
-
-  const loadCourseData = async () => {
-    try {
-      const resolvedParams = await params
-      const response = await fetch(`/api/student/courses/${resolvedParams.courseId}`)
-      
-      if (!response.ok) {
-        throw new Error('Error al cargar el curso')
-      }
-      
-      const data = await response.json()
-      setCourseData(data)
-    } catch (err) {
-      setError('Error al cargar el curso')
-      console.error('Error loading course:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [session, status, router, loadCourseData])
 
   const getStatusIcon = (status: string) => {
     switch (status) {

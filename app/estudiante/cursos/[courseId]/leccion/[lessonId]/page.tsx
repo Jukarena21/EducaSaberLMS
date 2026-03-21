@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, useCallback } from "react"
+import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -68,10 +68,10 @@ interface CourseData {
   modules: any[]
 }
 
-export default function LessonPage({ 
-  params 
-}: { 
-  params: Promise<{ courseId: string; lessonId: string }> 
+export default function LessonPage({
+  params: _params,
+}: {
+  params: Promise<{ courseId: string; lessonId: string }>
 }) {
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -86,17 +86,6 @@ export default function LessonPage({
   const [videoViewed, setVideoViewed] = useState(false)
   const [theoryViewed, setTheoryViewed] = useState(false)
   const [exercisesCompleted, setExercisesCompleted] = useState(false)
-
-  useEffect(() => {
-    if (status === "loading") return
-    
-    if (!session || session.user?.role !== "student") {
-      router.push("/")
-      return
-    }
-
-    loadLessonData()
-  }, [session, status, router])
 
   // Efecto para detectar cuando se ve el video
   useEffect(() => {
@@ -114,34 +103,51 @@ export default function LessonPage({
     }
   }, [activeTab, lesson, theoryViewed, videoViewed, exercisesCompleted])
 
-  const loadLessonData = async () => {
+  const loadLessonData = useCallback(async () => {
+    if (!courseId || !lessonIdParam) {
+      setError("Curso o lección no especificados")
+      setLoading(false)
+      return
+    }
     try {
-      const resolvedParams = await params
-      
-      // Cargar datos del curso
-      const courseResponse = await fetch(`/api/student/courses/${resolvedParams.courseId}`)
+      setLoading(true)
+      setError(null)
+
+      const courseResponse = await fetch(`/api/student/courses/${courseId}`)
+      const courseJson = await courseResponse.json().catch(() => null)
+
       if (!courseResponse.ok) {
-        throw new Error('Error al cargar el curso')
+        const msg =
+          courseJson &&
+          typeof courseJson === "object" &&
+          courseJson !== null &&
+          "error" in courseJson
+            ? String((courseJson as { error?: string }).error)
+            : "Error al cargar el curso"
+        throw new Error(msg)
       }
-      const courseData = await courseResponse.json()
+
+      if (!courseJson || !Array.isArray((courseJson as CourseData).modules)) {
+        throw new Error("Datos del curso inválidos")
+      }
+
+      const courseData = courseJson as CourseData
       setCourseData(courseData)
 
-      // Buscar la lección en los módulos
-      let foundLesson = null
-      for (const module of courseData.modules) {
-        const lesson = module.lessons.find((l: Lesson) => l.id === resolvedParams.lessonId)
-        if (lesson) {
-          foundLesson = lesson
+      let foundLesson: Lesson | null = null
+      for (const mod of courseData.modules) {
+        const hit = mod.lessons.find((l: Lesson) => l.id === lessonIdParam)
+        if (hit) {
+          foundLesson = hit
           break
         }
       }
 
       if (!foundLesson) {
-        throw new Error('Lección no encontrada')
+        throw new Error("Lección no encontrada")
       }
 
-      // Cargar preguntas de la lección
-      const questionsResponse = await fetch(`/api/student/lessons/${resolvedParams.lessonId}/questions`)
+      const questionsResponse = await fetch(`/api/student/lessons/${lessonIdParam}/questions`)
       if (questionsResponse.ok) {
         const questionsData = await questionsResponse.json()
         console.log('[Lesson Page] Preguntas cargadas:', questionsData.length)
@@ -154,7 +160,7 @@ export default function LessonPage({
       }
 
       // Cargar progreso existente de la lección
-      const progressResponse = await fetch(`/api/student/lessons/${resolvedParams.lessonId}/progress`)
+      const progressResponse = await fetch(`/api/student/lessons/${lessonIdParam}/progress`)
       if (progressResponse.ok) {
         const progressData = await progressResponse.json()
         setVideoViewed(progressData.videoCompleted || false)
@@ -171,12 +177,23 @@ export default function LessonPage({
 
       setLesson(foundLesson)
     } catch (err) {
-      setError('Error al cargar la lección')
-      console.error('Error loading lesson:', err)
+      setError(err instanceof Error ? err.message : "Error al cargar la lección")
+      console.error("Error loading lesson:", err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [courseId, lessonIdParam])
+
+  useEffect(() => {
+    if (status === "loading") return
+
+    if (!session || session.user?.role !== "student") {
+      router.push("/")
+      return
+    }
+
+    loadLessonData()
+  }, [session, status, router, loadLessonData])
 
   const handleAnswer = (exerciseId: number, answer: any) => {
     setUserAnswers(prev => ({
@@ -248,10 +265,9 @@ export default function LessonPage({
 
   const resetExercises = async () => {
     try {
-      const resolvedParams = await params
-      
-      // Recargar preguntas de forma aleatoria
-      const questionsResponse = await fetch(`/api/student/lessons/${resolvedParams.lessonId}/questions`)
+      if (!lessonIdParam) return
+
+      const questionsResponse = await fetch(`/api/student/lessons/${lessonIdParam}/questions`)
       if (questionsResponse.ok) {
         const questionsData = await questionsResponse.json()
         if (lesson) {
@@ -299,8 +315,9 @@ export default function LessonPage({
 
   const updateProgress = async (video: boolean, theory: boolean, exercises: boolean, correctAnswers: number, totalQuestions: number) => {
     try {
-      const resolvedParams = await params
-      const response = await fetch(`/api/student/lessons/${resolvedParams.lessonId}/progress`, {
+      if (!lessonIdParam) return
+
+      const response = await fetch(`/api/student/lessons/${lessonIdParam}/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

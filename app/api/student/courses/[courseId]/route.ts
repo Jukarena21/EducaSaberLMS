@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+/** Progreso en BD usa valores en español (completado) en algunos registros */
+function isLessonCompletedStatus(status: string | undefined | null): boolean {
+  return status === 'completed' || status === 'completado';
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ courseId: string }> }
@@ -14,15 +19,18 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
+    if (session.user.role !== 'student') {
+      return NextResponse.json({ error: 'Solo estudiantes pueden acceder' }, { status: 403 });
+    }
+
     const { courseId } = await params;
     const userId = session.user.id;
 
-    // Verificar que el estudiante está inscrito en el curso
+    // Inscripción al curso (cualquier registro válido; no exigir solo isActive)
     const enrollment = await prisma.courseEnrollment.findFirst({
       where: {
         userId,
         courseId,
-        isActive: true,
       },
       include: {
         course: {
@@ -56,27 +64,33 @@ export async function GET(
       return NextResponse.json({ error: 'No estás inscrito en este curso' }, { status: 404 });
     }
 
+    const moduleIds = enrollment.course.courseModules.map(cm => cm.module.id);
+
     // Obtener progreso del estudiante para cada módulo
-    const moduleProgress = await prisma.studentModuleProgress.findMany({
-      where: {
-        userId,
-        moduleId: {
-          in: enrollment.course.courseModules.map(cm => cm.module.id),
-        },
-      },
-    });
+    const moduleProgress =
+      moduleIds.length === 0
+        ? []
+        : await prisma.studentModuleProgress.findMany({
+            where: {
+              userId,
+              moduleId: { in: moduleIds },
+            },
+          });
 
     // Obtener progreso del estudiante para cada lección
-    const lessonProgress = await prisma.studentLessonProgress.findMany({
-      where: {
-        userId,
-        lessonId: {
-          in: enrollment.course.courseModules.flatMap(cm => 
-            cm.module.moduleLessons.map(ml => ml.lesson.id)
-          ),
-        },
-      },
-    });
+    const lessonIds = enrollment.course.courseModules.flatMap(cm =>
+      cm.module.moduleLessons.filter(ml => ml.lesson).map(ml => ml.lesson!.id)
+    );
+
+    const lessonProgress =
+      lessonIds.length === 0
+        ? []
+        : await prisma.studentLessonProgress.findMany({
+            where: {
+              userId,
+              lessonId: { in: lessonIds },
+            },
+          });
 
     // Crear mapa de progreso para acceso rápido
     const moduleProgressMap = new Map(
@@ -91,21 +105,30 @@ export async function GET(
       const module = courseModule.module;
       const progress = moduleProgressMap.get(module.id);
       
-      const lessonsWithProgress = module.moduleLessons.map(moduleLesson => {
-        const lesson = moduleLesson.lesson;
-        const lessonProgressData = lessonProgressMap.get(lesson.id);
-        
-        return {
-          id: lesson.id,
-          title: lesson.title,
-          description: lesson.description,
-          estimatedTimeMinutes: lesson.estimatedTimeMinutes,
-          status: lessonProgressData?.status || 'not_started',
-          progressPercentage: lessonProgressData?.progressPercentage || 0,
-          totalTimeMinutes: lessonProgressData?.totalTimeMinutes || 0,
-          completedAt: lessonProgressData?.completedAt,
-        };
-      });
+      const lessonsWithProgress = module.moduleLessons
+        .filter(moduleLesson => moduleLesson.lesson)
+        .map(moduleLesson => {
+          const lesson = moduleLesson.lesson!;
+          const lessonProgressData = lessonProgressMap.get(lesson.id);
+
+          const rawStatus = lessonProgressData?.status;
+          const uiStatus = isLessonCompletedStatus(rawStatus)
+            ? 'completed'
+            : rawStatus === 'en_progreso' || rawStatus === 'in_progress'
+              ? 'in_progress'
+              : 'not_started';
+
+          return {
+            id: lesson.id,
+            title: lesson.title,
+            description: lesson.description,
+            estimatedTimeMinutes: lesson.estimatedTimeMinutes,
+            status: uiStatus,
+            progressPercentage: lessonProgressData?.progressPercentage || 0,
+            totalTimeMinutes: lessonProgressData?.totalTimeMinutes || 0,
+            completedAt: lessonProgressData?.completedAt,
+          };
+        });
 
       // Calcular progreso del módulo
       const completedLessons = lessonsWithProgress.filter(l => l.status === 'completed').length;
