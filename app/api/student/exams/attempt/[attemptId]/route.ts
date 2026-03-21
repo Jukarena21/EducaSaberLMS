@@ -3,6 +3,28 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+const getQuestionAreaName = (question: any) => {
+  return (
+    question?.competency?.displayName ||
+    question?.competency?.name ||
+    question?.componente ||
+    'General'
+  )
+}
+
+const sortQuestionsByArea = (questions: any[]) => {
+  return [...questions].sort((a, b) => {
+    const areaA = getQuestionAreaName(a).toLowerCase()
+    const areaB = getQuestionAreaName(b).toLowerCase()
+
+    if (areaA !== areaB) {
+      return areaA.localeCompare(areaB, 'es', { sensitivity: 'base' })
+    }
+
+    return (a.orderIndex ?? 0) - (b.orderIndex ?? 0)
+  })
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ attemptId: string }> }
@@ -25,7 +47,17 @@ export async function GET(
       include: {
         exam: {
           include: {
-            examQuestions: true
+            examQuestions: {
+              include: {
+                competency: {
+                  select: {
+                    id: true,
+                    name: true,
+                    displayName: true
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -74,8 +106,10 @@ export async function GET(
       return acc
     }, {} as Record<string, any>)
 
+    const sortedExamQuestions = sortQuestionsByArea(result.exam.examQuestions || [])
+
     // Preparar preguntas para el examen (sin respuestas correctas)
-    const questions = result.exam.examQuestions.map(eq => ({
+    const questions = sortedExamQuestions.map(eq => ({
       id: eq.id,
       text: eq.questionText,
       type: eq.questionType,
@@ -83,6 +117,7 @@ export async function GET(
       imageUrl: eq.questionImage,
       questionImage: eq.questionImage,
       questionType: eq.questionType,
+      lessonUrl: eq.lessonUrl,
       optionA: eq.optionA,
       optionB: eq.optionB,
       optionC: eq.optionC,
@@ -97,7 +132,7 @@ export async function GET(
         { id: 'C', text: eq.optionC, isCorrect: false },
         { id: 'D', text: eq.optionD, isCorrect: false }
       ],
-      competency: 'General'
+      competency: getQuestionAreaName(eq)
     }))
 
     return NextResponse.json({
