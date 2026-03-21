@@ -325,6 +325,29 @@ export function ManualSimulacroQuestionEditor({
            comp.name
   }
 
+  // Estilos visuales suaves por área para facilitar escaneo del listado
+  const getAreaTintClasses = (competencyId?: string) => {
+    const areaName = getAreaDisplayName(competencyId || '').toLowerCase()
+
+    if (areaName.includes('matem')) {
+      return 'border-l-4 border-l-blue-400 bg-blue-50/55'
+    }
+    if (areaName.includes('social') || areaName.includes('ciudadan')) {
+      return 'border-l-4 border-l-amber-400 bg-amber-50/55'
+    }
+    if (areaName.includes('natural') || areaName.includes('escrita')) {
+      return 'border-l-4 border-l-emerald-400 bg-emerald-50/55'
+    }
+    if (areaName.includes('lectura')) {
+      return 'border-l-4 border-l-violet-400 bg-violet-50/55'
+    }
+    if (areaName.includes('ingles') || areaName.includes('inglés')) {
+      return 'border-l-4 border-l-cyan-400 bg-cyan-50/55'
+    }
+
+    return 'border-l-4 border-l-slate-300 bg-slate-50/50'
+  }
+
   // Ordenar preguntas por área y luego por el orden de la pregunta
   const sortedQuestions = [...questions].sort((a, b) => {
     const areaA = getAreaDisplayName(a.competencyId || '').toLowerCase()
@@ -461,7 +484,7 @@ export function ManualSimulacroQuestionEditor({
       ) : (
         <div className="space-y-2">
           {filteredQuestions.map((question, index) => (
-            <Card key={question.id}>
+            <Card key={question.id} className={getAreaTintClasses(question.competencyId)}>
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
