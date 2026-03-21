@@ -466,7 +466,7 @@ export function ManualSimulacroQuestionEditor({
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">#{question.orderIndex + 1}</Badge>
+                      <Badge variant="outline">#{index + 1}</Badge>
                       <Badge>{question.difficultyLevel}</Badge>
                       {question.competency && (
                         <Badge variant="secondary">
