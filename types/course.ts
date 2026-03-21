@@ -2,7 +2,7 @@ export interface CourseData {
   id: string;
   title: string;
   description: string;
-  year: number; // año escolar (6, 7, 8, 9, 10, 11)
+  year?: number; // año escolar (6–11), solo ICFES / cursos con academicGrade
   competencyId: string;
   competency?: {
     id: string;
@@ -10,6 +10,8 @@ export interface CourseData {
     displayName?: string;
   };
   isIcfesCourse?: boolean;
+  /** Si es false, los estudiantes no ven el curso en el catálogo */
+  isPublished?: boolean;
   schoolIds?: string[];
   schoolId?: string; // Deprecated: usar schools en su lugar
   school?: {

@@ -40,16 +40,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Curso no encontrado' }, { status: 404 })
     }
 
-    if (!course.isActive) {
-      return NextResponse.json({ error: 'Curso no disponible' }, { status: 400 })
+    if (!course.isPublished) {
+      return NextResponse.json(
+        { error: 'Este curso no está publicado aún. Contacta a tu institución.' },
+        { status: 400 }
+      )
     }
 
     // Verificar que el estudiante no esté ya inscrito
     const existingEnrollment = await prisma.courseEnrollment.findFirst({
       where: {
         userId,
-        courseId,
-        status: { in: ['active', 'pending'] }
+        courseId
       }
     })
 
@@ -72,44 +74,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 })
     }
 
-    // Validar prerequisitos si existen
-    if (course.prerequisites && course.prerequisites.length > 0) {
-      const completedCourses = await prisma.courseEnrollment.findMany({
-        where: {
-          userId,
-          status: 'completed',
-          course: {
-            id: { in: course.prerequisites }
-          }
-        }
-      })
-
-      const completedCourseIds = completedCourses.map(cc => cc.courseId)
-      const missingPrerequisites = course.prerequisites.filter(
-        prereqId => !completedCourseIds.includes(prereqId)
-      )
-
-      if (missingPrerequisites.length > 0) {
-        const missingCourses = await prisma.course.findMany({
-          where: { id: { in: missingPrerequisites } },
-          select: { title: true }
-        })
-
-        return NextResponse.json({
-          error: 'No cumples con los prerequisitos',
-          missingPrerequisites: missingCourses.map(c => c.title)
-        }, { status: 400 })
-      }
-    }
-
     // Crear la inscripción
     const enrollment = await prisma.courseEnrollment.create({
       data: {
         userId,
-        courseId,
-        status: 'active',
-        enrolledAt: new Date(),
-        lastActivityAt: new Date()
+        courseId
       },
       include: {
         course: {
@@ -128,9 +97,8 @@ export async function POST(request: NextRequest) {
     const progressRecords = allLessons.map(lesson => ({
       userId,
       lessonId: lesson.id,
-      status: 'not_started',
-      progressPercentage: 0,
-      lastAccessedAt: new Date()
+      status: 'no_iniciado',
+      progressPercentage: 0
     }))
 
     if (progressRecords.length > 0) {
@@ -180,7 +148,7 @@ export async function POST(request: NextRequest) {
           academicGrade: enrollment.course.academicGrade
         },
         enrolledAt: enrollment.enrolledAt,
-        status: enrollment.status
+        isActive: enrollment.isActive
       }
     })
 

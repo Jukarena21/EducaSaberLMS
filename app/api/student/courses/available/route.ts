@@ -3,6 +3,15 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+/** Grado del estudiante: query > perfil (User.academicGrade) > último curso inscrito */
+function resolveStudentTargetGrade(
+  queryGrade: string | null,
+  profileGrade: string | null,
+  enrollmentGrade: string | null
+): string | null {
+  return queryGrade || profileGrade || enrollmentGrade || null
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -18,10 +27,14 @@ export async function GET(request: NextRequest) {
     // Obtener información del estudiante
     const student = await prisma.user.findUnique({
       where: { id: userId },
-      include: { 
+      select: {
+        id: true,
+        academicGrade: true,
+        schoolId: true,
         school: true,
         courseEnrollments: {
-          include: {
+          select: {
+            enrolledAt: true,
             course: {
               select: {
                 academicGrade: true
@@ -40,45 +53,49 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Estudiante no encontrado' }, { status: 404 })
     }
 
-    // Obtener el grado académico del estudiante desde sus cursos inscritos
-    const studentAcademicGrade = student.courseEnrollments?.[0]?.course?.academicGrade || null
+    // Grado desde último curso inscrito (fallback)
+    const enrollmentGrade =
+      student.courseEnrollments?.[0]?.course?.academicGrade || null
 
-    // Construir filtros para cursos disponibles
-    let whereClause: any = {
-      isPublished: true
-    }
+    const targetGrade = resolveStudentTargetGrade(
+      academicGrade,
+      student.academicGrade,
+      enrollmentGrade
+    )
 
-    // Filtrar por grado académico del estudiante o parámetro
-    const targetGrade = academicGrade || studentAcademicGrade
-    if (targetGrade) {
-      whereClause.academicGrade = targetGrade
-    }
-
-    // Filtrar por competencia si se especifica
-    if (competencyId) {
-      whereClause.competencyId = competencyId
-    }
-
-    // Filtrar por visibilidad: cursos generales (sin colegio) O cursos del colegio del estudiante
-    if (student.schoolId) {
-      whereClause.OR = [
-        {
-          courseSchools: {
-            none: {} // Cursos generales (sin asignar)
-          }
-        },
-        {
-          courseSchools: {
-            some: {
-              schoolId: student.schoolId
-            }
-          }
+    // Visibilidad por colegio: curso sin asignar (global) o asignado al colegio del estudiante
+    const schoolBranch = student.schoolId
+      ? {
+          OR: [
+            { courseSchools: { none: {} } },
+            { courseSchools: { some: { schoolId: student.schoolId } } }
+          ]
         }
-      ]
+      : { courseSchools: { none: {} } }
+
+    const competencyFilter = competencyId ? { competencyId } : {}
+
+    // Con cursos ICFES por grado: incluir también cursos generales (academicGrade null)
+    let whereClause: any
+    if (targetGrade) {
+      whereClause = {
+        isPublished: true,
+        ...competencyFilter,
+        AND: [
+          {
+            OR: [
+              { academicGrade: targetGrade },
+              { academicGrade: null }
+            ]
+          },
+          schoolBranch
+        ]
+      }
     } else {
-      // Si el estudiante no tiene colegio, solo puede ver cursos generales
-      whereClause.courseSchools = {
-        none: {}
+      whereClause = {
+        isPublished: true,
+        ...competencyFilter,
+        ...schoolBranch
       }
     }
 
@@ -102,7 +119,7 @@ export async function GET(request: NextRequest) {
         },
         courseEnrollments: {
           where: { userId },
-          select: { id: true, status: true }
+          select: { id: true, isActive: true, enrolledAt: true }
         }
       },
       orderBy: [
@@ -114,9 +131,8 @@ export async function GET(request: NextRequest) {
 
     // Obtener cursos ya inscritos
     const enrolledCourses = await prisma.courseEnrollment.findMany({
-      where: { 
-        userId,
-        status: { in: ['active', 'completed'] }
+      where: {
+        userId
       },
       include: {
         course: {
@@ -154,12 +170,12 @@ export async function GET(request: NextRequest) {
         totalModules,
         totalLessons,
         estimatedTimeMinutes: estimatedTime,
-        difficulty: course.difficulty || 'intermedio',
-        prerequisites: course.prerequisites || [],
+        difficulty: course.difficultyLevel || 'intermedio',
+        prerequisites: [] as string[],
         isEnrolled,
-        enrollmentStatus: enrollment?.status || null,
+        enrollmentStatus: enrollment?.isActive ? 'active' : null,
         enrollmentDate: enrollment?.enrolledAt || null,
-        canEnroll: !isEnrolled && course.isActive,
+        canEnroll: !isEnrolled && course.isPublished,
         courseModules: course.courseModules.map(cm => ({
           id: cm.module.id,
           title: cm.module.title,
@@ -178,7 +194,7 @@ export async function GET(request: NextRequest) {
       available: catalogCourses,
       enrolled: courses.filter(course => course.isEnrolled),
       student: {
-        academicGrade: studentAcademicGrade,
+        academicGrade: targetGrade,
         school: student.school?.name || 'Sin asignar'
       }
     })

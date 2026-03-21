@@ -59,6 +59,7 @@ export function CourseManagement({
     loading: coursesLoading,
     error: coursesError,
     filters,
+    fetchCourses,
     createCourse,
     updateCourse,
     deleteCourse,
@@ -90,7 +91,10 @@ export function CourseManagement({
   const canCreate = userRole === 'teacher_admin'; // Solo teacher_admin puede crear cursos
   const canEdit = userRole === 'teacher_admin'; // Solo teacher_admin puede editar cursos
   const canDelete = userRole === 'teacher_admin'; // Solo teacher_admin puede eliminar cursos
+  const canPublish = userRole === 'teacher_admin' || userRole === 'school_admin'; // Publicar para estudiantes
   const canView = true; // Ambos pueden ver cursos
+
+  const [publishingId, setPublishingId] = useState<string | null>(null);
 
   // Filtrar colegios según el rol
   const availableSchools = userRole === 'teacher_admin' 
@@ -104,7 +108,8 @@ export function CourseManagement({
       setShowForm(false);
       toast({
         title: 'Curso creado',
-        description: 'Puedes previsualizarlo con el botón de ojo en la lista.',
+        description:
+          'Queda en borrador hasta que lo publiques (columna Estado). Luego los estudiantes lo verán en el catálogo.',
       });
     }
   };
@@ -115,6 +120,38 @@ export function CourseManagement({
       if (result) {
         setEditingCourse(null);
       }
+    }
+  };
+
+  const handleTogglePublish = async (course: CourseData) => {
+    if (!canPublish) return;
+    const next = course.isPublished !== true;
+    setPublishingId(course.id);
+    try {
+      const res = await fetch(`/api/courses/${course.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublished: next }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'No se pudo actualizar');
+      }
+      toast({
+        title: next ? 'Curso publicado' : 'Curso en borrador',
+        description: next
+          ? 'Los estudiantes del colegio asignado ya pueden verlo e inscribirse.'
+          : 'El curso ya no aparece en el catálogo del estudiante.',
+      });
+      await fetchCourses(filters, { skipCache: true });
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: e instanceof Error ? e.message : 'Error al cambiar publicación',
+        variant: 'destructive',
+      });
+    } finally {
+      setPublishingId(null);
     }
   };
 
@@ -375,6 +412,7 @@ export function CourseManagement({
                     <TableHead>Colegio(s)</TableHead>
                     <TableHead>Módulos</TableHead>
                     <TableHead>Tipo</TableHead>
+                    <TableHead>Estado</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Acciones</TableHead>
                   </TableRow>
@@ -394,13 +432,17 @@ export function CourseManagement({
                       </TableCell>
                       
                       <TableCell>
-                        {course.year ? (
+                        {course.year != null && course.year > 0 ? (
                           <Badge variant="secondary">
                             {course.year}° Grado
                           </Badge>
-                        ) : (
+                        ) : course.isIcfesCourse ? (
                           <Badge variant="outline" className="text-muted-foreground">
                             N/A
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            General
                           </Badge>
                         )}
                       </TableCell>
@@ -456,6 +498,30 @@ export function CourseManagement({
                             Regular
                           </Badge>
                         )}
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <Badge variant={course.isPublished ? 'default' : 'secondary'}>
+                            {course.isPublished ? 'Publicado' : 'Borrador'}
+                          </Badge>
+                          {canPublish && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={publishingId === course.id}
+                              onClick={() => handleTogglePublish(course)}
+                            >
+                              {publishingId === course.id
+                                ? '...'
+                                : course.isPublished
+                                  ? 'Despublicar'
+                                  : 'Publicar'}
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                       
                       <TableCell>

@@ -602,6 +602,82 @@ export async function PUT(
   }
 }
 
+/** Publicar / despublicar curso (visible para estudiantes solo si está publicado) */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    if (session.user.role !== 'teacher_admin' && session.user.role !== 'school_admin') {
+      return NextResponse.json(
+        { error: 'No tienes permisos para modificar cursos' },
+        { status: 403 }
+      );
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+
+    if (typeof body.isPublished !== 'boolean') {
+      return NextResponse.json(
+        { error: 'Se requiere isPublished (boolean)' },
+        { status: 400 }
+      );
+    }
+
+    const existingCourse = await prisma.course.findUnique({
+      where: { id },
+      include: {
+        courseSchools: { select: { schoolId: true } }
+      }
+    });
+
+    if (!existingCourse) {
+      return NextResponse.json({ error: 'Curso no encontrado' }, { status: 404 });
+    }
+
+    if (session.user.role === 'school_admin') {
+      if (!session.user.schoolId) {
+        return NextResponse.json(
+          { error: 'Usuario sin colegio asignado' },
+          { status: 400 }
+        );
+      }
+      const existingSchoolIds = existingCourse.courseSchools.map(cs => cs.schoolId);
+      const hasAccess =
+        existingSchoolIds.length === 0 || existingSchoolIds.includes(session.user.schoolId);
+      if (!hasAccess) {
+        return NextResponse.json(
+          { error: 'Solo puedes modificar cursos de tu colegio' },
+          { status: 403 }
+        );
+      }
+    }
+
+    const updated = await prisma.course.update({
+      where: { id },
+      data: { isPublished: body.isPublished }
+    });
+
+    return NextResponse.json({
+      id: updated.id,
+      isPublished: updated.isPublished,
+      title: updated.title
+    });
+  } catch (error) {
+    console.error('Error al actualizar publicación del curso:', error);
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    );
+  }
+}
+
 // DELETE - Eliminar curso
 export async function DELETE(
   request: NextRequest,

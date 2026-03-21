@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { yearToAcademicGrade } from '@/lib/academicGrades'
+import { yearToAcademicGrade, academicGradeToYear } from '@/lib/academicGrades'
 import { requireRole } from '@/lib/rbac'
 
 export async function GET(request: NextRequest) {
@@ -153,19 +153,26 @@ export async function GET(request: NextRequest) {
     })
 
     // Transformar los datos para que coincidan con la estructura esperada por el frontend
-    const transformedCourses = courses.map(course => ({
-      ...course,
-      modules: course.courseModules.map(cm => ({
-        id: cm.module.id,
-        title: cm.module.title,
-        orderIndex: cm.orderIndex
-      })),
-      schools: course.courseSchools.map(cs => ({
-        id: cs.school.id,
-        name: cs.school.name,
-        type: cs.school.type
-      }))
-    }))
+    const transformedCourses = courses.map(course => {
+      const year =
+        course.academicGrade != null
+          ? academicGradeToYear(course.academicGrade) ?? undefined
+          : undefined
+      return {
+        ...course,
+        year,
+        modules: course.courseModules.map(cm => ({
+          id: cm.module.id,
+          title: cm.module.title,
+          orderIndex: cm.orderIndex
+        })),
+        schools: course.courseSchools.map(cs => ({
+          id: cs.school.id,
+          name: cs.school.name,
+          type: cs.school.type
+        }))
+      }
+    })
 
     return NextResponse.json(transformedCourses)
   } catch (error) {
