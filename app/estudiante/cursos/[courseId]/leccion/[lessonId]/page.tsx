@@ -74,6 +74,19 @@ export default function LessonPage({
   params: Promise<{ courseId: string; lessonId: string }>
 }) {
   const router = useRouter()
+  const routeParams = useParams()
+  const courseId =
+    typeof routeParams?.courseId === "string"
+      ? routeParams.courseId
+      : Array.isArray(routeParams?.courseId)
+        ? routeParams.courseId[0]
+        : ""
+  const lessonIdParam =
+    typeof routeParams?.lessonId === "string"
+      ? routeParams.lessonId
+      : Array.isArray(routeParams?.lessonId)
+        ? routeParams.lessonId[0]
+        : ""
   const { data: session, status } = useSession()
   const [lesson, setLesson] = useState<Lesson | null>(null)
   const [courseData, setCourseData] = useState<CourseData | null>(null)
