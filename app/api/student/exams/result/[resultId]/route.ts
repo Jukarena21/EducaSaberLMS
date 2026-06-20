@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import {
+  getFeedbackStatusMessage,
+  isExamFeedbackReleased,
+} from '@/lib/examFeedbackPolicy'
+import { buildQuestionAreaNumberMaps } from '@/lib/examAnswerValidation'
 
 export async function GET(
   request: NextRequest,
@@ -16,13 +21,10 @@ export async function GET(
     const { resultId } = await params
     const userId = session.user.id
 
-    console.log('Fetching result for:', resultId, 'user:', userId)
-    
-    // Obtener el resultado del examen con preguntas y respuestas
     const result = await prisma.examResult.findFirst({
       where: {
         id: resultId,
-        userId
+        userId,
       },
       include: {
         exam: {
@@ -30,6 +32,7 @@ export async function GET(
             competency: true,
             examQuestions: {
               include: {
+                competency: true,
                 lesson: {
                   include: {
                     moduleLessons: {
@@ -38,51 +41,65 @@ export async function GET(
                           include: {
                             courseModules: {
                               include: {
-                                course: true
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
+                                course: true,
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               },
               orderBy: {
-                orderIndex: 'asc'
-              }
-            }
-          }
+                orderIndex: 'asc',
+              },
+            },
+          },
         },
         examQuestionAnswers: {
           select: {
             questionId: true,
             selectedOption: true,
-            isCorrect: true
-          }
-        }
-      }
+            answerText: true,
+            isCorrect: true,
+          },
+        },
+      },
     })
-
-    console.log('Found result:', result)
 
     if (!result) {
       return NextResponse.json({ error: 'Resultado no encontrado' }, { status: 404 })
     }
 
-    // Procesar preguntas con respuestas del estudiante
-    const questions = result.exam.examQuestions.map(examQuestion => {
+    const feedbackReleased = isExamFeedbackReleased(result.exam)
+    const feedbackMessage = getFeedbackStatusMessage(feedbackReleased, result.exam.closeDate)
+
+    const areaNumberMaps = buildQuestionAreaNumberMaps(
+      result.exam.examQuestions.map((q) => ({
+        id: q.id,
+        areaKey: q.competencyId || q.competency?.name || result.exam.competency?.name || 'general',
+        areaLabel:
+          q.competency?.displayName ||
+          result.exam.competency?.displayName ||
+          'General',
+      }))
+    )
+
+    const questions = result.exam.examQuestions.map((examQuestion) => {
       const studentAnswer = result.examQuestionAnswers.find(
-        answer => answer.questionId === examQuestion.id
+        (answer) => answer.questionId === examQuestion.id
       )
-      
-      // Obtener información de la lección relacionada
+
       const lesson = examQuestion.lesson
       const moduleLesson = lesson?.moduleLessons?.[0]
       const courseModule = moduleLesson?.module?.courseModules?.[0]
       const course = courseModule?.course
-      
-      return {
+
+      const numbering = areaNumberMaps.get(examQuestion.id)
+      const isCorrect = studentAnswer?.isCorrect || false
+
+      const base = {
         id: examQuestion.id,
         text: examQuestion.questionText,
         questionImage: examQuestion.questionImage,
@@ -94,19 +111,40 @@ export async function GET(
         optionBImage: examQuestion.optionBImage,
         optionCImage: examQuestion.optionCImage,
         optionDImage: examQuestion.optionDImage,
-        userAnswer: studentAnswer?.selectedOption || 'No respondida',
+        userAnswer: studentAnswer?.selectedOption || studentAnswer?.answerText || 'No respondida',
+        isCorrect,
+        areaLabel: numbering?.areaLabel || 'General',
+        displayNumberInArea: numbering?.numberInArea ?? examQuestion.orderIndex,
+        tema: examQuestion.tema || null,
+        subtema: examQuestion.subtema || null,
+        componente: examQuestion.componente || null,
+        lesson: lesson
+          ? {
+              id: lesson.id,
+              title: lesson.title,
+              courseId: course?.id,
+              courseTitle: course?.title,
+            }
+          : null,
+      }
+
+      if (!feedbackReleased) {
+        return base
+      }
+
+      return {
+        ...base,
         correctAnswer: examQuestion.correctOption,
-        isCorrect: studentAnswer?.isCorrect || false,
         explanation: examQuestion.explanation || 'Sin explicación disponible',
         explanationImage: examQuestion.explanationImage,
-        lesson: lesson ? {
-          id: lesson.id,
-          title: lesson.title,
-          courseId: course?.id,
-          courseTitle: course?.title
-        } : null
       }
     })
+
+    let visibleQuestions = questions
+
+    if (!feedbackReleased) {
+      visibleQuestions = questions.filter((q) => !q.isCorrect)
+    }
 
     return NextResponse.json({
       id: result.id,
@@ -117,19 +155,21 @@ export async function GET(
       isPassed: result.isPassed,
       timeTakenMinutes: result.timeTakenMinutes,
       completedAt: result.completedAt,
+      feedbackReleased,
+      feedbackMessage,
       exam: {
         id: result.exam.id,
         title: result.exam.title,
         description: result.exam.description,
+        closeDate: result.exam.closeDate,
         competency: {
           id: result.exam.competency?.id,
           name: result.exam.competency?.name,
-          displayName: result.exam.competency?.displayName
-        }
+          displayName: result.exam.competency?.displayName,
+        },
       },
-      questions: questions
+      questions: visibleQuestions,
     })
-
   } catch (error) {
     console.error('Error fetching exam result:', error)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

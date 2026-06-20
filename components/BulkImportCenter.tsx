@@ -66,7 +66,7 @@ const importTypes: ImportTypeConfig[] = [
     icon: <FileQuestion className="h-6 w-6" />,
     description: 'Preguntas de lecciones con opciones y explicaciones (múltiple opción, verdadero/falso, completar, emparejar, ensayo)',
     requiredFields: ['questionText', 'questionType'],
-    optionalFields: ['lessonId', 'optionA', 'optionB', 'optionC', 'optionD', 'correctOption', 'explanation', 'difficultyLevel', 'orderIndex', 'timeLimit']
+    optionalFields: ['lessonId', 'usage', 'orderInLesson', 'optionA', 'optionB', 'optionC', 'optionD', 'correctOption', 'explanation', 'difficultyLevel', 'orderIndex', 'timeLimit']
   },
 ]
 
@@ -733,7 +733,10 @@ export function BulkImportCenter() {
             '3. questionType debe ser: multiple_choice, true_false, fill_blank, matching o essay',
             '4. correctOption debe ser: A, B, C o D (según el tipo de pregunta)',
             '5. difficultyLevel debe ser: facil, intermedio o dificil',
-            '6. Para imágenes, ingrese la URL completa (ej: https://ejemplo.com/imagen.jpg)',
+            '6. lessonId vincula la pregunta a una lección (opcional)',
+            '7. usage: lesson | exam | both (por defecto: lesson)',
+            '8. orderInLesson: número de orden dentro de la lección (1, 2, 3…). Si se omite, se asigna automáticamente',
+            '9. Para imágenes, ingrese la URL completa (ej: https://ejemplo.com/imagen.jpg)',
             '',
             'REQUISITOS POR TIPO:',
             '- multiple_choice: Requiere optionA, optionB, optionC, optionD y correctOption',
@@ -743,17 +746,18 @@ export function BulkImportCenter() {
             '- essay: Solo requiere questionText, no necesita opciones',
             '',
             'CAMPOS OBLIGATORIOS (*): questionText, questionType',
-            'CAMPOS OPCIONALES: questionImage, optionAImage, optionBImage, optionCImage, optionDImage, explanationImage'
+            'CAMPOS OPCIONALES: lessonId, usage, orderInLesson, questionImage, optionAImage, optionBImage, optionCImage, optionDImage, explanationImage'
           ]
-          headers = ['_ES_EJEMPLO', 'questionText *', 'questionType *', 'optionA', 'optionB', 'optionC', 'optionD', 
+          headers = ['_ES_EJEMPLO', 'questionText *', 'questionType *', 'lessonId', 'usage', 'orderInLesson',
+                     'optionA', 'optionB', 'optionC', 'optionD', 
                      'correctOption', 'explanation', 'difficultyLevel',
                      'questionImage', 'optionAImage', 'optionBImage', 'optionCImage', 'optionDImage', 'explanationImage']
           examples = [
-            ['SI', '¿Cuál es el resultado de (x+2)(x+3)?', 'multiple_choice', 'x² + 5x + 6', 'x² + 6x + 5', 'x² + 3x + 2', 'x² + 5x + 3', 'A', 'Se aplica la propiedad distributiva: (x+2)(x+3) = x² + 3x + 2x + 6 = x² + 5x + 6', 'intermedio', '', '', '', '', '', ''],
-            ['SI', 'La suma de dos números negativos siempre es negativa', 'true_false', 'Verdadero', 'Falso', '', '', 'A', 'Al sumar dos números negativos, el resultado es siempre negativo', 'facil', '', '', '', '', '', ''],
-            ['SI', 'Completa: El resultado de 5 + 3 es _____', 'fill_blank', '8', '7', '9', '6', 'A', 'La suma de 5 + 3 es igual a 8', 'facil', '', '', '', '', '', ''],
-            ['SI', 'Empareja cada concepto con su definición', 'matching', 'Fotosíntesis|Proceso por el cual las plantas convierten luz en energía', 'Mitosis|División celular que produce células idénticas', 'ADN|Molécula que contiene la información genética', 'ARN|Molécula que transporta información del ADN', 'A', 'Cada concepto debe emparejarse con su definición correcta', 'intermedio', 'https://ejemplo.com/conceptos.jpg', '', '', '', '', ''],
-            ['SI', 'Explica en tus propias palabras qué es la fotosíntesis y por qué es importante para la vida en la Tierra', 'essay', '', '', '', '', '', 'Esta pregunta permite al estudiante demostrar su comprensión del concepto', 'dificil', 'https://ejemplo.com/fotosintesis.jpg', '', '', '', '', 'https://ejemplo.com/explicacion.jpg']
+            ['SI', '¿Cuál es el resultado de (x+2)(x+3)?', 'multiple_choice', '', 'lesson', '1', 'x² + 5x + 6', 'x² + 6x + 5', 'x² + 3x + 2', 'x² + 5x + 3', 'A', 'Se aplica la propiedad distributiva: (x+2)(x+3) = x² + 3x + 2x + 6 = x² + 5x + 6', 'intermedio', '', '', '', '', '', ''],
+            ['SI', 'La suma de dos números negativos siempre es negativa', 'true_false', '', 'lesson', '2', 'Verdadero', 'Falso', '', '', 'A', 'Al sumar dos números negativos, el resultado es siempre negativo', 'facil', '', '', '', '', '', ''],
+            ['SI', 'Completa: El resultado de 5 + 3 es _____', 'fill_blank', '', 'both', '1', '8', '7', '9', '6', 'A', 'La suma de 5 + 3 es igual a 8', 'facil', '', '', '', '', '', ''],
+            ['SI', 'Empareja cada concepto con su definición', 'matching', '', 'exam', '1', 'Fotosíntesis|Proceso por el cual las plantas convierten luz en energía', 'Mitosis|División celular que produce células idénticas', 'ADN|Molécula que contiene la información genética', 'ARN|Molécula que transporta información del ADN', 'A', 'Cada concepto debe emparejarse con su definición correcta', 'intermedio', 'https://ejemplo.com/conceptos.jpg', '', '', '', '', ''],
+            ['SI', 'Explica en tus propias palabras qué es la fotosíntesis', 'essay', '', 'lesson', '3', '', '', '', '', '', 'Esta pregunta permite al estudiante demostrar su comprensión del concepto', 'dificil', 'https://ejemplo.com/fotosintesis.jpg', '', '', '', '', 'https://ejemplo.com/explicacion.jpg']
           ]
           break
         }

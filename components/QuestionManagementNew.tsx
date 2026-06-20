@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { FormDialog } from '@/components/FormDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { QuestionData, QuestionFormData, QuestionFilters } from '@/types/question';
@@ -255,6 +256,35 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b">
+            <Button
+              type="button"
+              size="sm"
+              variant={pendingFilters.competencyId === 'all' ? 'default' : 'outline'}
+              onClick={() => {
+                const next = { ...pendingFilters, competencyId: 'all' as const }
+                setPendingFilters(next)
+                applyFilters(next)
+              }}
+            >
+              Todas las áreas
+            </Button>
+            {competencies.map((comp) => (
+              <Button
+                key={comp.id}
+                type="button"
+                size="sm"
+                variant={pendingFilters.competencyId === comp.id ? 'default' : 'outline'}
+                onClick={() => {
+                  const next = { ...pendingFilters, competencyId: comp.id }
+                  setPendingFilters(next)
+                  applyFilters(next)
+                }}
+              >
+                {comp.displayName}
+              </Button>
+            ))}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
             <div className="space-y-2">
               <Label htmlFor="search">Buscar</Label>
@@ -615,31 +645,18 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
         </CardContent>
       </Card>
 
-      {/* Formulario de creación/edición */}
-      <Dialog 
-        open={showForm || !!editingQuestion} 
-        onOpenChange={(open) => {
-          if (!open) {
-            setShowForm(false);
-            setEditingQuestion(null);
-            setQuestionTypeSelected(false);
-            setSelectedQuestionType('multiple_choice');
-          }
-        }}
+      {/* Formulario de creación/edición — solo se cierra con Guardar o Cancelar */}
+      <FormDialog
+        open={showForm || !!editingQuestion}
+        onOpenChange={() => {}}
+        className="max-w-6xl max-h-[90vh] overflow-y-auto"
+        title={editingQuestion ? 'Editar Pregunta' : 'Crear Nueva Pregunta'}
+        description={
+          editingQuestion
+            ? 'Modifica los datos de la pregunta'
+            : 'Completa la información para crear una nueva pregunta'
+        }
       >
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingQuestion ? 'Editar Pregunta' : 'Crear Nueva Pregunta'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingQuestion 
-                ? 'Modifica los datos de la pregunta' 
-                : 'Completa la información para crear una nueva pregunta'
-              }
-            </DialogDescription>
-          </DialogHeader>
-          
           <QuestionFormNew
             question={editingQuestion ? {
               ...editingQuestion,
@@ -673,8 +690,7 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
             setQuestionTypeSelected={setQuestionTypeSelected}
             initialQuestionType={editingQuestion ? undefined : selectedQuestionType}
           />
-        </DialogContent>
-      </Dialog>
+      </FormDialog>
     </div>
   );
 }

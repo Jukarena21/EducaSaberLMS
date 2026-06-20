@@ -367,6 +367,36 @@ export async function POST(req: NextRequest) {
         }
       }
     } else if (type === 'questions') {
+      const orderCounters = new Map<string, number>()
+
+      const resolveOrderIndex = async (r: Record<string, string>) => {
+        const lessonId = r.lessonId?.trim() || 'global'
+        if (r.orderInLesson) {
+          const parsed = parseInt(String(r.orderInLesson), 10)
+          if (!Number.isNaN(parsed) && parsed > 0) return parsed
+        }
+        if (r.orderIndex) {
+          const parsed = parseInt(String(r.orderIndex), 10)
+          if (!Number.isNaN(parsed) && parsed > 0) return parsed
+        }
+        if (orderCounters.has(lessonId)) {
+          const next = (orderCounters.get(lessonId) || 0) + 1
+          orderCounters.set(lessonId, next)
+          return next
+        }
+        if (r.lessonId) {
+          const max = await prisma.lessonQuestion.aggregate({
+            where: { lessonId: r.lessonId },
+            _max: { orderIndex: true },
+          })
+          const start = (max._max.orderIndex || 0) + 1
+          orderCounters.set(lessonId, start)
+          return start
+        }
+        orderCounters.set(lessonId, 1)
+        return 1
+      }
+
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
         try {
@@ -387,8 +417,7 @@ export async function POST(req: NextRequest) {
             usage = 'lesson'
           }
           
-          // orderIndex se asigna automáticamente (las preguntas se muestran aleatoriamente, así que usamos 1)
-          const orderIndex = 1
+          const orderIndex = await resolveOrderIndex(r)
           
           // Validaciones según el tipo de pregunta
           if (questionType === 'essay') {

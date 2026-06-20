@@ -17,6 +17,10 @@ import {
   BookOpen
 } from "lucide-react"
 import { QuestionRenderer } from "@/components/QuestionRenderer"
+import {
+  buildQuestionAreaNumberMaps,
+  isClientExamAnswerComplete,
+} from "@/lib/examAnswerValidation"
 
 interface Question {
   id: string
@@ -67,6 +71,7 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
   const [timeRemaining, setTimeRemaining] = useState(exam.timeLimitMinutes * 60)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false)
+  const [showPendingAlert, setShowPendingAlert] = useState(false)
 
   // Inicializar respuestas existentes
   useEffect(() => {
@@ -105,8 +110,62 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
     return groups
   }, [questions])
 
+  const areaNumberMaps = useMemo(
+    () =>
+      buildQuestionAreaNumberMaps(
+        questions.map((q) => ({
+          id: q.id,
+          areaKey: q.competency?.trim() || 'General',
+          areaLabel: q.competency?.trim() || 'General',
+        }))
+      ),
+    [questions]
+  )
+
   const currentQuestion = questions[currentQuestionIndex]
-  const answeredQuestions = Object.keys(answers).length
+  const currentAreaNumber =
+    areaNumberMaps.get(currentQuestion?.id)?.numberInArea ?? currentQuestionIndex + 1
+  const currentAreaLabel =
+    areaNumberMaps.get(currentQuestion?.id)?.areaLabel ||
+    currentQuestion?.competency ||
+    'General'
+
+  const isAnswered = (questionId: string) => {
+    const question = questions.find((q) => q.id === questionId)
+    if (!question) return false
+    const answer = answers[questionId]
+    return isClientExamAnswerComplete(
+      question.questionType || question.type,
+      answer
+    )
+  }
+
+  const answeredQuestions = questions.filter((q) => isAnswered(q.id)).length
+  const allQuestionsAnswered = answeredQuestions === questions.length && questions.length > 0
+
+  const pendingByArea = useMemo(() => {
+    const groups = new Map<string, number[]>()
+    questions.forEach((q, index) => {
+      if (isAnswered(q.id)) return
+      const area = q.competency?.trim() || 'General'
+      const num = areaNumberMaps.get(q.id)?.numberInArea ?? index + 1
+      if (!groups.has(area)) groups.set(area, [])
+      groups.get(area)!.push(num)
+    })
+    return Array.from(groups.entries()).map(([area, numbers]) => ({
+      area,
+      numbers: numbers.sort((a, b) => a - b),
+    }))
+  }, [answers, questions, areaNumberMaps])
+
+  const handleRequestSubmit = () => {
+    if (!allQuestionsAnswered) {
+      setShowPendingAlert(true)
+      return
+    }
+    setShowConfirmSubmit(true)
+  }
+
   const progress = questions.length > 0 ? (answeredQuestions / questions.length) * 100 : 0
 
   // Timer effect
@@ -205,6 +264,10 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
       } else {
         const errorData = await response.json()
         console.error('Submit error:', errorData)
+        if (errorData.pending?.length) {
+          setShowConfirmSubmit(false)
+          setShowPendingAlert(true)
+        }
         throw new Error(errorData.error || 'Error al enviar el examen')
       }
     } catch (error) {
@@ -228,30 +291,6 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
       case 'dificil': return 'bg-red-100 text-red-800'
       default: return 'bg-gray-100 text-gray-800'
     }
-  }
-
-  const isAnswered = (questionId: string) => {
-    const answer = answers[questionId]
-    if (!answer) return false
-    
-    // Si es un string (opción múltiple, verdadero/falso, fill_blank, essay)
-    if (typeof answer === 'string') {
-      return answer.trim().length > 0
-    }
-    
-    // Si es un objeto (matching o respuesta estructurada)
-    if (typeof answer === 'object') {
-      // Para matching, verificar que tenga al menos una clave
-      if (Object.keys(answer).length > 0) {
-        return true
-      }
-      // Para respuestas estructuradas
-      if (answer.optionId || (answer.text && answer.text.trim().length > 0) || answer.answer) {
-        return true
-      }
-    }
-    
-    return false
   }
 
   return (
@@ -299,7 +338,7 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
                     <BookOpen className="h-5 w-5 text-blue-600" />
                     <div>
                       <CardTitle className="text-lg">
-                        Pregunta {currentQuestionIndex + 1}
+                        {currentAreaLabel} — Pregunta {currentAreaNumber}
                       </CardTitle>
                       <div className="flex items-center space-x-2 mt-1">
                         <Badge className={getDifficultyColor(currentQuestion.difficultyLevel)}>
@@ -395,8 +434,9 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
                   </Button>
                 ) : (
                   <Button
-                    onClick={() => setShowConfirmSubmit(true)}
-                    className="flex items-center space-x-2 bg-green-600 hover:bg-green-700"
+                    onClick={handleRequestSubmit}
+                    disabled={!allQuestionsAnswered}
+                    className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 disabled:opacity-50"
                   >
                     <CheckCircle className="h-4 w-4" />
                     <span>Finalizar Examen</span>
@@ -423,7 +463,10 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
                         {group.area}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {group.indices.map((index) => (
+                        {group.indices.map((index) => {
+                          const localNumber =
+                            areaNumberMaps.get(questions[index].id)?.numberInArea ?? index + 1
+                          return (
                           <button
                             key={questions[index].id}
                             type="button"
@@ -436,9 +479,10 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
                                 : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
                             }`}
                           >
-                            {index + 1}
+                            {localNumber}
                           </button>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
                   ))}
@@ -477,9 +521,57 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
                 </AlertDescription>
               </Alert>
             ) : null}
+
+            {!previewMode && !allQuestionsAnswered && (
+              <Alert className="mt-4 border-orange-200 bg-orange-50">
+                <AlertCircle className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="text-orange-900 text-sm">
+                  Faltan {questions.length - answeredQuestions} pregunta(s) por responder. Debes completar todas antes de enviar.
+                  <Button
+                    variant="link"
+                    className="h-auto p-0 ml-1 text-orange-800"
+                    onClick={() => setShowPendingAlert(true)}
+                  >
+                    Ver pendientes
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Alerta: preguntas pendientes */}
+      {showPendingAlert && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg max-h-[80vh] overflow-y-auto">
+            <CardHeader>
+              <CardTitle>Preguntas pendientes</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-gray-600 text-sm">
+                Debes responder todas las preguntas antes de enviar la prueba.
+              </p>
+              <ul className="space-y-2 text-sm">
+                {pendingByArea.map(({ area, numbers }) => (
+                  <li key={area} className="rounded-md border p-3">
+                    <span className="font-medium">{area}</span>
+                    <span className="text-muted-foreground"> — sin responder: </span>
+                    {numbers.map((n) => (
+                      <Badge key={`${area}-${n}`} variant="outline" className="mr-1 mb-1">
+                        #{n}
+                      </Badge>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+              <Button className="w-full" onClick={() => setShowPendingAlert(false)}>
+                Entendido
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Submit Confirmation Modal */}
       {showConfirmSubmit && (
@@ -490,8 +582,7 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-gray-600">
-                Has respondido {answeredQuestions} de {questions.length} preguntas.
-                ¿Estás seguro de que quieres finalizar el examen?
+                Has respondido las {questions.length} preguntas. ¿Estás seguro de que quieres finalizar el examen?
               </p>
               <div className="flex space-x-3">
                 <Button
@@ -503,7 +594,7 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
                 </Button>
                 <Button
                   onClick={handleSubmitExam}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !allQuestionsAnswered}
                   className="flex-1 bg-green-600 hover:bg-green-700"
                 >
                   {isSubmitting ? 'Enviando...' : 'Finalizar'}

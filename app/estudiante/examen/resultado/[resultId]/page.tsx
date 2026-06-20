@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { StudentHeader } from "@/components/StudentHeader"
 import {
   CheckCircle,
@@ -16,7 +19,39 @@ import {
   Target,
   Clock,
   ArrowRight,
+  AlertCircle,
+  Filter,
 } from "lucide-react"
+
+interface ExamQuestionResult {
+  id: string
+  text: string
+  questionImage?: string
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+  optionAImage?: string
+  optionBImage?: string
+  optionCImage?: string
+  optionDImage?: string
+  userAnswer: string
+  correctAnswer?: string
+  isCorrect: boolean
+  explanation?: string
+  explanationImage?: string
+  areaLabel?: string
+  displayNumberInArea?: number
+  tema?: string | null
+  subtema?: string | null
+  componente?: string | null
+  lesson?: {
+    id: string
+    title: string
+    courseId: string
+    courseTitle: string
+  } | null
+}
 
 interface ExamResult {
   id: string
@@ -26,40 +61,20 @@ interface ExamResult {
   totalQuestions: number
   isPassed: boolean
   timeTakenMinutes: number
+  feedbackReleased?: boolean
+  feedbackMessage?: string
   exam: {
     id: string
     title: string
     description: string
+    closeDate?: string | null
     competency: {
       id: string
       name: string
       displayName: string
     }
   }
-  questions?: Array<{
-    id: string
-    text: string
-    questionImage?: string
-    optionA: string
-    optionB: string
-    optionC: string
-    optionD: string
-    optionAImage?: string
-    optionBImage?: string
-    optionCImage?: string
-    optionDImage?: string
-    userAnswer: string
-    correctAnswer: string
-    isCorrect: boolean
-    explanation: string
-    explanationImage?: string
-    lesson?: {
-      id: string
-      title: string
-      courseId: string
-      courseTitle: string
-    } | null
-  }>
+  questions?: ExamQuestionResult[]
 }
 
 export default function ExamResultPage({ params }: { params: Promise<{ resultId: string }> }) {
@@ -69,6 +84,10 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("resumen")
+  const [filterArea, setFilterArea] = useState("all")
+  const [filterTema, setFilterTema] = useState("all")
+  const [filterSubtema, setFilterSubtema] = useState("all")
+  const [filterStatus, setFilterStatus] = useState<"all" | "incorrect" | "correct">("all")
 
   useEffect(() => {
     if (status === "loading") return
@@ -142,10 +161,52 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
   // Preparar datos para la vista
   // Como todos los exámenes actuales son por competencia única, usamos la competencia del examen
   const examCompetency = result.exam.competency?.displayName || 'General'
-  const preguntasFiltradas = result.questions || []
+  const feedbackReleased = result.feedbackReleased !== false
+
+  const areaOptions = (() => {
+    const set = new Set<string>()
+    result.questions?.forEach((q) => {
+      if (q.areaLabel) set.add(q.areaLabel)
+    })
+    return Array.from(set).sort()
+  })()
+
+  const temaOptions = (() => {
+    const set = new Set<string>()
+    result.questions?.forEach((q) => {
+      if (q.tema) set.add(q.tema)
+    })
+    return Array.from(set).sort()
+  })()
+
+  const subtemaOptions = (() => {
+    const set = new Set<string>()
+    result.questions?.forEach((q) => {
+      if (q.subtema) set.add(q.subtema)
+    })
+    return Array.from(set).sort()
+  })()
+
+  const preguntasFiltradas = (result.questions || []).filter((q) => {
+    if (filterArea !== 'all' && q.areaLabel !== filterArea) return false
+    if (filterTema !== 'all' && q.tema !== filterTema) return false
+    if (filterSubtema !== 'all' && q.subtema !== filterSubtema) return false
+    if (filterStatus === 'incorrect' && q.isCorrect) return false
+    if (filterStatus === 'correct' && !q.isCorrect) return false
+    return true
+  })
+
+  const groupedByArea = (() => {
+    const groups = new Map<string, ExamQuestionResult[]>()
+    preguntasFiltradas.forEach((q) => {
+      const key = q.areaLabel || examCompetency
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(q)
+    })
+    return Array.from(groups.entries())
+  })()
   
-  // Función para obtener el texto de una opción
-  const getOptionText = (pregunta: ExamResult['questions'][0], option: string) => {
+  const getOptionText = (pregunta: ExamQuestionResult, option: string) => {
     switch(option) {
       case 'A': return pregunta.optionA
       case 'B': return pregunta.optionB
@@ -156,7 +217,7 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
   }
   
   // Función para obtener la imagen de una opción
-  const getOptionImage = (pregunta: ExamResult['questions'][0], option: string) => {
+  const getOptionImage = (pregunta: ExamQuestionResult, option: string) => {
     switch(option) {
       case 'A': return pregunta.optionAImage
       case 'B': return pregunta.optionBImage
@@ -202,6 +263,13 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
       </div>
 
       <div className="container mx-auto px-4 py-8">
+        {!feedbackReleased && result.feedbackMessage && (
+          <Alert className="mb-6 border-amber-200 bg-amber-50">
+            <AlertCircle className="h-4 w-4 text-amber-700" />
+            <AlertDescription className="text-amber-900">{result.feedbackMessage}</AlertDescription>
+          </Alert>
+        )}
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className={`grid w-full ${false ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
@@ -280,12 +348,78 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
 
           <TabsContent value="preguntas" className="space-y-6">
             {result.questions && result.questions.length > 0 && (
-              <div className="space-y-4">
-                {preguntasFiltradas.map((pregunta, index) => {
-                  const userAnswerText = getOptionText(pregunta, pregunta.userAnswer)
-                  const correctAnswerText = getOptionText(pregunta, pregunta.correctAnswer)
-                  const userAnswerImage = getOptionImage(pregunta, pregunta.userAnswer)
-                  const correctAnswerImage = getOptionImage(pregunta, pregunta.correctAnswer)
+              <>
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-2 mb-4 text-sm font-medium">
+                      <Filter className="h-4 w-4" />
+                      Filtrar resultados
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <Select value={filterArea} onValueChange={setFilterArea}>
+                        <SelectTrigger><SelectValue placeholder="Área" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todas las áreas</SelectItem>
+                          {areaOptions.map((a) => (
+                            <SelectItem key={a} value={a}>{a}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select value={filterTema} onValueChange={setFilterTema}>
+                        <SelectTrigger><SelectValue placeholder="Tema" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos los temas</SelectItem>
+                          {temaOptions.map((t) => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select value={filterSubtema} onValueChange={setFilterSubtema}>
+                        <SelectTrigger><SelectValue placeholder="Subtema" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos los subtemas</SelectItem>
+                          {subtemaOptions.map((s) => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as typeof filterStatus)}>
+                        <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todas</SelectItem>
+                          <SelectItem value="incorrect">Solo incorrectas</SelectItem>
+                          <SelectItem value="correct">Solo correctas</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-3">
+                      Mostrando {preguntasFiltradas.length} de {result.questions.length} pregunta(s)
+                      {!feedbackReleased ? ' — retroalimentación completa pendiente' : ''}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Accordion type="multiple" defaultValue={groupedByArea.map(([area]) => area)} className="space-y-2">
+                  {groupedByArea.map(([area, items]) => (
+                    <AccordionItem key={area} value={area} className="border rounded-lg px-4">
+                      <AccordionTrigger className="hover:no-underline">
+                        <span className="font-medium">{area}</span>
+                        <Badge variant="secondary" className="ml-2">{items.length}</Badge>
+                      </AccordionTrigger>
+                      <AccordionContent className="space-y-4 pt-2">
+                {items.map((pregunta) => {
+                  const userAnswerText = ['A', 'B', 'C', 'D'].includes(pregunta.userAnswer)
+                    ? getOptionText(pregunta, pregunta.userAnswer)
+                    : pregunta.userAnswer
+                  const correctAnswerText = pregunta.correctAnswer
+                    ? getOptionText(pregunta, pregunta.correctAnswer)
+                    : ''
+                  const userAnswerImage = ['A', 'B', 'C', 'D'].includes(pregunta.userAnswer)
+                    ? getOptionImage(pregunta, pregunta.userAnswer)
+                    : null
+                  const correctAnswerImage = pregunta.correctAnswer
+                    ? getOptionImage(pregunta, pregunta.correctAnswer)
+                    : null
                   
                   return (
                     <Card
@@ -295,15 +429,19 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                       <CardHeader>
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <Badge variant="outline">{examCompetency}</Badge>
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <Badge variant="outline">{pregunta.areaLabel || examCompetency}</Badge>
+                              {pregunta.tema && <Badge variant="secondary">{pregunta.tema}</Badge>}
+                              {pregunta.subtema && <Badge variant="outline">{pregunta.subtema}</Badge>}
                               {pregunta.isCorrect ? (
                                 <CheckCircle className="h-5 w-5 text-green-500" />
                               ) : (
                                 <XCircle className="h-5 w-5 text-red-500" />
                               )}
                             </div>
-                            <CardTitle className="text-lg">Pregunta {index + 1}</CardTitle>
+                            <CardTitle className="text-lg">
+                              Pregunta {pregunta.displayNumberInArea ?? '—'}
+                            </CardTitle>
                           </div>
                         </div>
                       </CardHeader>
@@ -321,13 +459,15 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                         )}
                         <p className="text-gray-700">{pregunta.text}</p>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className={`grid grid-cols-1 ${feedbackReleased && pregunta.correctAnswer ? 'md:grid-cols-2' : ''} gap-4`}>
                           <div>
                             <span className="text-sm font-medium text-gray-600">Tu respuesta:</span>
                             <div
                               className={`mt-1 p-3 rounded ${pregunta.isCorrect ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}
                             >
-                              <div className="font-semibold mb-1">Opción {pregunta.userAnswer}</div>
+                              {['A', 'B', 'C', 'D'].includes(pregunta.userAnswer) && (
+                                <div className="font-semibold mb-1">Opción {pregunta.userAnswer}</div>
+                              )}
                               <div>{userAnswerText}</div>
                               {userAnswerImage && (
                                 <div className="mt-2">
@@ -342,6 +482,7 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                               )}
                             </div>
                           </div>
+                          {feedbackReleased && pregunta.correctAnswer && (
                           <div>
                             <span className="text-sm font-medium text-gray-600">Respuesta correcta:</span>
                             <div className="mt-1 p-3 rounded bg-green-50 text-green-800">
@@ -360,8 +501,10 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                               )}
                             </div>
                           </div>
+                          )}
                         </div>
 
+                        {feedbackReleased && pregunta.explanation && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                           <h4 className="font-semibold text-blue-800 mb-2">Explicación:</h4>
                           <p className="text-blue-700 text-sm">{pregunta.explanation}</p>
@@ -377,8 +520,9 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                             </div>
                           )}
                         </div>
+                        )}
 
-                        {!pregunta.isCorrect && pregunta.lesson && (
+                        {feedbackReleased && !pregunta.isCorrect && pregunta.lesson && (
                           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                             <div className="flex items-center justify-between">
                               <div>
@@ -407,7 +551,18 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                     </Card>
                   )
                 })}
-              </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </>
+            )}
+            {result.questions && result.questions.length === 0 && !feedbackReleased && (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  ¡Excelente! No tienes preguntas incorrectas en este intento.
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
         </Tabs>

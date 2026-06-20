@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { FormDialog } from '@/components/FormDialog'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { ImageUpload } from '@/components/ImageUpload'
@@ -249,14 +249,17 @@ export function OtrosSimulacroQuestionEditor({
         </div>
       )}
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingQuestion ? 'Editar Pregunta' : 'Nueva Pregunta'}</DialogTitle>
-            <DialogDescription>
-              En “Otros simulacros”, el campo <strong>Área</strong> es texto libre.
-            </DialogDescription>
-          </DialogHeader>
+      <FormDialog
+        open={showForm}
+        onOpenChange={() => {}}
+        className="max-w-4xl max-h-[90vh] overflow-y-auto"
+        title={editingQuestion ? 'Editar Pregunta' : 'Nueva Pregunta'}
+        description={
+          <>
+            En “Otros simulacros”, el campo <strong>Área</strong> es texto libre.
+          </>
+        }
+      >
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
@@ -383,8 +386,7 @@ export function OtrosSimulacroQuestionEditor({
               <Button type="submit">Guardar</Button>
             </div>
           </form>
-        </DialogContent>
-      </Dialog>
+      </FormDialog>
     </div>
   )
 }

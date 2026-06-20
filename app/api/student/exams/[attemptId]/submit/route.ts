@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { AchievementService } from '@/lib/achievementService'
+import { findUnansweredExamQuestions } from '@/lib/examAnswerValidation'
 
 export async function POST(
   request: NextRequest,
@@ -26,10 +27,13 @@ export async function POST(
       include: {
         exam: {
           include: {
-            examQuestions: true
-          }
-        }
-      }
+            examQuestions: {
+              include: { competency: true },
+              orderBy: { orderIndex: 'asc' },
+            },
+          },
+        },
+      },
     })
 
     if (!result) {
@@ -40,6 +44,19 @@ export async function POST(
     const answers = await prisma.examQuestionAnswer.findMany({
       where: { examResultId: attemptId }
     })
+
+    const answersMap = new Map(answers.map((a) => [a.questionId, a]))
+    const unanswered = findUnansweredExamQuestions(result.exam.examQuestions, answersMap)
+
+    if (unanswered.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'Debes responder todas las preguntas antes de enviar la prueba',
+          pending: unanswered,
+        },
+        { status: 400 }
+      )
+    }
 
     // Helper para validar respuestas según el tipo de pregunta
     const checkAnswer = (question: any, userAnswer: any): boolean => {
