@@ -15,12 +15,22 @@ export function isExamFeedbackReleased(exam: {
 
 export function getFeedbackStatusMessage(released: boolean, closeDate?: Date | string | null): string {
   if (released) {
-    return 'La retroalimentación completa está disponible.'
+    return 'La retroalimentación y el reporte del examen están disponibles.'
   }
   const dateStr = closeDate
     ? new Date(closeDate).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })
     : null
   return dateStr
-    ? `Tu prueba fue enviada. La retroalimentación completa estará disponible cuando finalice el periodo de la prueba (${dateStr}) o cuando el docente cierre la evaluación.`
-    : 'Tu prueba fue enviada. La retroalimentación completa estará disponible cuando el docente cierre la evaluación.'
+    ? `Tu prueba fue enviada correctamente. Podrás ver tus resultados, la retroalimentación y descargar el reporte cuando finalice el periodo de la prueba (${dateStr}).`
+    : 'Tu prueba fue enviada correctamente. Podrás ver tus resultados cuando el docente cierre la evaluación.'
+}
+
+export function getPendingSubmissionMessage(closeDate?: Date | string | null): string {
+  const dateStr = closeDate
+    ? new Date(closeDate).toLocaleString('es-CO', { dateStyle: 'full', timeStyle: 'short' })
+    : null
+  if (dateStr) {
+    return `Los resultados estarán disponibles a partir del ${dateStr}.`
+  }
+  return 'Los resultados estarán disponibles cuando el docente cierre la evaluación.'
 }

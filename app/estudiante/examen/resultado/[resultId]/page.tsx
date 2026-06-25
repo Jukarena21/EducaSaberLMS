@@ -21,7 +21,10 @@ import {
   ArrowRight,
   AlertCircle,
   Filter,
+  FileText,
+  Lock,
 } from "lucide-react"
+import { getPendingSubmissionMessage } from "@/lib/examFeedbackPolicy"
 
 interface ExamQuestionResult {
   id: string
@@ -55,14 +58,16 @@ interface ExamQuestionResult {
 
 interface ExamResult {
   id: string
-  score: number
-  correctAnswers: number
-  incorrectAnswers: number
-  totalQuestions: number
-  isPassed: boolean
-  timeTakenMinutes: number
+  score?: number
+  correctAnswers?: number
+  incorrectAnswers?: number
+  totalQuestions?: number
+  isPassed?: boolean
+  timeTakenMinutes?: number
+  completedAt?: string
   feedbackReleased?: boolean
   feedbackMessage?: string
+  reportAvailable?: boolean
   exam: {
     id: string
     title: string
@@ -88,6 +93,35 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
   const [filterTema, setFilterTema] = useState("all")
   const [filterSubtema, setFilterSubtema] = useState("all")
   const [filterStatus, setFilterStatus] = useState<"all" | "incorrect" | "correct">("all")
+  const [downloadingReport, setDownloadingReport] = useState(false)
+
+  const downloadReport = async () => {
+    if (!result) return
+    setDownloadingReport(true)
+    try {
+      const response = await fetch(`/api/student/exams/result/${result.id}/certificate`, {
+        method: 'POST',
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Error al generar el reporte')
+      }
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `reporte-examen-${result.exam.title.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err) {
+      console.error('Error descargando reporte:', err)
+      alert(err instanceof Error ? err.message : 'Error al descargar el reporte.')
+    } finally {
+      setDownloadingReport(false)
+    }
+  }
 
   useEffect(() => {
     if (status === "loading") return
@@ -161,7 +195,57 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
   // Preparar datos para la vista
   // Como todos los exámenes actuales son por competencia única, usamos la competencia del examen
   const examCompetency = result.exam.competency?.displayName || 'General'
-  const feedbackReleased = result.feedbackReleased !== false
+  const feedbackReleased = result.feedbackReleased === true
+
+  if (!feedbackReleased) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <StudentHeader
+          title={result.exam.title}
+          subtitle={examCompetency}
+          showBackButton={true}
+          backUrl="/estudiante"
+        />
+        <div className="container mx-auto px-4 py-12 max-w-lg">
+          <Card>
+            <CardContent className="pt-10 pb-10 text-center space-y-6">
+              <div className="mx-auto w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle className="h-9 w-9 text-green-600" />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-2xl font-bold text-gray-900">Prueba enviada</h1>
+                <p className="text-gray-600">
+                  Tu examen fue registrado correctamente el{' '}
+                  {result.completedAt
+                    ? new Date(result.completedAt).toLocaleString('es-CO', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      })
+                    : new Date().toLocaleString('es-CO')}
+                  .
+                </p>
+              </div>
+              <Alert className="text-left border-amber-200 bg-amber-50">
+                <Lock className="h-4 w-4 text-amber-700" />
+                <AlertDescription className="text-amber-900">
+                  {result.feedbackMessage ||
+                    getPendingSubmissionMessage(result.exam.closeDate)}
+                </AlertDescription>
+              </Alert>
+              <p className="text-sm text-muted-foreground">
+                Hasta entonces no podrás ver el puntaje, las respuestas ni descargar el reporte.
+              </p>
+              <Button className="w-full" onClick={() => router.push('/estudiante')}>
+                Volver al inicio
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  const score = result.score ?? 0
 
   const areaOptions = (() => {
     const set = new Set<string>()
@@ -246,16 +330,16 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
               <div className="flex items-center space-x-6 mt-4 text-sm opacity-90">
                 <span>Estudiante: {session?.user?.firstName} {session?.user?.lastName}</span>
                 <span>Fecha: {new Date().toLocaleDateString()}</span>
-                <span>Duración: {result.timeTakenMinutes} min</span>
+                <span>Duración: {result.timeTakenMinutes ?? 0} min</span>
               </div>
             </div>
             <div className="text-center">
-              <div className="text-5xl font-bold mb-2">{result.score}%</div>
+              <div className="text-5xl font-bold mb-2">{score}%</div>
               <div className="text-lg">Puntaje General</div>
               <Badge
-                className={`mt-2 ${getNivelRendimiento(result.score).bg} ${getNivelRendimiento(result.score).color}`}
+                className={`mt-2 ${getNivelRendimiento(score).bg} ${getNivelRendimiento(score).color}`}
               >
-                {getNivelRendimiento(result.score).nivel}
+                {getNivelRendimiento(score).nivel}
               </Badge>
             </div>
           </div>
@@ -263,19 +347,11 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
       </div>
 
       <div className="container mx-auto px-4 py-8">
-        {!feedbackReleased && result.feedbackMessage && (
-          <Alert className="mb-6 border-amber-200 bg-amber-50">
-            <AlertCircle className="h-4 w-4 text-amber-700" />
-            <AlertDescription className="text-amber-900">{result.feedbackMessage}</AlertDescription>
-          </Alert>
-        )}
-
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className={`grid w-full ${false ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="resumen">Resumen</TabsTrigger>
-            {/* Solo mostrar "Por Materia" si hay más de una competencia (futuro: simulacros completos) */}
-            {false && <TabsTrigger value="por-materia">Por Materia</TabsTrigger>}
             <TabsTrigger value="preguntas">Preguntas</TabsTrigger>
+            <TabsTrigger value="reporte">Reporte</TabsTrigger>
           </TabsList>
 
           <TabsContent value="resumen" className="space-y-6">
@@ -284,66 +360,62 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
               <Card>
                 <CardContent className="p-6 text-center">
                   <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-green-600">{result.correctAnswers}</div>
+                  <div className="text-2xl font-bold text-green-600">{result.correctAnswers ?? 0}</div>
                   <div className="text-sm text-gray-600">Respuestas Correctas</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-6 text-center">
                   <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-red-600">{result.incorrectAnswers}</div>
+                  <div className="text-2xl font-bold text-red-600">{result.incorrectAnswers ?? 0}</div>
                   <div className="text-sm text-gray-600">Respuestas Incorrectas</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-6 text-center">
                   <Target className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-blue-600">{result.totalQuestions}</div>
+                  <div className="text-2xl font-bold text-blue-600">{result.totalQuestions ?? 0}</div>
                   <div className="text-sm text-gray-600">Total Preguntas</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-6 text-center">
                   <Clock className="h-8 w-8 text-purple-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-purple-600">{result.timeTakenMinutes} min</div>
+                  <div className="text-2xl font-bold text-purple-600">{result.timeTakenMinutes ?? 0} min</div>
                   <div className="text-sm text-gray-600">Tiempo Total</div>
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
 
-            {/* Actions */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button 
-                className="bg-[#73A2D3] hover:bg-[#5a8bc4]"
-                onClick={async () => {
-                  try {
-                    const response = await fetch(`/api/student/exams/result/${result.id}/certificate`, {
-                      method: 'POST'
-                    })
-                    
-                    if (!response.ok) {
-                      throw new Error('Error al generar el certificado')
-                    }
-                    
-                    const blob = await response.blob()
-                    const url = window.URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `certificado-examen-${result.exam.title.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`
-                    document.body.appendChild(a)
-                    a.click()
-                    window.URL.revokeObjectURL(url)
-                    document.body.removeChild(a)
-                  } catch (error) {
-                    console.error('Error descargando certificado:', error)
-                    alert('Error al descargar el certificado. Por favor, intenta nuevamente.')
-                  }
-                }}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Descargar Certificado
-              </Button>
-            </div>
+          <TabsContent value="reporte" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Reporte del examen
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Descarga un PDF con tu puntaje, estadísticas del intento y comparación de desempeño
+                  por área (estudiante, colegio y plataforma).
+                </p>
+                <ul className="text-sm text-gray-600 list-disc list-inside space-y-1">
+                  <li>Puntaje y resultado del examen</li>
+                  <li>Gráfico de desempeño por competencias</li>
+                  <li>Datos del estudiante y del colegio</li>
+                </ul>
+                <Button
+                  className="bg-[#73A2D3] hover:bg-[#5a8bc4]"
+                  disabled={downloadingReport || !result.reportAvailable}
+                  onClick={downloadReport}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {downloadingReport ? 'Generando reporte...' : 'Descargar reporte PDF'}
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="preguntas" className="space-y-6">
@@ -393,8 +465,7 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                       </Select>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3">
-                      Mostrando {preguntasFiltradas.length} de {result.questions.length} pregunta(s)
-                      {!feedbackReleased ? ' — retroalimentación completa pendiente' : ''}
+                      Mostrando {preguntasFiltradas.length} de {result.questions?.length ?? 0} pregunta(s)
                     </p>
                   </CardContent>
                 </Card>
@@ -459,7 +530,7 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                         )}
                         <p className="text-gray-700">{pregunta.text}</p>
 
-                        <div className={`grid grid-cols-1 ${feedbackReleased && pregunta.correctAnswer ? 'md:grid-cols-2' : ''} gap-4`}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <span className="text-sm font-medium text-gray-600">Tu respuesta:</span>
                             <div
@@ -482,7 +553,7 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                               )}
                             </div>
                           </div>
-                          {feedbackReleased && pregunta.correctAnswer && (
+                          {pregunta.correctAnswer && (
                           <div>
                             <span className="text-sm font-medium text-gray-600">Respuesta correcta:</span>
                             <div className="mt-1 p-3 rounded bg-green-50 text-green-800">
@@ -504,7 +575,7 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                           )}
                         </div>
 
-                        {feedbackReleased && pregunta.explanation && (
+                        {pregunta.explanation && (
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                           <h4 className="font-semibold text-blue-800 mb-2">Explicación:</h4>
                           <p className="text-blue-700 text-sm">{pregunta.explanation}</p>
@@ -522,7 +593,7 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                         </div>
                         )}
 
-                        {feedbackReleased && !pregunta.isCorrect && pregunta.lesson && (
+                        {!pregunta.isCorrect && pregunta.lesson && (
                           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                             <div className="flex items-center justify-between">
                               <div>
@@ -557,10 +628,10 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                 </Accordion>
               </>
             )}
-            {result.questions && result.questions.length === 0 && !feedbackReleased && (
+            {(!result.questions || result.questions.length === 0) && (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
-                  ¡Excelente! No tienes preguntas incorrectas en este intento.
+                  No hay preguntas para mostrar en este resultado.
                 </CardContent>
               </Card>
             )}

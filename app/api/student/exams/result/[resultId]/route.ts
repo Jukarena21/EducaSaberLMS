@@ -75,6 +75,30 @@ export async function GET(
     const feedbackReleased = isExamFeedbackReleased(result.exam)
     const feedbackMessage = getFeedbackStatusMessage(feedbackReleased, result.exam.closeDate)
 
+    const examPayload = {
+      id: result.exam.id,
+      title: result.exam.title,
+      description: result.exam.description,
+      closeDate: result.exam.closeDate,
+      competency: {
+        id: result.exam.competency?.id,
+        name: result.exam.competency?.name,
+        displayName: result.exam.competency?.displayName,
+      },
+    }
+
+    // Antes del cierre: no exponer puntajes ni preguntas (evita filtración entre estudiantes)
+    if (!feedbackReleased) {
+      return NextResponse.json({
+        id: result.id,
+        completedAt: result.completedAt,
+        feedbackReleased: false,
+        feedbackMessage,
+        reportAvailable: false,
+        exam: examPayload,
+      })
+    }
+
     const areaNumberMaps = buildQuestionAreaNumberMaps(
       result.exam.examQuestions.map((q) => ({
         id: q.id,
@@ -99,7 +123,7 @@ export async function GET(
       const numbering = areaNumberMaps.get(examQuestion.id)
       const isCorrect = studentAnswer?.isCorrect || false
 
-      const base = {
+      return {
         id: examQuestion.id,
         text: examQuestion.questionText,
         questionImage: examQuestion.questionImage,
@@ -112,7 +136,10 @@ export async function GET(
         optionCImage: examQuestion.optionCImage,
         optionDImage: examQuestion.optionDImage,
         userAnswer: studentAnswer?.selectedOption || studentAnswer?.answerText || 'No respondida',
+        correctAnswer: examQuestion.correctOption,
         isCorrect,
+        explanation: examQuestion.explanation || 'Sin explicación disponible',
+        explanationImage: examQuestion.explanationImage,
         areaLabel: numbering?.areaLabel || 'General',
         displayNumberInArea: numbering?.numberInArea ?? examQuestion.orderIndex,
         tema: examQuestion.tema || null,
@@ -127,24 +154,7 @@ export async function GET(
             }
           : null,
       }
-
-      if (!feedbackReleased) {
-        return base
-      }
-
-      return {
-        ...base,
-        correctAnswer: examQuestion.correctOption,
-        explanation: examQuestion.explanation || 'Sin explicación disponible',
-        explanationImage: examQuestion.explanationImage,
-      }
     })
-
-    let visibleQuestions = questions
-
-    if (!feedbackReleased) {
-      visibleQuestions = questions.filter((q) => !q.isCorrect)
-    }
 
     return NextResponse.json({
       id: result.id,
@@ -155,20 +165,11 @@ export async function GET(
       isPassed: result.isPassed,
       timeTakenMinutes: result.timeTakenMinutes,
       completedAt: result.completedAt,
-      feedbackReleased,
+      feedbackReleased: true,
       feedbackMessage,
-      exam: {
-        id: result.exam.id,
-        title: result.exam.title,
-        description: result.exam.description,
-        closeDate: result.exam.closeDate,
-        competency: {
-          id: result.exam.competency?.id,
-          name: result.exam.competency?.name,
-          displayName: result.exam.competency?.displayName,
-        },
-      },
-      questions: visibleQuestions,
+      reportAvailable: true,
+      exam: examPayload,
+      questions,
     })
   } catch (error) {
     console.error('Error fetching exam result:', error)

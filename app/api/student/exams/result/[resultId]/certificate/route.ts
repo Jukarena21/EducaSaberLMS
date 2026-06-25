@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { isExamFeedbackReleased } from '@/lib/examFeedbackPolicy'
 import puppeteer from 'puppeteer'
 import fs from 'fs'
 import path from 'path'
@@ -47,6 +48,16 @@ export async function POST(
     // Verificar que el examen esté completado
     if (!result.completedAt) {
       return NextResponse.json({ error: 'El examen aún no ha sido completado' }, { status: 400 })
+    }
+
+    if (!isExamFeedbackReleased(result.exam)) {
+      return NextResponse.json(
+        {
+          error:
+            'El reporte estará disponible cuando finalice el periodo de la prueba (fecha de cierre del examen).',
+        },
+        { status: 403 }
+      )
     }
 
     // Obtener datos de desempeño por competencia para el gráfico radar (solo ICFES, excluir "otros")
