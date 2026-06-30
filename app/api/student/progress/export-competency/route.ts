@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import puppeteer from 'puppeteer'
+import { launchBrowser } from '@/lib/pdf/launchBrowser'
 import fs from 'fs'
 import path from 'path'
 import Handlebars from 'handlebars'
@@ -175,6 +175,9 @@ function generateExamBasedAnalysis(
     recommendations: recommendations.length > 0 ? recommendations : ['Sigue preparándote para los próximos exámenes']
   }
 }
+
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
@@ -458,10 +461,7 @@ export async function POST(request: NextRequest) {
     const html = template(templateData)
 
     // Generar PDF con Puppeteer
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    })
+    const browser = await launchBrowser()
 
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle0' })
@@ -481,7 +481,7 @@ export async function POST(request: NextRequest) {
 
     // Retornar el PDF
     const competencyName = competency?.name || 'competencia'
-    const userName = user?.name || 'estudiante'
+    const userName = `${user?.firstName || 'estudiante'}-${user?.lastName || ''}`.replace(/\s+/g, '-').toLowerCase()
     
     return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {

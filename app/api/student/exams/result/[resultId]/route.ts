@@ -7,6 +7,12 @@ import {
   isExamFeedbackReleased,
 } from '@/lib/examFeedbackPolicy'
 import { buildQuestionAreaNumberMaps } from '@/lib/examAnswerValidation'
+import {
+  buildExamAttemptBreakdown,
+  getCompetencyRadarComparison,
+} from '@/lib/examPerformanceAnalytics'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(
   request: NextRequest,
@@ -27,29 +33,15 @@ export async function GET(
         userId,
       },
       include: {
+        user: {
+          select: { schoolId: true },
+        },
         exam: {
           include: {
             competency: true,
             examQuestions: {
               include: {
                 competency: true,
-                lesson: {
-                  include: {
-                    moduleLessons: {
-                      include: {
-                        module: {
-                          include: {
-                            courseModules: {
-                              include: {
-                                course: true,
-                              },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
               },
               orderBy: {
                 orderIndex: 'asc',
@@ -110,51 +102,28 @@ export async function GET(
       }))
     )
 
-    const questions = result.exam.examQuestions.map((examQuestion) => {
-      const studentAnswer = result.examQuestionAnswers.find(
-        (answer) => answer.questionId === examQuestion.id
-      )
+    const defaultAreaLabel = result.exam.competency?.displayName || 'General'
 
-      const lesson = examQuestion.lesson
-      const moduleLesson = lesson?.moduleLessons?.[0]
-      const courseModule = moduleLesson?.module?.courseModules?.[0]
-      const course = courseModule?.course
+    const attemptBreakdown = buildExamAttemptBreakdown(
+      result.exam.examQuestions.map((q) => ({
+        id: q.id,
+        tema: q.tema,
+        subtema: q.subtema,
+        competency: q.competency,
+      })),
+      result.examQuestionAnswers.map((a) => ({
+        questionId: a.questionId,
+        isCorrect: a.isCorrect || false,
+      })),
+      defaultAreaLabel
+    )
 
-      const numbering = areaNumberMaps.get(examQuestion.id)
-      const isCorrect = studentAnswer?.isCorrect || false
+    const radarComparison = await getCompetencyRadarComparison(userId, result.user.schoolId)
 
-      return {
-        id: examQuestion.id,
-        text: examQuestion.questionText,
-        questionImage: examQuestion.questionImage,
-        optionA: examQuestion.optionA,
-        optionB: examQuestion.optionB,
-        optionC: examQuestion.optionC,
-        optionD: examQuestion.optionD,
-        optionAImage: examQuestion.optionAImage,
-        optionBImage: examQuestion.optionBImage,
-        optionCImage: examQuestion.optionCImage,
-        optionDImage: examQuestion.optionDImage,
-        userAnswer: studentAnswer?.selectedOption || studentAnswer?.answerText || 'No respondida',
-        correctAnswer: examQuestion.correctOption,
-        isCorrect,
-        explanation: examQuestion.explanation || 'Sin explicación disponible',
-        explanationImage: examQuestion.explanationImage,
-        areaLabel: numbering?.areaLabel || 'General',
-        displayNumberInArea: numbering?.numberInArea ?? examQuestion.orderIndex,
-        tema: examQuestion.tema || null,
-        subtema: examQuestion.subtema || null,
-        componente: examQuestion.componente || null,
-        lesson: lesson
-          ? {
-              id: lesson.id,
-              title: lesson.title,
-              courseId: course?.id,
-              courseTitle: course?.title,
-            }
-          : null,
-      }
-    })
+    const weakTopics = [...attemptBreakdown.byTema, ...attemptBreakdown.bySubtema]
+      .filter((item) => item.total >= 2 && item.percent < 60)
+      .sort((a, b) => a.percent - b.percent)
+      .slice(0, 5)
 
     return NextResponse.json({
       id: result.id,
@@ -169,7 +138,21 @@ export async function GET(
       feedbackMessage,
       reportAvailable: true,
       exam: examPayload,
-      questions,
+      analytics: {
+        attemptBreakdown,
+        radarComparison,
+        weakTopics,
+        areaLabels: Array.from(
+          new Set(
+            result.exam.examQuestions.map(
+              (q) =>
+                areaNumberMaps.get(q.id)?.areaLabel ||
+                q.competency?.displayName ||
+                defaultAreaLabel
+            )
+          )
+        ).sort(),
+      },
     })
   } catch (error) {
     console.error('Error fetching exam result:', error)

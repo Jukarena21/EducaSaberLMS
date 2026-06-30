@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/rbac'
 import { prisma } from '@/lib/prisma'
-import puppeteer from 'puppeteer'
+import { launchBrowser } from '@/lib/pdf/launchBrowser'
 import fs from 'fs'
 import path from 'path'
 import Handlebars from 'handlebars'
@@ -256,6 +256,9 @@ Handlebars.registerHelper('comparisonChart', function(chartData: any[]) {
   
   return new Handlebars.SafeString(svg)
 })
+
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
@@ -970,15 +973,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Generar PDF con Puppeteer
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    })
+    const browser = await launchBrowser()
 
     const page = await browser.newPage()
     await page.setViewport({

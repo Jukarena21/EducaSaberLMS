@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireRole } from '@/lib/rbac'
 import { prisma } from '@/lib/prisma'
-import puppeteer from 'puppeteer'
+import { launchBrowser } from '@/lib/pdf/launchBrowser'
+import type { Browser } from 'puppeteer-core'
 import fs from 'fs'
 import path from 'path'
 
@@ -30,11 +31,14 @@ function pct(correct: number, total: number) {
   return total > 0 ? Math.round((correct / total) * 100) : 0
 }
 
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  let browser: puppeteer.Browser | null = null
+  let browser: Browser | null = null
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
@@ -447,10 +451,7 @@ export async function GET(
 </html>
 `
 
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    })
+    browser = await launchBrowser()
     const page = await browser.newPage()
     await page.setContent(html, { waitUntil: 'networkidle0' })
     const pdfBuffer = await page.pdf({

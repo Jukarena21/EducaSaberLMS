@@ -3,10 +3,14 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isExamFeedbackReleased } from '@/lib/examFeedbackPolicy'
-import puppeteer from 'puppeteer'
+import { getCompetencyRadarComparison } from '@/lib/examPerformanceAnalytics'
+import { launchBrowser } from '@/lib/pdf/launchBrowser'
 import fs from 'fs'
 import path from 'path'
 import Handlebars from 'handlebars'
+
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
 
 export async function POST(
   request: NextRequest,
@@ -60,103 +64,8 @@ export async function POST(
       )
     }
 
-    // Obtener datos de desempeño por competencia para el gráfico radar (solo ICFES, excluir "otros")
-    const competencies = await prisma.area.findMany({
-      where: {
-        name: { not: 'otros' }
-      },
-      orderBy: {
-        name: 'asc'
-      }
-    })
-
-    // Obtener resultados de exámenes del estudiante por competencia
-    const studentExamResults = await prisma.examResult.findMany({
-      where: {
-        userId,
-        completedAt: { not: null }
-      },
-      include: {
-        exam: {
-          include: {
-            competency: true
-          }
-        }
-      }
-    })
-
-    // Calcular promedios por competencia para el estudiante
-    const studentScoresByCompetency = competencies.map(comp => {
-      const exams = studentExamResults.filter(r => r.exam.competencyId === comp.id)
-      const avgScore = exams.length > 0
-        ? Math.round(exams.reduce((sum, e) => sum + e.score, 0) / exams.length)
-        : 0
-      // Asegurar que el score esté entre 0 y 100
-      const clampedScore = Math.min(Math.max(avgScore, 0), 100)
-      return {
-        id: comp.id,
-        score: clampedScore
-      }
-    })
-
-    // Calcular promedios por competencia para el colegio
-    const schoolExamResults = await prisma.examResult.findMany({
-      where: {
-        user: {
-          schoolId: result.user.schoolId
-        },
-        completedAt: { not: null }
-      },
-      include: {
-        exam: {
-          include: {
-            competency: true
-          }
-        }
-      }
-    })
-
-    const schoolScoresByCompetency = competencies.map(comp => {
-      const exams = schoolExamResults.filter(r => r.exam.competencyId === comp.id)
-      const avgScore = exams.length > 0
-        ? Math.round(exams.reduce((sum, e) => sum + e.score, 0) / exams.length)
-        : 0
-      // Asegurar que el score esté entre 0 y 100
-      const clampedScore = Math.min(Math.max(avgScore, 0), 100)
-      return {
-        id: comp.id,
-        score: clampedScore
-      }
-    })
-
-    // Calcular promedios por competencia para toda la plataforma
-    const platformExamResults = await prisma.examResult.findMany({
-      where: {
-        completedAt: { not: null }
-      },
-      include: {
-        exam: {
-          include: {
-            competency: true
-          }
-        }
-      },
-      take: 10000 // Limitar para rendimiento
-    })
-
-    const platformScoresByCompetency = competencies.map(comp => {
-      const exams = platformExamResults.filter(r => r.exam.competencyId === comp.id)
-      const avgScore = exams.length > 0
-        ? Math.round(exams.reduce((sum, e) => sum + e.score, 0) / exams.length)
-        : 0
-      // Asegurar que el score esté entre 0 y 100
-      const clampedScore = Math.min(Math.max(avgScore, 0), 100)
-      return {
-        id: comp.id,
-        score: clampedScore
-      }
-    })
-
+    // Datos comparativos para el gráfico radar
+    const radarData = await getCompetencyRadarComparison(userId, result.user.schoolId)
 
     // Preparar datos para el certificado
     const fullName = `${result.user.firstName || ''} ${result.user.lastName || ''}`.trim() || 'Estudiante'
@@ -226,13 +135,13 @@ export async function POST(
       secondaryColor: 'dc2626', // Rojo
       accentColor: '059669', // Verde
       // Datos para el gráfico radar
-      competencies: competencies.map(c => ({
+      competencies: radarData.competencies.map((c) => ({
         id: c.id,
-        displayName: c.displayName || c.name
+        displayName: c.displayName,
       })),
-      studentScoresForRadar: studentScoresByCompetency,
-      schoolScoresForRadar: schoolScoresByCompetency,
-      platformScoresForRadar: platformScoresByCompetency
+      studentScoresForRadar: radarData.studentScores,
+      schoolScoresForRadar: radarData.schoolScores,
+      platformScoresForRadar: radarData.platformScores,
     }
 
     // Registrar helper de Handlebars para el gráfico radar
@@ -377,11 +286,8 @@ export async function POST(
     const template = Handlebars.compile(templateContent)
     const html = template(certificateData)
 
-    // Generar PDF con Puppeteer
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    })
+    // Generar PDF con Puppeteer (compatible con Vercel)
+    const browser = await launchBrowser()
 
     const page = await browser.newPage()
     

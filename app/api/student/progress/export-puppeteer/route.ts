@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import puppeteer from 'puppeteer'
+import { launchBrowser } from '@/lib/pdf/launchBrowser'
 import fs from 'fs'
 import path from 'path'
 import { AchievementService } from '@/lib/achievementService'
@@ -543,6 +543,9 @@ function generateAchievements(competencies: any[], averageProgress: number): any
   
   return achievements
 }
+
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   try {
@@ -1508,15 +1511,7 @@ export async function POST(request: NextRequest) {
     console.log('📝 HTML template compiled')
 
     // Configurar Puppeteer optimizado
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    })
+    const browser = await launchBrowser()
 
     const page = await browser.newPage()
     
