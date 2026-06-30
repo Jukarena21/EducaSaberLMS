@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isExamFeedbackReleased } from '@/lib/examFeedbackPolicy'
-import { getCompetencyRadarComparison } from '@/lib/examPerformanceAnalytics'
+import { getCompetencyRadarComparison, buildExamAttemptBreakdown } from '@/lib/examPerformanceAnalytics'
 import { launchBrowser } from '@/lib/pdf/launchBrowser'
 import fs from 'fs'
 import path from 'path'
@@ -34,8 +34,14 @@ export async function POST(
       include: {
         exam: {
           include: {
-            competency: true
-          }
+            competency: true,
+            examQuestions: {
+              include: { competency: true },
+            },
+          },
+        },
+        examQuestionAnswers: {
+          select: { questionId: true, isCorrect: true },
         },
         user: {
           include: {
@@ -65,7 +71,27 @@ export async function POST(
     }
 
     // Datos comparativos para el gráfico radar
-    const radarData = await getCompetencyRadarComparison(userId, result.user.schoolId)
+    const defaultCompetencyLabel = result.exam.competency?.displayName || 'General'
+    const attemptBreakdown = buildExamAttemptBreakdown(
+      result.exam.examQuestions.map((q) => ({
+        id: q.id,
+        competencyId: q.competencyId || result.exam.competencyId,
+        tema: q.tema,
+        subtema: q.subtema,
+        competency: q.competency || result.exam.competency,
+      })),
+      result.examQuestionAnswers.map((a) => ({
+        questionId: a.questionId,
+        isCorrect: a.isCorrect || false,
+      })),
+      defaultCompetencyLabel
+    )
+
+    const radarData = await getCompetencyRadarComparison(
+      userId,
+      result.user.schoolId,
+      attemptBreakdown
+    )
 
     // Preparar datos para el certificado
     const fullName = `${result.user.firstName || ''} ${result.user.lastName || ''}`.trim() || 'Estudiante'
@@ -142,6 +168,7 @@ export async function POST(
       studentScoresForRadar: radarData.studentScores,
       schoolScoresForRadar: radarData.schoolScores,
       platformScoresForRadar: radarData.platformScores,
+      attemptScoresForRadar: radarData.attemptScores,
     }
 
     // Registrar helper de Handlebars para el gráfico radar
@@ -289,45 +316,49 @@ export async function POST(
     // Generar PDF con Puppeteer (compatible con Vercel)
     const browser = await launchBrowser()
 
-    const page = await browser.newPage()
-    
-    // Configurar viewport para orientación horizontal (A4 landscape) con más altura para el gráfico
-    await page.setViewport({
-      width: 1200, // Ancho mayor para acomodar el gráfico completo
-      height: 1000, // Altura mayor para mejor renderizado
-      deviceScaleFactor: 1
-    })
-    
-    await page.setContent(html, { waitUntil: 'networkidle0' })
+    try {
+      const page = await browser.newPage()
 
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      landscape: true, // Orientación horizontal
-      printBackground: true,
-      margin: {
-        top: '0.3in',
-        right: '0.3in',
-        bottom: '0.3in',
-        left: '0.3in'
-      },
-      preferCSSPageSize: true
-    })
+      await page.setViewport({
+        width: 1200,
+        height: 1000,
+        deviceScaleFactor: 1,
+      })
 
-    await browser.close()
+      await page.setContent(html, { waitUntil: 'load', timeout: 60000 })
 
-    // Retornar el PDF
-    const fileName = `certificado-${result.exam.title.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.pdf`
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        landscape: true,
+        printBackground: true,
+        margin: {
+          top: '0.3in',
+          right: '0.3in',
+          bottom: '0.3in',
+          left: '0.3in',
+        },
+        preferCSSPageSize: true,
+      })
 
-    return new NextResponse(Buffer.from(pdfBuffer), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${fileName}"`
-      }
-    })
+      const fileName = `certificado-${result.exam.title.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.pdf`
+
+      return new NextResponse(Buffer.from(pdfBuffer), {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${fileName}"`,
+        },
+      })
+    } finally {
+      await browser.close()
+    }
 
   } catch (error) {
     console.error('Error generating certificate:', error)
-    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
+    const detail = error instanceof Error ? error.message : 'Error desconocido'
+    return NextResponse.json(
+      { error: 'Error al generar el reporte PDF', detail },
+      { status: 500 }
+    )
   }
 }
 

@@ -9,7 +9,7 @@ export async function generatePdfFromHtml(
 
   try {
     const page = await browser.newPage()
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 60000 })
+    await page.setContent(html, { waitUntil: 'load', timeout: 60000 })
 
     const pdfBuffer = await page.pdf({
       format: 'A4',

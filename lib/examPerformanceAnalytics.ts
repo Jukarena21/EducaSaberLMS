@@ -10,9 +10,11 @@ export type CompetencyRadarData = {
   studentScores: ScoreByCompetency[]
   schoolScores: ScoreByCompetency[]
   platformScores: ScoreByCompetency[]
+  attemptScores: ScoreByCompetency[]
 }
 
 export type BreakdownItem = {
+  id?: string
   label: string
   total: number
   correct: number
@@ -21,13 +23,14 @@ export type BreakdownItem = {
 }
 
 export type ExamAttemptAnalytics = {
-  byArea: BreakdownItem[]
+  byCompetency: BreakdownItem[]
   byTema: BreakdownItem[]
   bySubtema: BreakdownItem[]
 }
 
 type ExamQuestionRow = {
   id: string
+  competencyId?: string | null
   tema?: string | null
   subtema?: string | null
   competency?: { displayName?: string | null; name?: string | null } | null
@@ -56,9 +59,66 @@ function averageScoresByCompetency(
   })
 }
 
+function aggregateBreakdown(
+  questions: ExamQuestionRow[],
+  answers: AnswerRow[],
+  getLabel: (question: ExamQuestionRow) => string | null | undefined,
+  getId?: (question: ExamQuestionRow) => string | null | undefined,
+  fallbackLabel = 'Sin clasificar'
+): BreakdownItem[] {
+  const answerMap = new Map(answers.map((a) => [a.questionId, a.isCorrect]))
+  const groups = new Map<
+    string,
+    { id?: string; total: number; correct: number }
+  >()
+
+  for (const question of questions) {
+    const label = getLabel(question)?.trim() || fallbackLabel
+    const groupId = getId?.(question) || undefined
+    const key = groupId ? `${groupId}::${label}` : label
+    const current = groups.get(key) || { id: groupId, total: 0, correct: 0 }
+    current.total += 1
+    if (answerMap.get(question.id)) current.correct += 1
+    groups.set(key, current)
+  }
+
+  return Array.from(groups.entries())
+    .map(([key, stats]) => ({
+      id: stats.id,
+      label: key.includes('::') ? key.split('::').slice(1).join('::') : key,
+      total: stats.total,
+      correct: stats.correct,
+      incorrect: stats.total - stats.correct,
+      percent:
+        stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'es'))
+}
+
+export function buildExamAttemptBreakdown(
+  questions: ExamQuestionRow[],
+  answers: AnswerRow[],
+  defaultCompetencyLabel = 'General'
+): ExamAttemptAnalytics {
+  return {
+    byCompetency: aggregateBreakdown(
+      questions,
+      answers,
+      (q) =>
+        q.competency?.displayName ||
+        q.competency?.name ||
+        defaultCompetencyLabel,
+      (q) => q.competencyId || undefined
+    ),
+    byTema: aggregateBreakdown(questions, answers, (q) => q.tema),
+    bySubtema: aggregateBreakdown(questions, answers, (q) => q.subtema),
+  }
+}
+
 export async function getCompetencyRadarComparison(
   userId: string,
-  schoolId: string | null | undefined
+  schoolId: string | null | undefined,
+  attemptBreakdown?: ExamAttemptAnalytics
 ): Promise<CompetencyRadarData> {
   const competencies = await prisma.area.findMany({
     where: { name: { not: 'otros' } },
@@ -89,6 +149,11 @@ export async function getCompetencyRadarComparison(
       }),
     ])
 
+  const attemptScores: ScoreByCompetency[] = competencyIds.map((compId) => {
+    const item = attemptBreakdown?.byCompetency.find((entry) => entry.id === compId)
+    return { id: compId, score: item?.percent ?? 0 }
+  })
+
   return {
     competencies: competencies.map((c) => ({
       id: c.id,
@@ -96,50 +161,10 @@ export async function getCompetencyRadarComparison(
     })),
     studentScores: averageScoresByCompetency(studentExamResults, competencyIds),
     schoolScores: averageScoresByCompetency(schoolExamResults, competencyIds),
-    platformScores: averageScoresByCompetency(platformExamResults, competencyIds),
-  }
-}
-
-function aggregateBreakdown(
-  questions: ExamQuestionRow[],
-  answers: AnswerRow[],
-  getLabel: (question: ExamQuestionRow) => string | null | undefined,
-  fallbackLabel = 'Sin clasificar'
-): BreakdownItem[] {
-  const answerMap = new Map(answers.map((a) => [a.questionId, a.isCorrect]))
-  const groups = new Map<string, { total: number; correct: number }>()
-
-  for (const question of questions) {
-    const label = getLabel(question)?.trim() || fallbackLabel
-    const current = groups.get(label) || { total: 0, correct: 0 }
-    current.total += 1
-    if (answerMap.get(question.id)) current.correct += 1
-    groups.set(label, current)
-  }
-
-  return Array.from(groups.entries())
-    .map(([label, stats]) => ({
-      label,
-      total: stats.total,
-      correct: stats.correct,
-      incorrect: stats.total - stats.correct,
-      percent: stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'es'))
-}
-
-export function buildExamAttemptBreakdown(
-  questions: ExamQuestionRow[],
-  answers: AnswerRow[],
-  defaultAreaLabel = 'General'
-): ExamAttemptAnalytics {
-  return {
-    byArea: aggregateBreakdown(
-      questions,
-      answers,
-      (q) => q.competency?.displayName || q.competency?.name || defaultAreaLabel
+    platformScores: averageScoresByCompetency(
+      platformExamResults,
+      competencyIds
     ),
-    byTema: aggregateBreakdown(questions, answers, (q) => q.tema),
-    bySubtema: aggregateBreakdown(questions, answers, (q) => q.subtema),
+    attemptScores,
   }
 }

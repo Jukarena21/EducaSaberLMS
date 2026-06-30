@@ -76,7 +76,10 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
       })
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || "Error al generar el reporte")
+        throw new Error(
+          [data.error, data.detail].filter(Boolean).join(": ") ||
+            "Error al generar el reporte"
+        )
       }
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)

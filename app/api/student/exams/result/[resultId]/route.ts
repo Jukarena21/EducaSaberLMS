@@ -102,23 +102,28 @@ export async function GET(
       }))
     )
 
-    const defaultAreaLabel = result.exam.competency?.displayName || 'General'
+    const defaultCompetencyLabel = result.exam.competency?.displayName || 'General'
 
     const attemptBreakdown = buildExamAttemptBreakdown(
       result.exam.examQuestions.map((q) => ({
         id: q.id,
+        competencyId: q.competencyId || result.exam.competencyId,
         tema: q.tema,
         subtema: q.subtema,
-        competency: q.competency,
+        competency: q.competency || result.exam.competency,
       })),
       result.examQuestionAnswers.map((a) => ({
         questionId: a.questionId,
         isCorrect: a.isCorrect || false,
       })),
-      defaultAreaLabel
+      defaultCompetencyLabel
     )
 
-    const radarComparison = await getCompetencyRadarComparison(userId, result.user.schoolId)
+    const radarComparison = await getCompetencyRadarComparison(
+      userId,
+      result.user.schoolId,
+      attemptBreakdown
+    )
 
     const weakTopics = [...attemptBreakdown.byTema, ...attemptBreakdown.bySubtema]
       .filter((item) => item.total >= 2 && item.percent < 60)
@@ -142,13 +147,13 @@ export async function GET(
         attemptBreakdown,
         radarComparison,
         weakTopics,
-        areaLabels: Array.from(
+        competencyLabels: Array.from(
           new Set(
             result.exam.examQuestions.map(
               (q) =>
                 areaNumberMaps.get(q.id)?.areaLabel ||
                 q.competency?.displayName ||
-                defaultAreaLabel
+                defaultCompetencyLabel
             )
           )
         ).sort(),
