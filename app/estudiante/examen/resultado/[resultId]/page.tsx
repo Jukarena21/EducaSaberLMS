@@ -71,7 +71,7 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
     if (!result) return
     setDownloadingReport(true)
     try {
-      const response = await fetch(`/api/student/exams/result/${result.id}/certificate`, {
+      const response = await fetch(`/api/student/exams/result/${result.id}/report`, {
         method: "POST",
       })
       if (!response.ok) {

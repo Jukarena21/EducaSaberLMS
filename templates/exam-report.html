@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reporte de examen - {{examTitle}}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #1f2937;
+      background: #fff;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .page { padding: 8px 0 24px; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid #{{primaryColor}};
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+    }
+    .logo { max-height: 44px; max-width: 120px; object-fit: contain; }
+    .header-center { text-align: center; flex: 1; padding: 0 16px; }
+    .report-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #{{primaryColor}};
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .report-subtitle { color: #6b7280; font-size: 13px; margin-top: 4px; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .card {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 14px;
+      background: #f9fafb;
+    }
+    .card h3 {
+      font-size: 13px;
+      color: #{{primaryColor}};
+      margin-bottom: 10px;
+      border-bottom: 1px solid #dbeafe;
+      padding-bottom: 6px;
+    }
+    .card p { margin: 4px 0; color: #374151; }
+    .score-banner {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, #{{primaryColor}} 0%, #{{secondaryColor}} 100%);
+      color: white;
+      border-radius: 10px;
+      padding: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .score-value { font-size: 42px; font-weight: 800; }
+    .score-label { font-size: 14px; opacity: 0.95; }
+    .stats-row { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 8px; }
+    .stat-pill {
+      background: rgba(255,255,255,0.15);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 12px;
+    }
+    .section { margin-bottom: 20px; }
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #{{primaryColor}};
+      margin-bottom: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 8px;
+      text-align: left;
+    }
+    th { background: #eff6ff; color: #1e3a8a; }
+    td.center, th.center { text-align: center; }
+    .progress-wrap {
+      background: #e5e7eb;
+      border-radius: 999px;
+      height: 8px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #73A2D3, #{{secondaryColor}});
+      border-radius: 999px;
+    }
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .note {
+      font-size: 10px;
+      color: #6b7280;
+      margin-top: 8px;
+      text-align: center;
+    }
+    .weak-list { list-style: none; }
+    .weak-list li {
+      border: 1px solid #fde68a;
+      background: #fffbeb;
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .footer {
+      margin-top: 24px;
+      padding-top: 10px;
+      border-top: 1px solid #e5e7eb;
+      text-align: center;
+      color: #6b7280;
+      font-size: 10px;
+    }
+    .badge-pass { color: #059669; font-weight: 700; }
+    .badge-fail { color: #dc2626; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <div>
+        {{#if companyLogo}}<img src="{{companyLogo}}" alt="EducaSaber" class="logo">{{/if}}
+      </div>
+      <div class="header-center">
+        <div class="report-title">Reporte de examen</div>
+        <div class="report-subtitle">Informe analítico de desempeño (sin detalle de preguntas)</div>
+      </div>
+      <div style="text-align:right;">
+        {{#if schoolLogo}}<img src="{{schoolLogo}}" alt="{{schoolName}}" class="logo">{{/if}}
+      </div>
+    </div>
+
+    <div class="meta-grid">
+      <div class="card">
+        <h3>Estudiante</h3>
+        <p><strong>{{studentName}}</strong></p>
+        {{#if studentDocument}}<p>{{studentDocument}}</p>{{/if}}
+        <p><strong>Institución:</strong> {{schoolName}}</p>
+      </div>
+      <div class="card">
+        <h3>Examen</h3>
+        <p><strong>Título:</strong> {{examTitle}}</p>
+        <p><strong>Competencia principal:</strong> {{competencyName}}</p>
+        <p><strong>Fecha:</strong> {{completedDate}}</p>
+        <p><strong>Duración:</strong> {{timeTakenMinutes}} min</p>
+      </div>
+
+      <div class="score-banner">
+        <div>
+          <div class="score-label">Puntaje obtenido</div>
+          <div class="score-value">{{score}}%</div>
+          <div class="score-label">Nivel: {{performanceLevel}}</div>
+        </div>
+        <div>
+          <div class="stats-row">
+            <span class="stat-pill">Correctas: {{correctAnswers}}</span>
+            <span class="stat-pill">Incorrectas: {{incorrectAnswers}}</span>
+            <span class="stat-pill">Total: {{totalQuestions}}</span>
+            <span class="stat-pill">
+              {{#if isPassed}}<span class="badge-pass">Aprobado</span>{{else}}<span class="badge-fail">No aprobado</span>{{/if}}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Desempeño por competencia (este examen)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Competencia ICFES</th>
+            <th class="center">Correctas</th>
+            <th class="center">Total</th>
+            <th class="center">Acierto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each competencyBreakdown}}
+          <tr>
+            <td>
+              {{label}}
+              <div class="progress-wrap"><div class="progress-fill" style="width: {{percent}}%;"></div></div>
+            </td>
+            <td class="center">{{correct}}</td>
+            <td class="center">{{total}}</td>
+            <td class="center"><strong>{{percent}}%</strong></td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+
+    {{#if temaBreakdown.length}}
+    <div class="section">
+      <div class="section-title">Desempeño por tema (este examen)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Tema</th>
+            <th class="center">Correctas</th>
+            <th class="center">Total</th>
+            <th class="center">Acierto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each temaBreakdown}}
+          <tr>
+            <td>{{label}}</td>
+            <td class="center">{{correct}}</td>
+            <td class="center">{{total}}</td>
+            <td class="center">{{percent}}%</td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+    {{/if}}
+
+    <div class="section">
+      <div class="section-title">Comparación por competencia ICFES</div>
+      <div class="chart-row">
+        <div>
+          {{{competencyComparisonChart competencies attemptScoresForRadar studentScoresForRadar schoolScoresForRadar platformScoresForRadar}}}
+          <p class="note">Este examen (morado), tu promedio (azul), colegio (naranja) y plataforma (verde).</p>
+        </div>
+        <div>
+          <table>
+            <thead>
+              <tr>
+                <th>Competencia</th>
+                <th class="center">Este examen</th>
+                <th class="center">Tu prom.</th>
+                <th class="center">Colegio</th>
+                <th class="center">Plataforma</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each comparisonRows}}
+              <tr>
+                <td>{{name}}</td>
+                <td class="center">{{attempt}}%</td>
+                <td class="center">{{student}}%</td>
+                <td class="center">{{school}}%</td>
+                <td class="center">{{platform}}%</td>
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    {{#if weakTopics.length}}
+    <div class="section">
+      <div class="section-title">Temas a reforzar</div>
+      <ul class="weak-list">
+        {{#each weakTopics}}
+        <li><span>{{label}}</span><strong>{{percent}}% acierto</strong></li>
+        {{/each}}
+      </ul>
+    </div>
+    {{/if}}
+
+    <div class="footer">
+      Reporte generado el {{generatedDate}} · EducaSaber LMS · No incluye enunciados ni respuestas individuales
+    </div>
+  </div>
+</body>
+</html>
