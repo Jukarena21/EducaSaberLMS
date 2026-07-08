@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isExamFeedbackReleased } from '@/lib/examFeedbackPolicy'
-import { getCompetencyRadarComparison, buildExamAttemptBreakdown } from '@/lib/examPerformanceAnalytics'
+import { getAreaRadarComparison, buildExamAttemptBreakdown } from '@/lib/examPerformanceAnalytics'
 import { launchBrowser } from '@/lib/pdf/launchBrowser'
 import fs from 'fs'
 import path from 'path'
@@ -71,11 +71,13 @@ export async function POST(
     }
 
     // Datos comparativos para el gráfico radar
-    const defaultCompetencyLabel = result.exam.competency?.displayName || 'General'
+    const defaultAreaLabel = result.exam.competency?.displayName || 'General'
     const attemptBreakdown = buildExamAttemptBreakdown(
       result.exam.examQuestions.map((q) => ({
         id: q.id,
         competencyId: q.competencyId || result.exam.competencyId,
+        competencia: q.competencia,
+        componente: q.componente,
         tema: q.tema,
         subtema: q.subtema,
         competency: q.competency || result.exam.competency,
@@ -84,10 +86,10 @@ export async function POST(
         questionId: a.questionId,
         isCorrect: a.isCorrect || false,
       })),
-      defaultCompetencyLabel
+      defaultAreaLabel
     )
 
-    const radarData = await getCompetencyRadarComparison(
+    const radarData = await getAreaRadarComparison(
       userId,
       result.user.schoolId,
       attemptBreakdown
@@ -161,9 +163,9 @@ export async function POST(
       secondaryColor: 'dc2626', // Rojo
       accentColor: '059669', // Verde
       // Datos para el gráfico radar
-      competencies: radarData.competencies.map((c) => ({
-        id: c.id,
-        displayName: c.displayName,
+      competencies: radarData.areas.map((a) => ({
+        id: a.id,
+        displayName: a.displayName,
       })),
       studentScoresForRadar: radarData.studentScores,
       schoolScoresForRadar: radarData.schoolScores,

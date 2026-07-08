@@ -22,8 +22,9 @@ import {
   Cell,
 } from "recharts"
 import type {
+  AreaRadarData,
   BreakdownItem,
-  CompetencyRadarData,
+  ExamAttemptAnalytics,
 } from "@/lib/examPerformanceAnalytics"
 import { AlertTriangle, BarChart3, Target, TrendingUp } from "lucide-react"
 
@@ -31,32 +32,72 @@ type ExamResultAnalyticsProps = {
   score: number
   correctAnswers: number
   incorrectAnswers: number
-  attemptBreakdown: {
-    byCompetency: BreakdownItem[]
-    byTema: BreakdownItem[]
-    bySubtema: BreakdownItem[]
-  }
-  radarComparison: CompetencyRadarData
+  attemptBreakdown: ExamAttemptAnalytics
+  radarComparison: AreaRadarData
   weakTopics: BreakdownItem[]
 }
 
 const PIE_COLORS = ["#22c55e", "#ef4444"]
 
-function scoreForCompetency(
-  scores: Array<{ id: string; score: number }>,
-  competencyId: string
-) {
-  return scores.find((s) => s.id === competencyId)?.score ?? 0
+function scoreForArea(scores: Array<{ id: string; score: number }>, areaId: string) {
+  return scores.find((s) => s.id === areaId)?.score ?? 0
 }
 
-function buildRadarChartData(radar: CompetencyRadarData) {
-  return radar.competencies.map((comp) => ({
-    subject: comp.displayName,
-    "Este examen": scoreForCompetency(radar.attemptScores, comp.id),
-    Estudiante: scoreForCompetency(radar.studentScores, comp.id),
-    Colegio: scoreForCompetency(radar.schoolScores, comp.id),
-    Plataforma: scoreForCompetency(radar.platformScores, comp.id),
+function buildRadarChartData(radar: AreaRadarData) {
+  return radar.areas.map((area) => ({
+    subject: area.displayName,
+    "Este examen": scoreForArea(radar.attemptScores, area.id),
+    Estudiante: scoreForArea(radar.studentScores, area.id),
+    Colegio: scoreForArea(radar.schoolScores, area.id),
+    Plataforma: scoreForArea(radar.platformScores, area.id),
   }))
+}
+
+function toBarData(items: BreakdownItem[], excludeUnclassified = true) {
+  return items
+    .filter((item) => (excludeUnclassified ? item.label !== "Sin clasificar" : true))
+    .slice(0, 10)
+    .map((item) => ({
+      name: item.label.length > 22 ? `${item.label.slice(0, 20)}…` : item.label,
+      fullName: item.label,
+      acierto: item.percent,
+    }))
+}
+
+function BreakdownBarCard({
+  title,
+  items,
+  color,
+}: {
+  title: string
+  items: BreakdownItem[]
+  color: string
+}) {
+  const data = toBarData(items)
+  if (data.length === 0) return null
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+              <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
+              <Tooltip
+                formatter={(value: number) => [`${value}%`, "Acierto"]}
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ""}
+              />
+              <Bar dataKey="acierto" fill={color} radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 export function ExamResultAnalytics({
@@ -68,30 +109,11 @@ export function ExamResultAnalytics({
   weakTopics,
 }: ExamResultAnalyticsProps) {
   const radarData = buildRadarChartData(radarComparison)
-  const competencyBarData = attemptBreakdown.byCompetency.map((item) => ({
-    name: item.label.length > 18 ? `${item.label.slice(0, 16)}…` : item.label,
-    fullName: item.label,
-    acierto: item.percent,
-    correctas: item.correct,
-    total: item.total,
-  }))
-
-  const temaBarData = attemptBreakdown.byTema
-    .filter((item) => item.label !== "Sin clasificar")
-    .slice(0, 8)
-    .map((item) => ({
-      name: item.label.length > 22 ? `${item.label.slice(0, 20)}…` : item.label,
-      fullName: item.label,
-      acierto: item.percent,
-    }))
 
   const pieData = [
     { name: "Correctas", value: correctAnswers },
     { name: "Incorrectas", value: incorrectAnswers },
   ]
-
-  const percentTooltip = (value: number | string | undefined) =>
-    typeof value === "number" ? `${value}%` : `${value ?? 0}%`
 
   return (
     <div className="space-y-6">
@@ -137,26 +159,24 @@ export function ExamResultAnalytics({
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-indigo-600" />
-              Desempeño por competencia (este examen)
+              Desempeño por área (este examen)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {competencyBarData.length > 0 ? (
+            {attemptBreakdown.byArea.length > 0 ? (
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={competencyBarData}
+                    data={toBarData(attemptBreakdown.byArea, false)}
                     layout="vertical"
                     margin={{ left: 8, right: 16 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                    <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
                     <Tooltip
                       formatter={(value: number) => [`${value}%`, "Acierto"]}
-                      labelFormatter={(_, payload) =>
-                        payload?.[0]?.payload?.fullName || ""
-                      }
+                      labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ""}
                     />
                     <Bar dataKey="acierto" fill="#73A2D3" radius={[0, 4, 4, 0]} />
                   </BarChart>
@@ -164,7 +184,7 @@ export function ExamResultAnalytics({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground py-8 text-center">
-                No hay datos por competencia para este examen.
+                No hay datos por área para este examen.
               </p>
             )}
           </CardContent>
@@ -175,7 +195,7 @@ export function ExamResultAnalytics({
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-emerald-600" />
-            Comparación por competencia ICFES
+            Comparación por área ICFES
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -192,36 +212,12 @@ export function ExamResultAnalytics({
                       tick={{ fontSize: 10 }}
                       tickFormatter={(v) => `${v}%`}
                     />
-                    <Radar
-                      name="Este examen"
-                      dataKey="Este examen"
-                      stroke="#8b5cf6"
-                      fill="#8b5cf6"
-                      fillOpacity={0.2}
-                    />
-                    <Radar
-                      name="Tu promedio"
-                      dataKey="Estudiante"
-                      stroke="#3b82f6"
-                      fill="#3b82f6"
-                      fillOpacity={0.2}
-                    />
-                    <Radar
-                      name="Colegio"
-                      dataKey="Colegio"
-                      stroke="#f97316"
-                      fill="#f97316"
-                      fillOpacity={0.12}
-                    />
-                    <Radar
-                      name="Plataforma"
-                      dataKey="Plataforma"
-                      stroke="#10b981"
-                      fill="#10b981"
-                      fillOpacity={0.08}
-                    />
+                    <Radar name="Este examen" dataKey="Este examen" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.2} />
+                    <Radar name="Tu promedio" dataKey="Estudiante" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
+                    <Radar name="Colegio" dataKey="Colegio" stroke="#f97316" fill="#f97316" fillOpacity={0.12} />
+                    <Radar name="Plataforma" dataKey="Plataforma" stroke="#10b981" fill="#10b981" fillOpacity={0.08} />
                     <Legend />
-                    <Tooltip formatter={percentTooltip} />
+                    <Tooltip formatter={(value: any) => `${value}%`} />
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
@@ -230,7 +226,7 @@ export function ExamResultAnalytics({
                 <table className="w-full text-sm border-collapse">
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
-                      <th className="py-2 pr-3 font-medium">Competencia</th>
+                      <th className="py-2 pr-3 font-medium">Área</th>
                       <th className="py-2 px-2 font-medium text-center">Este examen</th>
                       <th className="py-2 px-2 font-medium text-center">Tu promedio</th>
                       <th className="py-2 px-2 font-medium text-center">Colegio</th>
@@ -252,9 +248,8 @@ export function ExamResultAnalytics({
               </div>
 
               <p className="text-xs text-muted-foreground text-center mt-3">
-                En el sistema, &quot;competencia&quot; corresponde al área ICFES (Matemáticas,
-                Lectura Crítica, etc.). Los promedios históricos se calculan por exámenes
-                presentados en cada competencia.
+                El &quot;área&quot; es la materia ICFES (Matemáticas, Lectura Crítica, etc.). Los
+                promedios históricos se calculan por exámenes presentados en cada área.
               </p>
             </>
           ) : (
@@ -265,46 +260,36 @@ export function ExamResultAnalytics({
         </CardContent>
       </Card>
 
-      {temaBarData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Desempeño por tema (este examen)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={temaBarData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10 }}
-                    interval={0}
-                    angle={-20}
-                    textAnchor="end"
-                    height={70}
-                  />
-                  <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                  <Tooltip
-                    formatter={(value: number) => [`${value}%`, "Acierto"]}
-                    labelFormatter={(_, payload) =>
-                      payload?.[0]?.payload?.fullName || ""
-                    }
-                  />
-                  <Bar dataKey="acierto" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <BreakdownBarCard
+          title="Desempeño por competencia (este examen)"
+          items={attemptBreakdown.byCompetencia}
+          color="#6366f1"
+        />
+        <BreakdownBarCard
+          title="Desempeño por componente (este examen)"
+          items={attemptBreakdown.byComponente}
+          color="#0ea5e9"
+        />
+        <BreakdownBarCard
+          title="Desempeño por tema (este examen)"
+          items={attemptBreakdown.byTema}
+          color="#f59e0b"
+        />
+        <BreakdownBarCard
+          title="Desempeño por subtema (este examen)"
+          items={attemptBreakdown.bySubtema}
+          color="#ec4899"
+        />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Detalle por competencia</CardTitle>
+            <CardTitle className="text-base">Detalle por área</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {attemptBreakdown.byCompetency.map((item) => (
+            {attemptBreakdown.byArea.map((item) => (
               <div key={item.label}>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="font-medium">{item.label}</span>
@@ -322,7 +307,7 @@ export function ExamResultAnalytics({
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-600" />
-              Temas a reforzar
+              Temas y subtemas a reforzar
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -345,9 +330,6 @@ export function ExamResultAnalytics({
                 No se detectaron temas críticos en este intento. ¡Buen trabajo!
               </p>
             )}
-            <p className="text-xs text-muted-foreground mt-4">
-              Por política del examen, no mostramos el enunciado ni las respuestas individuales.
-            </p>
           </CardContent>
         </Card>
       </div>

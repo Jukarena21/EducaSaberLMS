@@ -21,6 +21,7 @@ import {
   buildQuestionAreaNumberMaps,
   isClientExamAnswerComplete,
 } from "@/lib/examAnswerValidation"
+import { decodeMaybeEscapedHtml } from "@/lib/htmlContent"
 
 interface Question {
   id: string
@@ -362,7 +363,7 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
                 {(currentQuestion as any).lessonUrl && (
                   <div 
                     className="mb-4 p-4 bg-gray-50 rounded-lg border prose max-w-none"
-                    dangerouslySetInnerHTML={{ __html: (currentQuestion as any).lessonUrl }}
+                    dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml((currentQuestion as any).lessonUrl) }}
                   />
                 )}
                 <QuestionRenderer

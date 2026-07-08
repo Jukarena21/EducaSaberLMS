@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { CheckCircle, XCircle, AlertCircle, GripVertical } from 'lucide-react'
+import { SafeImage } from '@/components/SafeImage'
+import { decodeMaybeEscapedHtml } from '@/lib/htmlContent'
 
 interface QuestionRendererProps {
   question: {
@@ -120,11 +122,11 @@ export function QuestionRenderer({
     if (!question.questionImage) return null
     return (
       <div className="flex justify-center my-4">
-        <img
+        <SafeImage
           src={question.questionImage}
           alt="Imagen de la pregunta"
-          className="max-w-full h-auto rounded-lg shadow-md border border-gray-200"
-          style={{ maxHeight: '400px' }}
+          className="max-w-full h-auto rounded-lg shadow-md border border-gray-200 object-contain"
+          style={{ maxHeight: '260px' }}
         />
       </div>
     )
@@ -185,7 +187,7 @@ export function QuestionRenderer({
                     <span className="font-medium text-gray-700 mr-2">{option.key}.</span>
                     <span 
                       className="text-gray-800 text-sm prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{ __html: option.text }}
+                      dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(option.text) }}
                     />
                   </div>
                   {showCorrectAnswer && (
@@ -197,10 +199,10 @@ export function QuestionRenderer({
                 </div>
                 {option.image && (
                   <div className="flex-1 flex items-center justify-center mt-2">
-                    <img
+                    <SafeImage
                       src={option.image}
                       alt={`Opción ${option.key}`}
-                      className="w-full h-48 object-contain rounded border border-gray-200 bg-gray-50"
+                      className="max-w-full h-auto max-h-40 object-contain rounded border border-gray-200 bg-gray-50"
                     />
                   </div>
                 )}
@@ -263,7 +265,7 @@ export function QuestionRenderer({
                   </div>
                   <span 
                     className="font-medium text-gray-800 prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: option.text }}
+                    dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(option.text) }}
                   />
                 </div>
                 {showCorrectAnswer && (
@@ -287,7 +289,7 @@ export function QuestionRenderer({
       question.optionB,
       question.optionC,
       question.optionD
-    ].filter(Boolean)
+    ].filter((d): d is string => Boolean(d))
     
     const userAnswer = typeof selectedAnswer === 'string' 
       ? selectedAnswer 
@@ -353,7 +355,7 @@ export function QuestionRenderer({
                       <span className="font-medium text-gray-700 mr-2">{optionKey}.</span>
                       <span 
                         className="text-gray-800 prose prose-sm max-w-none"
-                        dangerouslySetInnerHTML={{ __html: option }}
+                        dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(option) }}
                       />
                     </div>
                     {showCorrectAnswer && (
@@ -400,9 +402,9 @@ export function QuestionRenderer({
                     </p>
                     {!isCorrect && (
                       <p className="text-sm text-gray-700 mt-1">
-                        La respuesta correcta es: <strong 
+                        La respuesta correcta es:                         <strong 
                           className="text-green-700 prose prose-sm max-w-none"
-                          dangerouslySetInnerHTML={{ __html: correctAnswer }}
+                          dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(correctAnswer) }}
                         />
                       </p>
                     )}
@@ -542,7 +544,7 @@ export function QuestionRenderer({
                     </div>
                     <span 
                       className="font-medium text-gray-800 flex-1 prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{ __html: leftItem.text }}
+                      dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(leftItem.text) }}
                     />
                     {isMatched && !isDragging && (
                       <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
@@ -587,7 +589,7 @@ export function QuestionRenderer({
                         </div>
                         <span 
                           className="font-medium text-gray-800 flex-1 prose prose-sm max-w-none"
-                          dangerouslySetInnerHTML={{ __html: rightItem.text }}
+                          dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(rightItem.text) }}
                         />
                         {showCorrectAnswer && (
                           <div className="flex-shrink-0">
@@ -656,7 +658,7 @@ export function QuestionRenderer({
       ? selectedAnswer 
       : selectedAnswer?.text || essayAnswer
 
-    const wordCount = answer.trim().split(/\s+/).filter(word => word.length > 0).length
+    const wordCount = answer.trim().split(/\s+/).filter((word: string) => word.length > 0).length
     const charCount = answer.length
 
     return (
@@ -688,11 +690,11 @@ export function QuestionRenderer({
             <p className="text-sm text-blue-800 whitespace-pre-line">{question.explanation}</p>
             {question.explanationImage && (
               <div className="mt-3">
-                <img
+                <SafeImage
                   src={question.explanationImage}
                   alt="Imagen de explicación"
-                  className="max-w-full h-auto rounded border border-blue-200"
-                  style={{ maxHeight: '300px' }}
+                  className="max-w-full h-auto rounded border border-blue-200 object-contain"
+                  style={{ maxHeight: '220px' }}
                 />
               </div>
             )}
@@ -709,7 +711,7 @@ export function QuestionRenderer({
         {renderQuestionImage()}
         <div 
           className="text-lg font-medium leading-relaxed prose max-w-none"
-          dangerouslySetInnerHTML={{ __html: question.questionText }}
+          dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(question.questionText) }}
         />
       </div>
 
@@ -729,11 +731,11 @@ export function QuestionRenderer({
           <p className="text-sm text-blue-800">{question.explanation}</p>
           {question.explanationImage && (
             <div className="mt-3">
-              <img
+              <SafeImage
                 src={question.explanationImage}
                 alt="Imagen de explicación"
-                className="max-w-full h-auto rounded"
-                style={{ maxHeight: '300px' }}
+                className="max-w-full h-auto rounded object-contain"
+                style={{ maxHeight: '220px' }}
               />
             </div>
           )}

@@ -502,9 +502,14 @@ export function ManualSimulacroQuestionEditor({
                         #{areaNumberMaps.get(question.id)?.numberInArea ?? index + 1}
                       </Badge>
                       <Badge>{question.difficultyLevel}</Badge>
-                      {question.competency && (
+                      {question.competencyId && (
                         <Badge variant="secondary">
-                          {question.competency.displayName}
+                          {getAreaDisplayName(question.competencyId)}
+                        </Badge>
+                      )}
+                      {question.competencia && (
+                        <Badge variant="outline" className="border-indigo-300 text-indigo-700">
+                          {question.competencia}
                         </Badge>
                       )}
                     </div>
@@ -609,9 +614,11 @@ export function ManualSimulacroQuestionEditor({
                         </div>
                       </div>
                       <div className="pt-2 border-t space-y-1">
+                        {question.competencyId && <div><strong>Área:</strong> {getAreaDisplayName(question.competencyId)}</div>}
+                        {question.competencia && <div><strong>Competencia:</strong> {question.competencia}</div>}
+                        {question.componente && <div><strong>Componente:</strong> {question.componente}</div>}
                         {question.tema && <div><strong>Tema:</strong> {question.tema}</div>}
                         {question.subtema && <div><strong>Subtema:</strong> {question.subtema}</div>}
-                        {question.componente && <div><strong>Componente:</strong> {question.componente}</div>}
                       </div>
                       {question.explanation && (
                         <div className="pt-2 border-t">

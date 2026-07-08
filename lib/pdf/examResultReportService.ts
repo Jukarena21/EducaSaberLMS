@@ -5,9 +5,10 @@ import { prisma } from '@/lib/prisma'
 import { isExamFeedbackReleased } from '@/lib/examFeedbackPolicy'
 import {
   buildExamAttemptBreakdown,
-  getCompetencyRadarComparison,
+  getAreaRadarComparison,
 } from '@/lib/examPerformanceAnalytics'
 import { launchBrowser } from '@/lib/pdf/launchBrowser'
+import { resolveAreaDisplayName } from '@/lib/icfesAreas'
 
 let radarHelperRegistered = false
 
@@ -184,11 +185,13 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
     )
   }
 
-  const defaultCompetencyLabel = result.exam.competency?.displayName || 'General'
+  const defaultAreaLabel = resolveAreaDisplayName(result.exam.competency, 'General')
   const attemptBreakdown = buildExamAttemptBreakdown(
     result.exam.examQuestions.map((q) => ({
       id: q.id,
       competencyId: q.competencyId || result.exam.competencyId,
+      competencia: q.competencia,
+      componente: q.componente,
       tema: q.tema,
       subtema: q.subtema,
       competency: q.competency || result.exam.competency,
@@ -197,10 +200,10 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
       questionId: a.questionId,
       isCorrect: a.isCorrect || false,
     })),
-    defaultCompetencyLabel
+    defaultAreaLabel
   )
 
-  const radarData = await getCompetencyRadarComparison(
+  const radarData = await getAreaRadarComparison(
     userId,
     result.user.schoolId,
     attemptBreakdown
@@ -226,15 +229,15 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
           ? 'Aceptable'
           : 'Necesita mejora'
 
-  const comparisonRows = radarData.competencies.map((comp) => ({
-    name: comp.displayName,
+  const comparisonRows = radarData.areas.map((area) => ({
+    name: area.displayName,
     attempt:
-      radarData.attemptScores.find((s) => s.id === comp.id)?.score ?? 0,
+      radarData.attemptScores.find((s) => s.id === area.id)?.score ?? 0,
     student:
-      radarData.studentScores.find((s) => s.id === comp.id)?.score ?? 0,
-    school: radarData.schoolScores.find((s) => s.id === comp.id)?.score ?? 0,
+      radarData.studentScores.find((s) => s.id === area.id)?.score ?? 0,
+    school: radarData.schoolScores.find((s) => s.id === area.id)?.score ?? 0,
     platform:
-      radarData.platformScores.find((s) => s.id === comp.id)?.score ?? 0,
+      radarData.platformScores.find((s) => s.id === area.id)?.score ?? 0,
   }))
 
   registerCompetencyComparisonChartHelper()
@@ -251,7 +254,7 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
       ? `${result.user.documentType || 'CC'}: ${result.user.documentNumber}`
       : '',
     examTitle: result.exam.title,
-    competencyName: result.exam.competency?.displayName || 'Competencia',
+    areaName: resolveAreaDisplayName(result.exam.competency, 'Área'),
     completedDate,
     timeTakenMinutes: result.timeTakenMinutes ?? 0,
     score: result.score,
@@ -266,12 +269,21 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
     primaryColor: '1e40af',
     secondaryColor: 'dc2626',
     accentColor: '059669',
-    competencyBreakdown: attemptBreakdown.byCompetency,
+    areaBreakdown: attemptBreakdown.byArea,
+    competenciaBreakdown: attemptBreakdown.byCompetencia.filter(
+      (item) => item.label !== 'Sin clasificar'
+    ),
+    componenteBreakdown: attemptBreakdown.byComponente.filter(
+      (item) => item.label !== 'Sin clasificar'
+    ),
     temaBreakdown: attemptBreakdown.byTema.filter(
       (item) => item.label !== 'Sin clasificar'
     ),
+    subtemaBreakdown: attemptBreakdown.bySubtema.filter(
+      (item) => item.label !== 'Sin clasificar'
+    ),
     weakTopics,
-    competencies: radarData.competencies,
+    areas: radarData.areas,
     attemptScoresForRadar: radarData.attemptScores,
     studentScoresForRadar: radarData.studentScores,
     schoolScoresForRadar: radarData.schoolScores,

@@ -160,7 +160,7 @@
       <div class="card">
         <h3>Examen</h3>
         <p><strong>Título:</strong> {{examTitle}}</p>
-        <p><strong>Competencia principal:</strong> {{competencyName}}</p>
+        <p><strong>Área principal:</strong> {{areaName}}</p>
         <p><strong>Fecha:</strong> {{completedDate}}</p>
         <p><strong>Duración:</strong> {{timeTakenMinutes}} min</p>
       </div>
@@ -185,18 +185,18 @@
     </div>
 
     <div class="section">
-      <div class="section-title">Desempeño por competencia (este examen)</div>
+      <div class="section-title">Desempeño por área (este examen)</div>
       <table>
         <thead>
           <tr>
-            <th>Competencia ICFES</th>
+            <th>Área ICFES</th>
             <th class="center">Correctas</th>
             <th class="center">Total</th>
             <th class="center">Acierto</th>
           </tr>
         </thead>
         <tbody>
-          {{#each competencyBreakdown}}
+          {{#each areaBreakdown}}
           <tr>
             <td>
               {{label}}
@@ -210,6 +210,58 @@
         </tbody>
       </table>
     </div>
+
+    {{#if competenciaBreakdown.length}}
+    <div class="section">
+      <div class="section-title">Desempeño por competencia (este examen)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Competencia</th>
+            <th class="center">Correctas</th>
+            <th class="center">Total</th>
+            <th class="center">Acierto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each competenciaBreakdown}}
+          <tr>
+            <td>{{label}}</td>
+            <td class="center">{{correct}}</td>
+            <td class="center">{{total}}</td>
+            <td class="center">{{percent}}%</td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+    {{/if}}
+
+    {{#if componenteBreakdown.length}}
+    <div class="section">
+      <div class="section-title">Desempeño por componente (este examen)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Componente</th>
+            <th class="center">Correctas</th>
+            <th class="center">Total</th>
+            <th class="center">Acierto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each componenteBreakdown}}
+          <tr>
+            <td>{{label}}</td>
+            <td class="center">{{correct}}</td>
+            <td class="center">{{total}}</td>
+            <td class="center">{{percent}}%</td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+    {{/if}}
 
     {{#if temaBreakdown.length}}
     <div class="section">
@@ -237,18 +289,44 @@
     </div>
     {{/if}}
 
+    {{#if subtemaBreakdown.length}}
     <div class="section">
-      <div class="section-title">Comparación por competencia ICFES</div>
+      <div class="section-title">Desempeño por subtema (este examen)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Subtema</th>
+            <th class="center">Correctas</th>
+            <th class="center">Total</th>
+            <th class="center">Acierto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each subtemaBreakdown}}
+          <tr>
+            <td>{{label}}</td>
+            <td class="center">{{correct}}</td>
+            <td class="center">{{total}}</td>
+            <td class="center">{{percent}}%</td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+    {{/if}}
+
+    <div class="section">
+      <div class="section-title">Comparación por área ICFES</div>
       <div class="chart-row">
         <div>
-          {{{competencyComparisonChart competencies attemptScoresForRadar studentScoresForRadar schoolScoresForRadar platformScoresForRadar}}}
+          {{{competencyComparisonChart areas attemptScoresForRadar studentScoresForRadar schoolScoresForRadar platformScoresForRadar}}}
           <p class="note">Este examen (morado), tu promedio (azul), colegio (naranja) y plataforma (verde).</p>
         </div>
         <div>
           <table>
             <thead>
               <tr>
-                <th>Competencia</th>
+                <th>Área</th>
                 <th class="center">Este examen</th>
                 <th class="center">Tu prom.</th>
                 <th class="center">Colegio</th>

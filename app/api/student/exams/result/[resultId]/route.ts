@@ -9,8 +9,10 @@ import {
 import { buildQuestionAreaNumberMaps } from '@/lib/examAnswerValidation'
 import {
   buildExamAttemptBreakdown,
-  getCompetencyRadarComparison,
+  getAreaRadarComparison,
 } from '@/lib/examPerformanceAnalytics'
+import { decodeMaybeEscapedHtml, normalizeImageUrl } from '@/lib/htmlContent'
+import { resolveAreaDisplayName } from '@/lib/icfesAreas'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,10 +44,23 @@ export async function GET(
             examQuestions: {
               include: {
                 competency: true,
+                lesson: {
+                  include: {
+                    moduleLessons: {
+                      include: {
+                        module: {
+                          include: {
+                            courseModules: {
+                              include: { course: true },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               },
-              orderBy: {
-                orderIndex: 'asc',
-              },
+              orderBy: { orderIndex: 'asc' },
             },
           },
         },
@@ -72,10 +87,10 @@ export async function GET(
       title: result.exam.title,
       description: result.exam.description,
       closeDate: result.exam.closeDate,
-      competency: {
+      area: {
         id: result.exam.competency?.id,
         name: result.exam.competency?.name,
-        displayName: result.exam.competency?.displayName,
+        displayName: resolveAreaDisplayName(result.exam.competency),
       },
     }
 
@@ -91,23 +106,22 @@ export async function GET(
       })
     }
 
+    const defaultAreaLabel = resolveAreaDisplayName(result.exam.competency, 'General')
+
     const areaNumberMaps = buildQuestionAreaNumberMaps(
       result.exam.examQuestions.map((q) => ({
         id: q.id,
         areaKey: q.competencyId || q.competency?.name || result.exam.competency?.name || 'general',
-        areaLabel:
-          q.competency?.displayName ||
-          result.exam.competency?.displayName ||
-          'General',
+        areaLabel: resolveAreaDisplayName(q.competency || result.exam.competency, defaultAreaLabel),
       }))
     )
-
-    const defaultCompetencyLabel = result.exam.competency?.displayName || 'General'
 
     const attemptBreakdown = buildExamAttemptBreakdown(
       result.exam.examQuestions.map((q) => ({
         id: q.id,
         competencyId: q.competencyId || result.exam.competencyId,
+        competencia: q.competencia,
+        componente: q.componente,
         tema: q.tema,
         subtema: q.subtema,
         competency: q.competency || result.exam.competency,
@@ -116,10 +130,10 @@ export async function GET(
         questionId: a.questionId,
         isCorrect: a.isCorrect || false,
       })),
-      defaultCompetencyLabel
+      defaultAreaLabel
     )
 
-    const radarComparison = await getCompetencyRadarComparison(
+    const radarComparison = await getAreaRadarComparison(
       userId,
       result.user.schoolId,
       attemptBreakdown
@@ -129,6 +143,53 @@ export async function GET(
       .filter((item) => item.total >= 2 && item.percent < 60)
       .sort((a, b) => a.percent - b.percent)
       .slice(0, 5)
+
+    const questions = result.exam.examQuestions.map((examQuestion) => {
+      const studentAnswer = result.examQuestionAnswers.find(
+        (answer) => answer.questionId === examQuestion.id
+      )
+
+      const lesson = examQuestion.lesson
+      const moduleLesson = lesson?.moduleLessons?.[0]
+      const courseModule = moduleLesson?.module?.courseModules?.[0]
+      const course = courseModule?.course
+
+      const numbering = areaNumberMaps.get(examQuestion.id)
+
+      return {
+        id: examQuestion.id,
+        text: decodeMaybeEscapedHtml(examQuestion.questionText),
+        questionImage: normalizeImageUrl(examQuestion.questionImage),
+        optionA: decodeMaybeEscapedHtml(examQuestion.optionA),
+        optionB: decodeMaybeEscapedHtml(examQuestion.optionB),
+        optionC: decodeMaybeEscapedHtml(examQuestion.optionC),
+        optionD: decodeMaybeEscapedHtml(examQuestion.optionD),
+        optionAImage: normalizeImageUrl(examQuestion.optionAImage),
+        optionBImage: normalizeImageUrl(examQuestion.optionBImage),
+        optionCImage: normalizeImageUrl(examQuestion.optionCImage),
+        optionDImage: normalizeImageUrl(examQuestion.optionDImage),
+        userAnswer:
+          studentAnswer?.selectedOption || studentAnswer?.answerText || 'No respondida',
+        correctAnswer: examQuestion.correctOption,
+        isCorrect: studentAnswer?.isCorrect || false,
+        explanation: decodeMaybeEscapedHtml(examQuestion.explanation) || 'Sin explicación disponible',
+        explanationImage: normalizeImageUrl(examQuestion.explanationImage),
+        areaLabel: numbering?.areaLabel || defaultAreaLabel,
+        displayNumberInArea: numbering?.numberInArea ?? examQuestion.orderIndex,
+        competencia: examQuestion.competencia || null,
+        componente: examQuestion.componente || null,
+        tema: examQuestion.tema || null,
+        subtema: examQuestion.subtema || null,
+        lesson: lesson
+          ? {
+              id: lesson.id,
+              title: lesson.title,
+              courseId: course?.id,
+              courseTitle: course?.title,
+            }
+          : null,
+      }
+    })
 
     return NextResponse.json({
       id: result.id,
@@ -147,17 +208,8 @@ export async function GET(
         attemptBreakdown,
         radarComparison,
         weakTopics,
-        competencyLabels: Array.from(
-          new Set(
-            result.exam.examQuestions.map(
-              (q) =>
-                areaNumberMaps.get(q.id)?.areaLabel ||
-                q.competency?.displayName ||
-                defaultCompetencyLabel
-            )
-          )
-        ).sort(),
       },
+      questions,
     })
   } catch (error) {
     console.error('Error fetching exam result:', error)

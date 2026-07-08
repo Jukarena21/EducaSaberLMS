@@ -1,16 +1,21 @@
 import { prisma } from '@/lib/prisma'
+import { ICFES_AREA_SLUGS, resolveAreaDisplayName } from '@/lib/icfesAreas'
 
-export type ScoreByCompetency = {
+export type ScoreByArea = {
   id: string
   score: number
 }
 
-export type CompetencyRadarData = {
-  competencies: Array<{ id: string; displayName: string }>
-  studentScores: ScoreByCompetency[]
-  schoolScores: ScoreByCompetency[]
-  platformScores: ScoreByCompetency[]
-  attemptScores: ScoreByCompetency[]
+/**
+ * Comparación por ÁREA ICFES (modelo Area, tabla Competency en BD).
+ * Un "área" es la materia: Matemáticas, Lectura Crítica, etc.
+ */
+export type AreaRadarData = {
+  areas: Array<{ id: string; displayName: string }>
+  attemptScores: ScoreByArea[]
+  studentScores: ScoreByArea[]
+  schoolScores: ScoreByArea[]
+  platformScores: ScoreByArea[]
 }
 
 export type BreakdownItem = {
@@ -22,8 +27,16 @@ export type BreakdownItem = {
   percent: number
 }
 
+/**
+ * Desglose del intento por cada nivel de clasificación de la pregunta.
+ * - byArea: agrupado por Área ICFES (Area / competencyId)
+ * - byCompetencia: agrupado por el campo de texto "competencia" de la pregunta
+ * - byComponente / byTema / bySubtema: campos de texto de la pregunta
+ */
 export type ExamAttemptAnalytics = {
-  byCompetency: BreakdownItem[]
+  byArea: BreakdownItem[]
+  byCompetencia: BreakdownItem[]
+  byComponente: BreakdownItem[]
   byTema: BreakdownItem[]
   bySubtema: BreakdownItem[]
 }
@@ -31,6 +44,8 @@ export type ExamAttemptAnalytics = {
 type ExamQuestionRow = {
   id: string
   competencyId?: string | null
+  competencia?: string | null
+  componente?: string | null
   tema?: string | null
   subtema?: string | null
   competency?: { displayName?: string | null; name?: string | null } | null
@@ -45,17 +60,17 @@ function clampScore(score: number): number {
   return Math.min(Math.max(Math.round(score), 0), 100)
 }
 
-function averageScoresByCompetency(
+function averageScoresByArea(
   examResults: Array<{ score: number; exam: { competencyId: string | null } }>,
-  competencyIds: string[]
-): ScoreByCompetency[] {
-  return competencyIds.map((compId) => {
-    const exams = examResults.filter((r) => r.exam.competencyId === compId)
+  areaIds: string[]
+): ScoreByArea[] {
+  return areaIds.map((areaId) => {
+    const exams = examResults.filter((r) => r.exam.competencyId === areaId)
     const avgScore =
       exams.length > 0
         ? exams.reduce((sum, e) => sum + e.score, 0) / exams.length
         : 0
-    return { id: compId, score: clampScore(avgScore) }
+    return { id: areaId, score: clampScore(avgScore) }
   })
 }
 
@@ -69,23 +84,23 @@ function aggregateBreakdown(
   const answerMap = new Map(answers.map((a) => [a.questionId, a.isCorrect]))
   const groups = new Map<
     string,
-    { id?: string; total: number; correct: number }
+    { id?: string; label: string; total: number; correct: number }
   >()
 
   for (const question of questions) {
     const label = getLabel(question)?.trim() || fallbackLabel
     const groupId = getId?.(question) || undefined
-    const key = groupId ? `${groupId}::${label}` : label
-    const current = groups.get(key) || { id: groupId, total: 0, correct: 0 }
+    const key = groupId ? `id:${groupId}` : `label:${label}`
+    const current = groups.get(key) || { id: groupId, label, total: 0, correct: 0 }
     current.total += 1
     if (answerMap.get(question.id)) current.correct += 1
     groups.set(key, current)
   }
 
-  return Array.from(groups.entries())
-    .map(([key, stats]) => ({
+  return Array.from(groups.values())
+    .map((stats) => ({
       id: stats.id,
-      label: key.includes('::') ? key.split('::').slice(1).join('::') : key,
+      label: stats.label,
       total: stats.total,
       correct: stats.correct,
       incorrect: stats.total - stats.correct,
@@ -98,34 +113,51 @@ function aggregateBreakdown(
 export function buildExamAttemptBreakdown(
   questions: ExamQuestionRow[],
   answers: AnswerRow[],
-  defaultCompetencyLabel = 'General'
+  defaultAreaLabel = 'General'
 ): ExamAttemptAnalytics {
   return {
-    byCompetency: aggregateBreakdown(
+    byArea: aggregateBreakdown(
       questions,
       answers,
       (q) =>
-        q.competency?.displayName ||
-        q.competency?.name ||
-        defaultCompetencyLabel,
+        q.competency
+          ? resolveAreaDisplayName(
+              { id: q.competencyId, name: q.competency.name, displayName: q.competency.displayName },
+              defaultAreaLabel
+            )
+          : defaultAreaLabel,
       (q) => q.competencyId || undefined
     ),
+    byCompetencia: aggregateBreakdown(questions, answers, (q) => q.competencia),
+    byComponente: aggregateBreakdown(questions, answers, (q) => q.componente),
     byTema: aggregateBreakdown(questions, answers, (q) => q.tema),
     bySubtema: aggregateBreakdown(questions, answers, (q) => q.subtema),
   }
 }
 
-export async function getCompetencyRadarComparison(
+/**
+ * Comparación por área ICFES: puntaje de este intento vs. promedio histórico
+ * del estudiante, del colegio y de la plataforma.
+ */
+export async function getAreaRadarComparison(
   userId: string,
   schoolId: string | null | undefined,
   attemptBreakdown?: ExamAttemptAnalytics
-): Promise<CompetencyRadarData> {
-  const competencies = await prisma.area.findMany({
-    where: { name: { not: 'otros' } },
+): Promise<AreaRadarData> {
+  const icfesAreas = await prisma.area.findMany({
+    where: { name: { in: ICFES_AREA_SLUGS } },
     orderBy: { name: 'asc' },
   })
+  // Fallback: si la BD usa otros slugs, no dejar el radar vacío.
+  const areas =
+    icfesAreas.length > 0
+      ? icfesAreas
+      : await prisma.area.findMany({
+          where: { name: { not: 'otros' } },
+          orderBy: { name: 'asc' },
+        })
 
-  const competencyIds = competencies.map((c) => c.id)
+  const areaIds = areas.map((a) => a.id)
 
   const [studentExamResults, schoolExamResults, platformExamResults] =
     await Promise.all([
@@ -149,22 +181,19 @@ export async function getCompetencyRadarComparison(
       }),
     ])
 
-  const attemptScores: ScoreByCompetency[] = competencyIds.map((compId) => {
-    const item = attemptBreakdown?.byCompetency.find((entry) => entry.id === compId)
-    return { id: compId, score: item?.percent ?? 0 }
+  const attemptScores: ScoreByArea[] = areaIds.map((areaId) => {
+    const item = attemptBreakdown?.byArea.find((entry) => entry.id === areaId)
+    return { id: areaId, score: item?.percent ?? 0 }
   })
 
   return {
-    competencies: competencies.map((c) => ({
-      id: c.id,
-      displayName: c.displayName || c.name,
+    areas: areas.map((a) => ({
+      id: a.id,
+      displayName: resolveAreaDisplayName(a),
     })),
-    studentScores: averageScoresByCompetency(studentExamResults, competencyIds),
-    schoolScores: averageScoresByCompetency(schoolExamResults, competencyIds),
-    platformScores: averageScoresByCompetency(
-      platformExamResults,
-      competencyIds
-    ),
     attemptScores,
+    studentScores: averageScoresByArea(studentExamResults, areaIds),
+    schoolScores: averageScoresByArea(schoolExamResults, areaIds),
+    platformScores: averageScoresByArea(platformExamResults, areaIds),
   }
 }
