@@ -99,13 +99,14 @@ export async function GET(
     })
 
     // Calcular estadísticas agregadas
-    const totalStudents = results.length
-    const totalAttempts = results.length
+    const countable = results.filter((r) => r.score > 0)
+    const totalStudents = countable.length
+    const totalAttempts = countable.length
     const averageScore = totalStudents > 0
-      ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / totalStudents)
+      ? Math.round(countable.reduce((sum, r) => sum + r.score, 0) / totalStudents)
       : 0
     const passRate = totalStudents > 0
-      ? Math.round((results.filter(r => r.isPassed).length / totalStudents) * 100)
+      ? Math.round((countable.filter(r => r.isPassed).length / totalStudents) * 100)
       : 0
 
     // Calcular resultados por metadatos (agregados de todos los estudiantes)

@@ -91,6 +91,13 @@ interface ExamResult {
     attemptBreakdown: ExamAttemptAnalytics
     radarComparison: AreaRadarData
     weakTopics: BreakdownItem[]
+    performanceLevelsByArea?: Array<{
+      areaLabel: string
+      percent: number
+      sharePercent: number
+      level: { label: string; description: string } | null
+    }>
+    weakTopicsByArea?: Array<{ areaLabel: string; topics: BreakdownItem[] }>
   }
   questions?: ExamQuestionResult[]
 }
@@ -386,26 +393,12 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
           </TabsList>
 
           <TabsContent value="resumen" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-green-600">{result.correctAnswers ?? 0}</div>
-                  <div className="text-sm text-gray-600">Respuestas Correctas</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-red-600">{result.incorrectAnswers ?? 0}</div>
-                  <div className="text-sm text-gray-600">Respuestas Incorrectas</div>
-                </CardContent>
-              </Card>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
                 <CardContent className="p-6 text-center">
                   <Target className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-blue-600">{result.totalQuestions ?? 0}</div>
-                  <div className="text-sm text-gray-600">Total Preguntas</div>
+                  <div className="text-2xl font-bold text-blue-600">{score}%</div>
+                  <div className="text-sm text-gray-600">Puntaje del intento</div>
                 </CardContent>
               </Card>
               <Card>
@@ -414,7 +407,7 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
                   <div className="text-2xl font-bold text-purple-600">
                     {result.timeTakenMinutes ?? 0} min
                   </div>
-                  <div className="text-sm text-gray-600">Tiempo Total</div>
+                  <div className="text-sm text-gray-600">Tiempo total</div>
                 </CardContent>
               </Card>
             </div>
@@ -422,11 +415,11 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
             {analytics ? (
               <ExamResultAnalytics
                 score={score}
-                correctAnswers={result.correctAnswers ?? 0}
-                incorrectAnswers={result.incorrectAnswers ?? 0}
                 attemptBreakdown={analytics.attemptBreakdown}
                 radarComparison={analytics.radarComparison}
                 weakTopics={analytics.weakTopics}
+                performanceLevelsByArea={analytics.performanceLevelsByArea}
+                weakTopicsByArea={analytics.weakTopicsByArea}
               />
             ) : (
               <Card>

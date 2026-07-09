@@ -17,9 +17,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  PieChart,
-  Pie,
-  Cell,
 } from "recharts"
 import type {
   AreaRadarData,
@@ -30,11 +27,17 @@ import { AlertTriangle, BarChart3, Target, TrendingUp } from "lucide-react"
 
 type ExamResultAnalyticsProps = {
   score: number
-  correctAnswers: number
-  incorrectAnswers: number
   attemptBreakdown: ExamAttemptAnalytics
   radarComparison: AreaRadarData
   weakTopics: BreakdownItem[]
+  performanceLevelsByArea?: Array<{
+    areaLabel: string
+    percent: number
+    sharePercent: number
+    level: { label: string; description: string } | null
+  }>
+  weakTopicsByArea?: Array<{ areaLabel: string; topics: BreakdownItem[] }>
+  hideCorrectCounts?: boolean
 }
 
 const PIE_COLORS = ["#22c55e", "#ef4444"]
@@ -61,6 +64,7 @@ function toBarData(items: BreakdownItem[], excludeUnclassified = true) {
       name: item.label.length > 22 ? `${item.label.slice(0, 20)}…` : item.label,
       fullName: item.label,
       acierto: item.percent,
+      sharePercent: item.sharePercent,
     }))
 }
 
@@ -68,10 +72,12 @@ function BreakdownBarCard({
   title,
   items,
   color,
+  showShare = true,
 }: {
   title: string
   items: BreakdownItem[]
   color: string
+  showShare?: boolean
 }) {
   const data = toBarData(items)
   if (data.length === 0) return null
@@ -89,7 +95,13 @@ function BreakdownBarCard({
               <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
               <Tooltip
                 formatter={(value: number) => [`${value}%`, "Acierto"]}
-                labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ""}
+                labelFormatter={(_, payload) => {
+                  const p = payload?.[0]?.payload
+                  if (!p) return ""
+                  return showShare
+                    ? `${p.fullName} (${p.sharePercent ?? 0}% de la prueba)`
+                    : p.fullName
+                }}
               />
               <Bar dataKey="acierto" fill={color} radius={[0, 4, 4, 0]} />
             </BarChart>
@@ -102,18 +114,14 @@ function BreakdownBarCard({
 
 export function ExamResultAnalytics({
   score,
-  correctAnswers,
-  incorrectAnswers,
   attemptBreakdown,
   radarComparison,
   weakTopics,
+  performanceLevelsByArea = [],
+  weakTopicsByArea = [],
+  hideCorrectCounts = true,
 }: ExamResultAnalyticsProps) {
   const radarData = buildRadarChartData(radarComparison)
-
-  const pieData = [
-    { name: "Correctas", value: correctAnswers },
-    { name: "Incorrectas", value: incorrectAnswers },
-  ]
 
   return (
     <div className="space-y-6">
@@ -122,36 +130,16 @@ export function ExamResultAnalytics({
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Target className="h-5 w-5 text-blue-600" />
-              Distribución de respuestas
+              Puntaje general
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={90}
-                    paddingAngle={3}
-                  >
-                    {pieData.map((_, index) => (
-                      <Cell key={index} fill={PIE_COLORS[index]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => [`${value}`, "Preguntas"]} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="text-center py-6">
+              <div className="text-5xl font-bold text-blue-700">{score}%</div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Resultado de este intento
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground text-center mt-2">
-              Obtuviste {score}% en este intento ({correctAnswers} de{" "}
-              {correctAnswers + incorrectAnswers} preguntas).
-            </p>
           </CardContent>
         </Card>
 
@@ -190,6 +178,32 @@ export function ExamResultAnalytics({
           </CardContent>
         </Card>
       </div>
+
+      {performanceLevelsByArea.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Nivel de desempeño por área</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {performanceLevelsByArea.map((row) => (
+              <div key={row.areaLabel} className="border rounded-lg p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <span className="font-medium">{row.areaLabel}</span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{row.percent}% acierto</Badge>
+                    {row.level && (
+                      <Badge className="bg-indigo-100 text-indigo-800">{row.level.label}</Badge>
+                    )}
+                  </div>
+                </div>
+                {row.level?.description && (
+                  <p className="text-sm text-muted-foreground">{row.level.description}</p>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -294,7 +308,7 @@ export function ExamResultAnalytics({
                 <div className="flex justify-between text-sm mb-1">
                   <span className="font-medium">{item.label}</span>
                   <span>
-                    {item.correct}/{item.total} ({item.percent}%)
+                    {item.percent}% acierto · {item.sharePercent}% de la prueba
                   </span>
                 </div>
                 <Progress value={item.percent} className="h-2" />
@@ -307,11 +321,32 @@ export function ExamResultAnalytics({
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-600" />
-              Temas y subtemas a reforzar
+              Temas a reforzar por área
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {weakTopics.length > 0 ? (
+            {weakTopicsByArea.length > 0 ? (
+              <div className="space-y-4">
+                {weakTopicsByArea.map((group) => (
+                  <div key={group.areaLabel}>
+                    <p className="font-medium text-sm mb-2">{group.areaLabel}</p>
+                    <ul className="space-y-2">
+                      {group.topics.map((item) => (
+                        <li
+                          key={`${group.areaLabel}-${item.label}`}
+                          className="flex items-center justify-between rounded-lg border p-2 bg-amber-50/50 text-sm"
+                        >
+                          <span>{item.label}</span>
+                          <Badge variant="outline" className="text-amber-800 border-amber-300">
+                            {item.percent}%
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : weakTopics.length > 0 ? (
               <ul className="space-y-3">
                 {weakTopics.map((item) => (
                   <li

@@ -13,6 +13,10 @@ import {
 } from '@/lib/examPerformanceAnalytics'
 import { decodeMaybeEscapedHtml, normalizeImageUrl } from '@/lib/htmlContent'
 import { resolveAreaDisplayName } from '@/lib/icfesAreas'
+import {
+  resolvePerformanceLevelForExam,
+  resolvePerformanceLevelFromDefaults,
+} from '@/lib/performanceLevels'
 
 export const dynamic = 'force-dynamic'
 
@@ -144,6 +148,51 @@ export async function GET(
       .sort((a, b) => a.percent - b.percent)
       .slice(0, 5)
 
+    const performanceLevelsByArea = await Promise.all(
+      attemptBreakdown.byArea.map(async (item) => {
+        const areaSlug =
+          result.exam.examQuestions.find(
+            (q) =>
+              resolveAreaDisplayName(q.competency || result.exam.competency) === item.label
+          )?.competency?.name ||
+          result.exam.competency?.name ||
+          'general'
+        const level =
+          (await resolvePerformanceLevelForExam(item.percent, areaSlug, {
+            id: result.exam.id,
+            performanceLevelProfileId: result.exam.performanceLevelProfileId,
+            academicGrade: result.exam.academicGrade,
+          })) || resolvePerformanceLevelFromDefaults(item.percent, areaSlug)
+        return {
+          areaLabel: item.label,
+          percent: item.percent,
+          sharePercent: item.sharePercent,
+          level,
+        }
+      })
+    )
+
+    // Temas débiles agrupados por área
+    const weakByAreaMap = new Map<string, typeof attemptBreakdown.byTema>()
+    for (const q of result.exam.examQuestions) {
+      const areaLabel = resolveAreaDisplayName(
+        q.competency || result.exam.competency,
+        defaultAreaLabel
+      )
+      const temaItem = attemptBreakdown.byTema.find((t) => t.label === q.tema)
+      const subtemaItem = attemptBreakdown.bySubtema.find((t) => t.label === q.subtema)
+      for (const item of [temaItem, subtemaItem].filter(Boolean)) {
+        if (!item || item.total < 2 || item.percent >= 60) continue
+        if (!weakByAreaMap.has(areaLabel)) weakByAreaMap.set(areaLabel, [])
+        const list = weakByAreaMap.get(areaLabel)!
+        if (!list.find((x) => x.label === item.label)) list.push(item)
+      }
+    }
+    const weakTopicsByArea = Array.from(weakByAreaMap.entries()).map(([areaLabel, topics]) => ({
+      areaLabel,
+      topics: topics.sort((a, b) => a.percent - b.percent),
+    }))
+
     const questions = result.exam.examQuestions.map((examQuestion) => {
       const studentAnswer = result.examQuestionAnswers.find(
         (answer) => answer.questionId === examQuestion.id
@@ -208,6 +257,8 @@ export async function GET(
         attemptBreakdown,
         radarComparison,
         weakTopics,
+        performanceLevelsByArea,
+        weakTopicsByArea,
       },
       questions,
     })

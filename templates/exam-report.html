@@ -143,7 +143,7 @@
       </div>
       <div class="header-center">
         <div class="report-title">Reporte de examen</div>
-        <div class="report-subtitle">Informe analítico de desempeño (sin detalle de preguntas)</div>
+        <div class="report-subtitle">Informe analítico de desempeño ICFES</div>
       </div>
       <div style="text-align:right;">
         {{#if schoolLogo}}<img src="{{schoolLogo}}" alt="{{schoolName}}" class="logo">{{/if}}
@@ -173,9 +173,7 @@
         </div>
         <div>
           <div class="stats-row">
-            <span class="stat-pill">Correctas: {{correctAnswers}}</span>
-            <span class="stat-pill">Incorrectas: {{incorrectAnswers}}</span>
-            <span class="stat-pill">Total: {{totalQuestions}}</span>
+            <span class="stat-pill">Puntaje: {{score}}%</span>
             <span class="stat-pill">
               {{#if isPassed}}<span class="badge-pass">Aprobado</span>{{else}}<span class="badge-fail">No aprobado</span>{{/if}}
             </span>
@@ -190,8 +188,7 @@
         <thead>
           <tr>
             <th>Área ICFES</th>
-            <th class="center">Correctas</th>
-            <th class="center">Total</th>
+            <th class="center">% prueba</th>
             <th class="center">Acierto</th>
           </tr>
         </thead>
@@ -202,8 +199,7 @@
               {{label}}
               <div class="progress-wrap"><div class="progress-fill" style="width: {{percent}}%;"></div></div>
             </td>
-            <td class="center">{{correct}}</td>
-            <td class="center">{{total}}</td>
+            <td class="center">{{sharePercent}}%</td>
             <td class="center"><strong>{{percent}}%</strong></td>
           </tr>
           {{/each}}
@@ -218,8 +214,7 @@
         <thead>
           <tr>
             <th>Competencia</th>
-            <th class="center">Correctas</th>
-            <th class="center">Total</th>
+            <th class="center">% prueba</th>
             <th class="center">Acierto</th>
           </tr>
         </thead>
@@ -227,8 +222,7 @@
           {{#each competenciaBreakdown}}
           <tr>
             <td>{{label}}</td>
-            <td class="center">{{correct}}</td>
-            <td class="center">{{total}}</td>
+            <td class="center">{{sharePercent}}%</td>
             <td class="center">{{percent}}%</td>
           </tr>
           {{/each}}
@@ -244,8 +238,7 @@
         <thead>
           <tr>
             <th>Componente</th>
-            <th class="center">Correctas</th>
-            <th class="center">Total</th>
+            <th class="center">% prueba</th>
             <th class="center">Acierto</th>
           </tr>
         </thead>
@@ -253,8 +246,7 @@
           {{#each componenteBreakdown}}
           <tr>
             <td>{{label}}</td>
-            <td class="center">{{correct}}</td>
-            <td class="center">{{total}}</td>
+            <td class="center">{{sharePercent}}%</td>
             <td class="center">{{percent}}%</td>
           </tr>
           {{/each}}
@@ -270,8 +262,7 @@
         <thead>
           <tr>
             <th>Tema</th>
-            <th class="center">Correctas</th>
-            <th class="center">Total</th>
+            <th class="center">% prueba</th>
             <th class="center">Acierto</th>
           </tr>
         </thead>
@@ -279,8 +270,7 @@
           {{#each temaBreakdown}}
           <tr>
             <td>{{label}}</td>
-            <td class="center">{{correct}}</td>
-            <td class="center">{{total}}</td>
+            <td class="center">{{sharePercent}}%</td>
             <td class="center">{{percent}}%</td>
           </tr>
           {{/each}}
@@ -296,8 +286,7 @@
         <thead>
           <tr>
             <th>Subtema</th>
-            <th class="center">Correctas</th>
-            <th class="center">Total</th>
+            <th class="center">% prueba</th>
             <th class="center">Acierto</th>
           </tr>
         </thead>
@@ -305,8 +294,7 @@
           {{#each subtemaBreakdown}}
           <tr>
             <td>{{label}}</td>
-            <td class="center">{{correct}}</td>
-            <td class="center">{{total}}</td>
+            <td class="center">{{sharePercent}}%</td>
             <td class="center">{{percent}}%</td>
           </tr>
           {{/each}}

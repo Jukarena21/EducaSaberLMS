@@ -25,6 +25,8 @@ export type BreakdownItem = {
   correct: number
   incorrect: number
   percent: number
+  /** Porcentaje de la prueba que representa este ítem (preguntas/total) */
+  sharePercent: number
 }
 
 /**
@@ -65,7 +67,9 @@ function averageScoresByArea(
   areaIds: string[]
 ): ScoreByArea[] {
   return areaIds.map((areaId) => {
-    const exams = examResults.filter((r) => r.exam.competencyId === areaId)
+    const exams = examResults.filter(
+      (r) => r.exam.competencyId === areaId && r.score > 0
+    )
     const avgScore =
       exams.length > 0
         ? exams.reduce((sum, e) => sum + e.score, 0) / exams.length
@@ -82,6 +86,7 @@ function aggregateBreakdown(
   fallbackLabel = 'Sin clasificar'
 ): BreakdownItem[] {
   const answerMap = new Map(answers.map((a) => [a.questionId, a.isCorrect]))
+  const totalQuestions = questions.length
   const groups = new Map<
     string,
     { id?: string; label: string; total: number; correct: number }
@@ -106,6 +111,8 @@ function aggregateBreakdown(
       incorrect: stats.total - stats.correct,
       percent:
         stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0,
+      sharePercent:
+        totalQuestions > 0 ? Math.round((stats.total / totalQuestions) * 100) : 0,
     }))
     .sort((a, b) => a.label.localeCompare(b.label, 'es'))
 }
@@ -162,7 +169,7 @@ export async function getAreaRadarComparison(
   const [studentExamResults, schoolExamResults, platformExamResults] =
     await Promise.all([
       prisma.examResult.findMany({
-        where: { userId, completedAt: { not: null } },
+        where: { userId, completedAt: { not: null }, score: { gt: 0 } },
         select: { score: true, exam: { select: { competencyId: true } } },
       }),
       schoolId
@@ -170,12 +177,13 @@ export async function getAreaRadarComparison(
             where: {
               user: { schoolId },
               completedAt: { not: null },
+              score: { gt: 0 },
             },
             select: { score: true, exam: { select: { competencyId: true } } },
           })
         : Promise.resolve([]),
       prisma.examResult.findMany({
-        where: { completedAt: { not: null } },
+        where: { completedAt: { not: null }, score: { gt: 0 } },
         select: { score: true, exam: { select: { competencyId: true } } },
         take: 10000,
       }),

@@ -78,6 +78,7 @@ import { ModuleManagement } from "@/components/ModuleManagement"
 import { CourseManagement } from "@/components/CourseManagement"
 import { StudentDetailModal } from "@/components/StudentDetailModal"
 import { BulkImportCenter } from "@/components/BulkImportCenter"
+import { PerformanceLevelManagement } from "@/components/PerformanceLevelManagement"
 import { BrandLoading } from "@/components/BrandLoading"
 import { NotificationManagement } from "@/components/NotificationManagement"
 import { StudentsManagement } from "@/components/StudentsManagement"
@@ -708,6 +709,12 @@ export default function AdminDashboard() {
                 <TabsTrigger value="schools" className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm">
                   <Building className="h-4 w-4 flex-shrink-0" />
                   <span>Colegios</span>
+                </TabsTrigger>
+              )}
+              {session?.user?.role === 'teacher_admin' && (
+                <TabsTrigger value="performance-levels" className="flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm">
+                  <Target className="h-4 w-4 flex-shrink-0" />
+                  <span>Niveles ICFES</span>
                 </TabsTrigger>
               )}
               {session?.user?.role === 'teacher_admin' && (
@@ -2751,6 +2758,13 @@ export default function AdminDashboard() {
           </TabsContent>
 
           {/* REPORTS TAB REMOVED (merged into analytics) */}
+
+          {/* PERFORMANCE LEVELS TAB */}
+          {session?.user?.role === 'teacher_admin' && (
+            <TabsContent value="performance-levels" className="space-y-6">
+              <PerformanceLevelManagement />
+            </TabsContent>
+          )}
 
           {/* SETTINGS TAB - Only for Teacher Admins */}
           {session?.user?.role === 'teacher_admin' && (

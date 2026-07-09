@@ -132,6 +132,7 @@ export async function POST(
     const resultsBySubtema: Record<string, { correct: number; total: number }> = {}
     const resultsByComponente: Record<string, { correct: number; total: number }> = {}
     const resultsByCompetency: Record<string, { correct: number; total: number }> = {}
+    const resultsByCompetencia: Record<string, { correct: number; total: number }> = {}
 
     for (const answer of answers) {
       // Buscar la pregunta correspondiente
@@ -189,7 +190,17 @@ export async function POST(
             }
           }
 
-          // Por competencia (si tiene competencyId directo o viene del exam)
+          // Por competencia ICFES (campo texto)
+          if (question.competencia) {
+            const key = question.competencia.trim()
+            if (!resultsByCompetencia[key]) {
+              resultsByCompetencia[key] = { correct: 0, total: 0 }
+            }
+            resultsByCompetencia[key].total++
+            if (isCorrect) resultsByCompetencia[key].correct++
+          }
+
+          // Por área (competencyId)
           const competencyId = question.competencyId || result.exam.competencyId
           if (competencyId) {
             if (!resultsByCompetency[competencyId]) {
@@ -238,6 +249,18 @@ export async function POST(
       }
       if (Object.keys(resultsByComponente).length > 0) {
         updateData.resultsByComponente = JSON.stringify(resultsByComponente)
+      }
+      if (Object.keys(resultsByCompetencia).length > 0) {
+        const competenciaResults: Record<string, { correct: number; total: number; percentage: number }> = {}
+        Object.keys(resultsByCompetencia).forEach((key) => {
+          const data = resultsByCompetencia[key]
+          competenciaResults[key] = {
+            correct: data.correct,
+            total: data.total,
+            percentage: data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0,
+          }
+        })
+        updateData.resultsByCompetencia = JSON.stringify(competenciaResults)
       }
       if (Object.keys(resultsByCompetency).length > 0) {
         // Convertir a formato compatible con resultsByCompetency existente

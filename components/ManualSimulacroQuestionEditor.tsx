@@ -10,6 +10,12 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { FormDialog } from '@/components/FormDialog'
 import { buildQuestionAreaNumberMaps } from '@/lib/examAnswerValidation'
+import { resolveAreaDisplayName } from '@/lib/icfesAreas'
+import {
+  getComponentsForArea,
+  getCompetenciasForComponent,
+  OTRO_OPTION,
+} from '@/lib/icfesTaxonomy'
 import { 
   Plus, 
   Edit, 
@@ -306,25 +312,23 @@ export function ManualSimulacroQuestionEditor({
     }
   }
 
-  // Obtener el nombre de área para mostrar en el filtro
+  // Nombre visible del área (usa helper central)
   const getAreaDisplayName = (competencyId: string) => {
-    const comp = competencies.find(c => c.id === competencyId)
-    if (!comp) return 'Sin área'
-    
-    const nameMapping: Record<string, string> = {
-      'comp-razonamiento-cuantitativo': 'Matemáticas',
-      'razonamiento_cuantitativo': 'Matemáticas',
-      'comp-competencias-ciudadanas': 'Ciencias Sociales',
-      'competencias_ciudadanas': 'Ciencias Sociales',
-      'comp-comunicacion-escrita': 'Ciencias Naturales',
-      'comunicacion_escrita': 'Ciencias Naturales',
-    }
-    
-    return nameMapping[comp.id] || 
-           nameMapping[comp.name?.toLowerCase() || ''] || 
-           comp.displayName || 
-           comp.name
+    const comp = competencies.find((c) => c.id === competencyId)
+    return resolveAreaDisplayName(comp, 'Sin área')
   }
+
+  const getAreaSlug = (competencyId: string) => {
+    const comp = competencies.find((c) => c.id === competencyId)
+    return comp?.name?.toLowerCase() || ''
+  }
+
+  const selectedAreaSlug = getAreaSlug(formData.competencyId)
+  const componentOptions = getComponentsForArea(selectedAreaSlug)
+  const competenciaOptions = getCompetenciasForComponent(
+    selectedAreaSlug,
+    formData.componente === OTRO_OPTION ? undefined : formData.componente
+  )
 
   // Estilos visuales suaves por área para facilitar escaneo del listado
   const getAreaTintClasses = (competencyId?: string) => {
@@ -434,19 +438,7 @@ export function ManualSimulacroQuestionEditor({
                   return questions.some(q => q.competencyId === comp.id)
                 })
                 .map((comp) => {
-                  const nameMapping: Record<string, string> = {
-                    'comp-razonamiento-cuantitativo': 'Matemáticas',
-                    'razonamiento_cuantitativo': 'Matemáticas',
-                    'comp-competencias-ciudadanas': 'Ciencias Sociales',
-                    'competencias_ciudadanas': 'Ciencias Sociales',
-                    'comp-comunicacion-escrita': 'Ciencias Naturales',
-                    'comunicacion_escrita': 'Ciencias Naturales',
-                  }
-                  
-                  const displayName = nameMapping[comp.id] || 
-                                    nameMapping[comp.name?.toLowerCase() || ''] || 
-                                    comp.displayName || 
-                                    comp.name
+                  const displayName = resolveAreaDisplayName(comp)
                   
                   const questionCount = questions.filter(q => q.competencyId === comp.id).length
                   
@@ -755,25 +747,9 @@ export function ManualSimulacroQuestionEditor({
                                allowedNames.includes(compName)
                       })
                       .map((comp) => {
-                        // Mapeo de nombres para mostrar en el dropdown
-                        const nameMapping: Record<string, string> = {
-                          'comp-razonamiento-cuantitativo': 'Matemáticas',
-                          'razonamiento_cuantitativo': 'Matemáticas',
-                          'comp-competencias-ciudadanas': 'Ciencias Sociales',
-                          'competencias_ciudadanas': 'Ciencias Sociales',
-                          'comp-comunicacion-escrita': 'Ciencias Naturales',
-                          'comunicacion_escrita': 'Ciencias Naturales',
-                        }
-                        
-                        // Usar el nombre mapeado si existe, sino el displayName original
-                        const displayName = nameMapping[comp.id] || 
-                                          nameMapping[comp.name?.toLowerCase() || ''] || 
-                                          comp.displayName || 
-                                          comp.name
-                        
                         return (
                           <SelectItem key={comp.id} value={comp.id}>
-                            {displayName}
+                            {resolveAreaDisplayName(comp)}
                           </SelectItem>
                         )
                       })}
@@ -805,24 +781,74 @@ export function ManualSimulacroQuestionEditor({
 
               <div>
                 <Label htmlFor="componente">Componente *</Label>
-                <Input
-                  id="componente"
-                  value={formData.componente}
-                  onChange={(e) => setFormData({ ...formData, componente: e.target.value })}
-                  required
-                  placeholder="Ej: Lectura Crítica - Comprensión"
-                />
+                <Select
+                  value={componentOptions.includes(formData.componente) ? formData.componente : OTRO_OPTION}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      componente: value === OTRO_OPTION ? '' : value,
+                      competencia: '',
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar componente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {componentOptions.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(!formData.componente || !componentOptions.includes(formData.componente)) && (
+                  <Input
+                    className="mt-2"
+                    value={formData.componente}
+                    onChange={(e) => setFormData({ ...formData, componente: e.target.value })}
+                    placeholder="Especifique el componente (Otro)"
+                    required
+                  />
+                )}
               </div>
 
               <div>
                 <Label htmlFor="competencia">Competencia *</Label>
-                <Input
-                  id="competencia"
-                  value={formData.competencia || ''}
-                  onChange={(e) => setFormData({ ...formData, competencia: e.target.value })}
-                  required
-                  placeholder="Ej: Competencia específica"
-                />
+                <Select
+                  value={
+                    formData.competencia && competenciaOptions.includes(formData.competencia)
+                      ? formData.competencia
+                      : OTRO_OPTION
+                  }
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      competencia: value === OTRO_OPTION ? '' : value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar competencia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {competenciaOptions.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(!formData.competencia || !competenciaOptions.includes(formData.competencia)) && (
+                  <Input
+                    className="mt-2"
+                    id="competencia"
+                    value={formData.competencia || ''}
+                    onChange={(e) => setFormData({ ...formData, competencia: e.target.value })}
+                    placeholder="Especifique la competencia (Otro)"
+                    required
+                  />
+                )}
               </div>
 
               <div>

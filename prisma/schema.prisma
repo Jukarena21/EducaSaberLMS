@@ -162,6 +162,40 @@ model Area {
   @@map("Competency") // Mantener nombre de tabla en BD para compatibilidad
 }
 
+// Perfil de niveles de desempeño (tabla de porcentajes con comentarios)
+// Puede ser: por defecto global, por año escolar, o asignado a un examen específico
+model PerformanceLevelProfile {
+  id            String  @id @default(cuid())
+  name          String
+  description   String?
+  isDefault     Boolean @default(false)
+  academicGrade String? // null = aplica a todos los grados
+  areaSlug      String? // null = todas las áreas; si se setea, solo esa área
+
+  bands PerformanceLevelBand[]
+  exams Exam[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PerformanceLevelBand {
+  id          String @id @default(cuid())
+  profileId   String
+  profile     PerformanceLevelProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  areaSlug    String // slug del área: lectura_critica, ingles, etc.
+  label       String // Insuficiente, Satisfactorio, B1, etc.
+  minScore    Int    // inclusive 0-100
+  maxScore    Int    // inclusive 0-100
+  description String @db.Text
+  sortOrder   Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId, areaSlug])
+}
+
 model Course {
   id              String     @id @default(cuid())
   title           String
@@ -374,6 +408,10 @@ model Exam {
   isManualSimulacro Boolean @default(false) // Si es simulacro creado manualmente
   isPredefined      Boolean @default(false) // Si es un examen predefinido de EducaSaber
 
+  // Tabla de niveles de desempeño personalizada (opcional; si null usa la por defecto)
+  performanceLevelProfileId String?
+  performanceLevelProfile   PerformanceLevelProfile? @relation(fields: [performanceLevelProfileId], references: [id])
+
   // Relaciones inversas
   examQuestions   ExamQuestion[]
   examResults     ExamResult[]
@@ -525,7 +563,10 @@ model ExamResult {
   fraudRiskScore               Float  @default(0)
 
   // Resultados por competencia (para simulacros completos)
-  resultsByCompetency String? // JSON string
+  resultsByCompetency String? // JSON string — por ÁREA (competencyId)
+
+  // Resultados por campo texto "competencia" de la pregunta
+  resultsByCompetencia String? // JSON: { "Competencia X": { correct, total, percentage } }
 
   // Resultados organizados por metadatos para reportes (retrocompatible - opcional)
   resultsByTema       String? // JSON: { "tema1": { correct: 5, total: 10 }, ... }
