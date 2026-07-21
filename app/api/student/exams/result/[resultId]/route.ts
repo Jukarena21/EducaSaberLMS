@@ -13,6 +13,7 @@ import {
 } from '@/lib/examPerformanceAnalytics'
 import { decodeMaybeEscapedHtml, normalizeImageUrl } from '@/lib/htmlContent'
 import { resolveAreaDisplayName } from '@/lib/icfesAreas'
+import { calculateIcfesGlobalScore } from '@/lib/icfesScoring'
 import {
   resolvePerformanceLevelForExam,
   resolvePerformanceLevelFromDefaults,
@@ -140,7 +141,15 @@ export async function GET(
     const radarComparison = await getAreaRadarComparison(
       userId,
       result.user.schoolId,
-      attemptBreakdown
+      attemptBreakdown,
+      { activeAreaIdsOnly: true }
+    )
+
+    const icfesGlobalScore = calculateIcfesGlobalScore(
+      attemptBreakdown.areaHierarchy.map((area) => ({
+        areaSlug: area.areaSlug,
+        score: area.percent,
+      }))
     )
 
     const weakTopics = [...attemptBreakdown.byTema, ...attemptBreakdown.bySubtema]
@@ -256,6 +265,7 @@ export async function GET(
       analytics: {
         attemptBreakdown,
         radarComparison,
+        icfesGlobalScore,
         weakTopics,
         performanceLevelsByArea,
         weakTopicsByArea,

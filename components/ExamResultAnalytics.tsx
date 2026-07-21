@@ -1,8 +1,15 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import {
   ResponsiveContainer,
   RadarChart,
@@ -12,21 +19,18 @@ import {
   Radar,
   Legend,
   Tooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
 } from "recharts"
 import type {
+  AreaHierarchyNode,
   AreaRadarData,
   BreakdownItem,
   ExamAttemptAnalytics,
 } from "@/lib/examPerformanceAnalytics"
-import { AlertTriangle, BarChart3, Target, TrendingUp } from "lucide-react"
+import { AlertTriangle, BarChart3, ChevronRight, Target, TrendingUp } from "lucide-react"
 
 type ExamResultAnalyticsProps = {
   score: number
+  icfesGlobalScore?: number | null
   attemptBreakdown: ExamAttemptAnalytics
   radarComparison: AreaRadarData
   weakTopics: BreakdownItem[]
@@ -37,10 +41,7 @@ type ExamResultAnalyticsProps = {
     level: { label: string; description: string } | null
   }>
   weakTopicsByArea?: Array<{ areaLabel: string; topics: BreakdownItem[] }>
-  hideCorrectCounts?: boolean
 }
-
-const PIE_COLORS = ["#22c55e", "#ef4444"]
 
 function scoreForArea(scores: Array<{ id: string; score: number }>, areaId: string) {
   return scores.find((s) => s.id === areaId)?.score ?? 0
@@ -50,139 +51,196 @@ function buildRadarChartData(radar: AreaRadarData) {
   return radar.areas.map((area) => ({
     subject: area.displayName,
     "Este examen": scoreForArea(radar.attemptScores, area.id),
-    Estudiante: scoreForArea(radar.studentScores, area.id),
+    "Tu promedio": scoreForArea(radar.studentScores, area.id),
     Colegio: scoreForArea(radar.schoolScores, area.id),
-    Plataforma: scoreForArea(radar.platformScores, area.id),
   }))
 }
 
-function toBarData(items: BreakdownItem[], excludeUnclassified = true) {
-  return items
-    .filter((item) => (excludeUnclassified ? item.label !== "Sin clasificar" : true))
-    .slice(0, 10)
-    .map((item) => ({
-      name: item.label.length > 22 ? `${item.label.slice(0, 20)}…` : item.label,
-      fullName: item.label,
-      acierto: item.percent,
-      sharePercent: item.sharePercent,
-    }))
+function StatsBadge({
+  percent,
+  correct,
+  total,
+}: {
+  percent: number
+  correct: number
+  total: number
+}) {
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <Badge variant="outline">{percent}% acierto</Badge>
+      <span className="text-xs text-muted-foreground">
+        {correct}/{total}
+      </span>
+    </div>
+  )
 }
 
-function BreakdownBarCard({
-  title,
-  items,
-  color,
-  showShare = true,
-}: {
-  title: string
-  items: BreakdownItem[]
-  color: string
-  showShare?: boolean
-}) {
-  const data = toBarData(items)
-  if (data.length === 0) return null
+function ComponenteList({ items }: { items: BreakdownItem[] }) {
+  const visible = items.filter((c) => c.label !== "Sin clasificar" || c.total > 0)
+  if (visible.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-2 pl-4">
+        Sin componentes clasificados en esta competencia.
+      </p>
+    )
+  }
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-              <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
-              <Tooltip
-                formatter={(value: number) => [`${value}%`, "Acierto"]}
-                labelFormatter={(_, payload) => {
-                  const p = payload?.[0]?.payload
-                  if (!p) return ""
-                  return showShare
-                    ? `${p.fullName} (${p.sharePercent ?? 0}% de la prueba)`
-                    : p.fullName
-                }}
-              />
-              <Bar dataKey="acierto" fill={color} radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+    <ul className="space-y-2 pl-4 border-l-2 border-indigo-100">
+      {visible.map((item) => (
+        <li key={item.label} className="rounded-lg border bg-slate-50/80 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <span className="text-sm font-medium">{item.label}</span>
+            <StatsBadge percent={item.percent} correct={item.correct} total={item.total} />
+          </div>
+          <Progress value={item.percent} className="h-1.5" />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function AreaDrillDown({ areas }: { areas: AreaHierarchyNode[] }) {
+  const [selectedArea, setSelectedArea] = useState<string | undefined>(
+    areas.length === 1 ? areas[0].areaSlug : undefined
+  )
+  const [selectedCompetencia, setSelectedCompetencia] = useState<string | undefined>()
+
+  if (areas.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-4 text-center">
+        No hay datos por área para este examen.
+      </p>
+    )
+  }
+
+  const activeArea = areas.find((a) => a.areaSlug === selectedArea)
+  const activeCompetencia = activeArea?.competencias.find((c) => c.label === selectedCompetencia)
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+          1. Selecciona un área
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {areas.map((area) => (
+            <button
+              key={area.areaSlug}
+              type="button"
+              onClick={() => {
+                setSelectedArea(area.areaSlug)
+                setSelectedCompetencia(undefined)
+              }}
+              className={`rounded-lg border px-3 py-2 text-sm transition-colors text-left ${
+                selectedArea === area.areaSlug
+                  ? "border-indigo-500 bg-indigo-50 text-indigo-900"
+                  : "hover:bg-muted/60"
+              }`}
+            >
+              <span className="font-medium block">{area.areaLabel}</span>
+              <span className="text-xs text-muted-foreground">
+                {area.percent}% · {area.correct}/{area.total}
+              </span>
+            </button>
+          ))}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      {activeArea && activeArea.competencias.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+            2. Competencias en {activeArea.areaLabel}
+          </p>
+          <Accordion
+            type="single"
+            collapsible
+            value={selectedCompetencia}
+            onValueChange={setSelectedCompetencia}
+            className="rounded-lg border px-3"
+          >
+            {activeArea.competencias.map((comp) => (
+              <AccordionItem key={comp.label} value={comp.label}>
+                <AccordionTrigger className="hover:no-underline py-3">
+                  <div className="flex flex-1 flex-wrap items-center justify-between gap-2 pr-2 text-left">
+                    <span className="font-medium text-sm">{comp.label}</span>
+                    <StatsBadge percent={comp.percent} correct={comp.correct} total={comp.total} />
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1">
+                    <ChevronRight className="h-3 w-3" />
+                    Componentes
+                  </p>
+                  <ComponenteList items={comp.componentes} />
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      )}
+
+      {activeArea && activeArea.competencias.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No hay competencias clasificadas para {activeArea.areaLabel}.
+        </p>
+      )}
+
+      {activeCompetencia && activeCompetencia.componentes.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          Esta competencia no tiene componentes clasificados.
+        </p>
+      )}
+    </div>
   )
 }
 
 export function ExamResultAnalytics({
   score,
+  icfesGlobalScore = null,
   attemptBreakdown,
   radarComparison,
   weakTopics,
   performanceLevelsByArea = [],
   weakTopicsByArea = [],
-  hideCorrectCounts = true,
 }: ExamResultAnalyticsProps) {
   const radarData = buildRadarChartData(radarComparison)
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Target className="h-5 w-5 text-blue-600" />
-              Puntaje general
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-6">
-              <div className="text-5xl font-bold text-blue-700">{score}%</div>
-              <p className="text-sm text-muted-foreground mt-2">
-                Resultado de este intento
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-indigo-600" />
-              Desempeño por área (este examen)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {attemptBreakdown.byArea.length > 0 ? (
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={toBarData(attemptBreakdown.byArea, false)}
-                    layout="vertical"
-                    margin={{ left: 8, right: 16 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                    <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
-                    <Tooltip
-                      formatter={(value: number) => [`${value}%`, "Acierto"]}
-                      labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName || ""}
-                    />
-                    <Bar dataKey="acierto" fill="#73A2D3" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+      <Card className="overflow-hidden border-indigo-200">
+        <div className="bg-gradient-to-r from-indigo-700 via-blue-700 to-indigo-800 text-white px-6 py-5">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+              <p className="text-indigo-100 text-sm font-medium">Resultado del examen</p>
+              <div className="flex items-baseline gap-3 mt-1">
+                <span className="text-5xl font-bold">{score}</span>
+                <span className="text-xl text-indigo-100">/ 100 pts</span>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground py-8 text-center">
-                No hay datos por área para este examen.
-              </p>
+              <p className="text-indigo-100/90 text-sm mt-1">Calificación porcentual del intento</p>
+            </div>
+            {icfesGlobalScore != null && (
+              <div className="rounded-xl bg-white/10 backdrop-blur px-5 py-4 border border-white/20">
+                <p className="text-indigo-100 text-xs uppercase tracking-wide">Puntaje ICFES estimado</p>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-4xl font-bold">{icfesGlobalScore}</span>
+                  <span className="text-indigo-100">/ 500</span>
+                </div>
+                <p className="text-indigo-100/80 text-xs mt-1 max-w-xs">
+                  Ponderación Saber 11 según las áreas presentes en esta prueba
+                </p>
+              </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </Card>
 
       {performanceLevelsByArea.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Nivel de desempeño por área</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Target className="h-5 w-5 text-indigo-600" />
+              Nivel de desempeño por área
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {performanceLevelsByArea.map((row) => (
@@ -190,12 +248,13 @@ export function ExamResultAnalytics({
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <span className="font-medium">{row.areaLabel}</span>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline">{row.percent}% acierto</Badge>
+                    <Badge variant="outline">{row.percent}/100 pts</Badge>
                     {row.level && (
                       <Badge className="bg-indigo-100 text-indigo-800">{row.level.label}</Badge>
                     )}
                   </div>
                 </div>
+                <Progress value={row.percent} className="h-2 mb-2" />
                 {row.level?.description && (
                   <p className="text-sm text-muted-foreground">{row.level.description}</p>
                 )}
@@ -224,14 +283,31 @@ export function ExamResultAnalytics({
                       angle={90}
                       domain={[0, 100]}
                       tick={{ fontSize: 10 }}
-                      tickFormatter={(v) => `${v}%`}
+                      tickFormatter={(v) => `${v}`}
                     />
-                    <Radar name="Este examen" dataKey="Este examen" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.2} />
-                    <Radar name="Tu promedio" dataKey="Estudiante" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
-                    <Radar name="Colegio" dataKey="Colegio" stroke="#f97316" fill="#f97316" fillOpacity={0.12} />
-                    <Radar name="Plataforma" dataKey="Plataforma" stroke="#10b981" fill="#10b981" fillOpacity={0.08} />
+                    <Radar
+                      name="Este examen"
+                      dataKey="Este examen"
+                      stroke="#8b5cf6"
+                      fill="#8b5cf6"
+                      fillOpacity={0.2}
+                    />
+                    <Radar
+                      name="Tu promedio"
+                      dataKey="Tu promedio"
+                      stroke="#3b82f6"
+                      fill="#3b82f6"
+                      fillOpacity={0.2}
+                    />
+                    <Radar
+                      name="Colegio"
+                      dataKey="Colegio"
+                      stroke="#f97316"
+                      fill="#f97316"
+                      fillOpacity={0.12}
+                    />
                     <Legend />
-                    <Tooltip formatter={(value: any) => `${value}%`} />
+                    <Tooltip formatter={(value: number) => [`${value}/100`, "Puntaje"]} />
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
@@ -243,18 +319,16 @@ export function ExamResultAnalytics({
                       <th className="py-2 pr-3 font-medium">Área</th>
                       <th className="py-2 px-2 font-medium text-center">Este examen</th>
                       <th className="py-2 px-2 font-medium text-center">Tu promedio</th>
-                      <th className="py-2 px-2 font-medium text-center">Colegio</th>
-                      <th className="py-2 pl-2 font-medium text-center">Plataforma</th>
+                      <th className="py-2 pl-2 font-medium text-center">Colegio</th>
                     </tr>
                   </thead>
                   <tbody>
                     {radarData.map((row) => (
                       <tr key={row.subject} className="border-b last:border-0">
                         <td className="py-2 pr-3 font-medium">{row.subject}</td>
-                        <td className="py-2 px-2 text-center">{row["Este examen"]}%</td>
-                        <td className="py-2 px-2 text-center">{row.Estudiante}%</td>
-                        <td className="py-2 px-2 text-center">{row.Colegio}%</td>
-                        <td className="py-2 pl-2 text-center">{row.Plataforma}%</td>
+                        <td className="py-2 px-2 text-center">{row["Este examen"]}/100</td>
+                        <td className="py-2 px-2 text-center">{row["Tu promedio"]}/100</td>
+                        <td className="py-2 pl-2 text-center">{row.Colegio}/100</td>
                       </tr>
                     ))}
                   </tbody>
@@ -262,8 +336,7 @@ export function ExamResultAnalytics({
               </div>
 
               <p className="text-xs text-muted-foreground text-center mt-3">
-                El &quot;área&quot; es la materia ICFES (Matemáticas, Lectura Crítica, etc.). Los
-                promedios históricos se calculan por exámenes presentados en cada área.
+                Solo se muestran las áreas evaluadas en este examen. Escala 0–100 por área.
               </p>
             </>
           ) : (
@@ -274,100 +347,68 @@ export function ExamResultAnalytics({
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <BreakdownBarCard
-          title="Desempeño por competencia (este examen)"
-          items={attemptBreakdown.byCompetencia}
-          color="#6366f1"
-        />
-        <BreakdownBarCard
-          title="Desempeño por componente (este examen)"
-          items={attemptBreakdown.byComponente}
-          color="#0ea5e9"
-        />
-        <BreakdownBarCard
-          title="Desempeño por tema (este examen)"
-          items={attemptBreakdown.byTema}
-          color="#f59e0b"
-        />
-        <BreakdownBarCard
-          title="Desempeño por subtema (este examen)"
-          items={attemptBreakdown.bySubtema}
-          color="#ec4899"
-        />
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-indigo-600" />
+            Detalle por área
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AreaDrillDown areas={attemptBreakdown.areaHierarchy} />
+        </CardContent>
+      </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Detalle por área</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {attemptBreakdown.byArea.map((item) => (
-              <div key={item.label}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="font-medium">{item.label}</span>
-                  <span>
-                    {item.percent}% acierto · {item.sharePercent}% de la prueba
-                  </span>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-600" />
+            Temas a reforzar
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {weakTopicsByArea.length > 0 ? (
+            <div className="space-y-4">
+              {weakTopicsByArea.map((group) => (
+                <div key={group.areaLabel}>
+                  <p className="font-medium text-sm mb-2">{group.areaLabel}</p>
+                  <ul className="space-y-2">
+                    {group.topics.map((item) => (
+                      <li
+                        key={`${group.areaLabel}-${item.label}`}
+                        className="flex items-center justify-between rounded-lg border p-2 bg-amber-50/50 text-sm"
+                      >
+                        <span>{item.label}</span>
+                        <Badge variant="outline" className="text-amber-800 border-amber-300">
+                          {item.percent}% · {item.correct}/{item.total}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <Progress value={item.percent} className="h-2" />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
-              Temas a reforzar por área
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {weakTopicsByArea.length > 0 ? (
-              <div className="space-y-4">
-                {weakTopicsByArea.map((group) => (
-                  <div key={group.areaLabel}>
-                    <p className="font-medium text-sm mb-2">{group.areaLabel}</p>
-                    <ul className="space-y-2">
-                      {group.topics.map((item) => (
-                        <li
-                          key={`${group.areaLabel}-${item.label}`}
-                          className="flex items-center justify-between rounded-lg border p-2 bg-amber-50/50 text-sm"
-                        >
-                          <span>{item.label}</span>
-                          <Badge variant="outline" className="text-amber-800 border-amber-300">
-                            {item.percent}%
-                          </Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ) : weakTopics.length > 0 ? (
-              <ul className="space-y-3">
-                {weakTopics.map((item) => (
-                  <li
-                    key={item.label}
-                    className="flex items-center justify-between rounded-lg border p-3 bg-amber-50/50"
-                  >
-                    <span className="text-sm font-medium">{item.label}</span>
-                    <Badge variant="outline" className="text-amber-800 border-amber-300">
-                      {item.percent}% acierto
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No se detectaron temas críticos en este intento. ¡Buen trabajo!
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              ))}
+            </div>
+          ) : weakTopics.length > 0 ? (
+            <ul className="space-y-3">
+              {weakTopics.map((item) => (
+                <li
+                  key={item.label}
+                  className="flex items-center justify-between rounded-lg border p-3 bg-amber-50/50"
+                >
+                  <span className="text-sm font-medium">{item.label}</span>
+                  <Badge variant="outline" className="text-amber-800 border-amber-300">
+                    {item.percent}% · {item.correct}/{item.total}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No se detectaron temas críticos en este intento. ¡Buen trabajo!
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

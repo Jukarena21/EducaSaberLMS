@@ -9,6 +9,11 @@ import {
 } from '@/lib/examPerformanceAnalytics'
 import { launchBrowser } from '@/lib/pdf/launchBrowser'
 import { resolveAreaDisplayName } from '@/lib/icfesAreas'
+import { calculateIcfesGlobalScore } from '@/lib/icfesScoring'
+import {
+  resolvePerformanceLevelForExam,
+  resolvePerformanceLevelFromDefaults,
+} from '@/lib/performanceLevels'
 
 let radarHelperRegistered = false
 
@@ -22,8 +27,7 @@ function registerCompetencyComparisonChartHelper() {
       competencies: Array<{ id: string; displayName?: string; name?: string }>,
       attemptScores: Array<{ id: string; score: number }>,
       studentScores: Array<{ id: string; score: number }>,
-      schoolScores: Array<{ id: string; score: number }>,
-      platformScores: Array<{ id: string; score: number }>
+      schoolScores: Array<{ id: string; score: number }>
     ) {
       if (!competencies?.length) return ''
 
@@ -61,7 +65,6 @@ function registerCompetencyComparisonChartHelper() {
       const attemptPath = buildPath((id) => scoreFor(attemptScores, id))
       const studentPath = buildPath((id) => scoreFor(studentScores, id))
       const schoolPath = buildPath((id) => scoreFor(schoolScores, id))
-      const platformPath = buildPath((id) => scoreFor(platformScores, id))
 
       let axes = ''
       let labels = ''
@@ -91,7 +94,6 @@ function registerCompetencyComparisonChartHelper() {
         <svg width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" style="background:white;border:1px solid #e5e7eb;border-radius:8px;">
           <g>
             ${axes}
-            <path d="${platformPath}" fill="rgba(16,185,129,0.12)" stroke="#10b981" stroke-width="2" stroke-dasharray="4,2"/>
             <path d="${schoolPath}" fill="rgba(249,115,22,0.15)" stroke="#f97316" stroke-width="2" stroke-dasharray="3,3"/>
             <path d="${studentPath}" fill="rgba(59,130,246,0.2)" stroke="#3b82f6" stroke-width="2"/>
             <path d="${attemptPath}" fill="rgba(139,92,246,0.2)" stroke="#8b5cf6" stroke-width="2.5"/>
@@ -103,8 +105,6 @@ function registerCompetencyComparisonChartHelper() {
               <text x="18" y="26" font-size="8" fill="#374151">Tu promedio</text>
               <rect x="0" y="32" width="12" height="12" fill="rgba(249,115,22,0.15)" stroke="#f97316" stroke-width="1.5"/>
               <text x="18" y="42" font-size="8" fill="#374151">Colegio</text>
-              <rect x="0" y="48" width="12" height="12" fill="rgba(16,185,129,0.12)" stroke="#10b981" stroke-width="1.5"/>
-              <text x="18" y="58" font-size="8" fill="#374151">Plataforma</text>
             </g>
           </g>
         </svg>
@@ -206,13 +206,65 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
   const radarData = await getAreaRadarComparison(
     userId,
     result.user.schoolId,
-    attemptBreakdown
+    attemptBreakdown,
+    { activeAreaIdsOnly: true }
+  )
+
+  const icfesGlobalScore = calculateIcfesGlobalScore(
+    attemptBreakdown.areaHierarchy.map((area) => ({
+      areaSlug: area.areaSlug,
+      score: area.percent,
+    }))
   )
 
   const weakTopics = [...attemptBreakdown.byTema, ...attemptBreakdown.bySubtema]
     .filter((item) => item.total >= 2 && item.percent < 60)
     .sort((a, b) => a.percent - b.percent)
     .slice(0, 5)
+
+  const performanceLevelsByArea = await Promise.all(
+    attemptBreakdown.byArea.map(async (item) => {
+      const areaSlug =
+        result.exam.examQuestions.find(
+          (q) =>
+            resolveAreaDisplayName(q.competency || result.exam.competency) === item.label
+        )?.competency?.name ||
+        result.exam.competency?.name ||
+        'general'
+      const level =
+        (await resolvePerformanceLevelForExam(item.percent, areaSlug, {
+          id: result.exam.id,
+          performanceLevelProfileId: result.exam.performanceLevelProfileId,
+          academicGrade: result.exam.academicGrade,
+        })) || resolvePerformanceLevelFromDefaults(item.percent, areaSlug)
+      return {
+        areaLabel: item.label,
+        percent: item.percent,
+        sharePercent: item.sharePercent,
+        level,
+      }
+    })
+  )
+
+  const weakByAreaMap = new Map<string, typeof attemptBreakdown.byTema>()
+  for (const q of result.exam.examQuestions) {
+    const areaLabel = resolveAreaDisplayName(
+      q.competency || result.exam.competency,
+      defaultAreaLabel
+    )
+    const temaItem = attemptBreakdown.byTema.find((t) => t.label === q.tema)
+    const subtemaItem = attemptBreakdown.bySubtema.find((t) => t.label === q.subtema)
+    for (const item of [temaItem, subtemaItem].filter(Boolean)) {
+      if (!item || item.total < 2 || item.percent >= 60) continue
+      if (!weakByAreaMap.has(areaLabel)) weakByAreaMap.set(areaLabel, [])
+      const list = weakByAreaMap.get(areaLabel)!
+      if (!list.find((x) => x.label === item.label)) list.push(item)
+    }
+  }
+  const weakTopicsByArea = Array.from(weakByAreaMap.entries()).map(([areaLabel, topics]) => ({
+    areaLabel,
+    topics: topics.sort((a, b) => a.percent - b.percent),
+  }))
 
   const completedDate = result.completedAt.toLocaleDateString('es-ES', {
     year: 'numeric',
@@ -221,13 +273,15 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
   })
 
   const performanceLevel =
-    result.score >= 90
-      ? 'Excelente'
-      : result.score >= 80
-        ? 'Bueno'
-        : result.score >= 70
-          ? 'Aceptable'
-          : 'Necesita mejora'
+    performanceLevelsByArea.length === 1 && performanceLevelsByArea[0].level
+      ? performanceLevelsByArea[0].level.label
+      : result.score >= 90
+        ? 'Excelente'
+        : result.score >= 80
+          ? 'Bueno'
+          : result.score >= 70
+            ? 'Aceptable'
+            : 'Necesita mejora'
 
   const comparisonRows = radarData.areas.map((area) => ({
     name: area.displayName,
@@ -236,8 +290,6 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
     student:
       radarData.studentScores.find((s) => s.id === area.id)?.score ?? 0,
     school: radarData.schoolScores.find((s) => s.id === area.id)?.score ?? 0,
-    platform:
-      radarData.platformScores.find((s) => s.id === area.id)?.score ?? 0,
   }))
 
   registerCompetencyComparisonChartHelper()
@@ -258,11 +310,13 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
     completedDate,
     timeTakenMinutes: result.timeTakenMinutes ?? 0,
     score: result.score,
+    icfesGlobalScore,
     totalQuestions: result.totalQuestions,
     correctAnswers: result.correctAnswers,
     incorrectAnswers: result.incorrectAnswers,
     isPassed: result.isPassed || false,
     performanceLevel,
+    performanceLevelsByArea,
     schoolName: result.user.school?.name || 'EducaSaber',
     companyLogo: loadLogoBase64('logo-educasaber.png'),
     schoolLogo: await loadSchoolLogoBase64(result.user.school?.logoUrl),
@@ -270,24 +324,13 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
     secondaryColor: 'dc2626',
     accentColor: '059669',
     areaBreakdown: attemptBreakdown.byArea,
-    competenciaBreakdown: attemptBreakdown.byCompetencia.filter(
-      (item) => item.label !== 'Sin clasificar'
-    ),
-    componenteBreakdown: attemptBreakdown.byComponente.filter(
-      (item) => item.label !== 'Sin clasificar'
-    ),
-    temaBreakdown: attemptBreakdown.byTema.filter(
-      (item) => item.label !== 'Sin clasificar'
-    ),
-    subtemaBreakdown: attemptBreakdown.bySubtema.filter(
-      (item) => item.label !== 'Sin clasificar'
-    ),
+    areaHierarchy: attemptBreakdown.areaHierarchy,
     weakTopics,
+    weakTopicsByArea,
     areas: radarData.areas,
     attemptScoresForRadar: radarData.attemptScores,
     studentScoresForRadar: radarData.studentScores,
     schoolScoresForRadar: radarData.schoolScores,
-    platformScoresForRadar: radarData.platformScores,
     comparisonRows,
     generatedDate: new Date().toLocaleDateString('es-ES', {
       year: 'numeric',

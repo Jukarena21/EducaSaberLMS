@@ -90,6 +90,7 @@ interface ExamResult {
   analytics?: {
     attemptBreakdown: ExamAttemptAnalytics
     radarComparison: AreaRadarData
+    icfesGlobalScore?: number | null
     weakTopics: BreakdownItem[]
     performanceLevelsByArea?: Array<{
       areaLabel: string
@@ -415,6 +416,7 @@ export default function ExamResultPage({ params }: { params: Promise<{ resultId:
             {analytics ? (
               <ExamResultAnalytics
                 score={score}
+                icfesGlobalScore={analytics.icfesGlobalScore}
                 attemptBreakdown={analytics.attemptBreakdown}
                 radarComparison={analytics.radarComparison}
                 weakTopics={analytics.weakTopics}

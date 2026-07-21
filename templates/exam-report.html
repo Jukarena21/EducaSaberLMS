@@ -53,24 +53,36 @@
     .card p { margin: 4px 0; color: #374151; }
     .score-banner {
       grid-column: 1 / -1;
-      background: linear-gradient(135deg, #{{primaryColor}} 0%, #{{secondaryColor}} 100%);
+      background: linear-gradient(135deg, #{{primaryColor}} 0%, #4338ca 100%);
       color: white;
       border-radius: 10px;
       padding: 18px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
     }
-    .score-value { font-size: 42px; font-weight: 800; }
-    .score-label { font-size: 14px; opacity: 0.95; }
-    .stats-row { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 8px; }
+    .score-block { flex: 1; min-width: 160px; }
+    .score-value { font-size: 42px; font-weight: 800; line-height: 1; }
+    .score-suffix { font-size: 16px; opacity: 0.9; }
+    .score-label { font-size: 13px; opacity: 0.95; margin-bottom: 4px; }
+    .icfes-box {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 8px;
+      padding: 12px 16px;
+      min-width: 180px;
+    }
+    .icfes-value { font-size: 32px; font-weight: 800; }
+    .stats-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
     .stat-pill {
       background: rgba(255,255,255,0.15);
       border-radius: 999px;
       padding: 6px 14px;
       font-size: 12px;
     }
-    .section { margin-bottom: 20px; }
+    .section { margin-bottom: 20px; page-break-inside: avoid; }
     .section-title {
       font-size: 15px;
       font-weight: 700;
@@ -123,6 +135,12 @@
       display: flex;
       justify-content: space-between;
     }
+    .weak-area-title {
+      font-weight: 700;
+      color: #92400e;
+      margin: 10px 0 6px;
+      font-size: 12px;
+    }
     .footer {
       margin-top: 24px;
       padding-top: 10px;
@@ -133,6 +151,50 @@
     }
     .badge-pass { color: #059669; font-weight: 700; }
     .badge-fail { color: #dc2626; font-weight: 700; }
+    .level-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      background: #fafafa;
+    }
+    .level-badge {
+      display: inline-block;
+      background: #e0e7ff;
+      color: #3730a3;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 10px;
+      font-weight: 700;
+      margin-left: 8px;
+    }
+    .area-block {
+      border: 1px solid #dbeafe;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      overflow: hidden;
+      page-break-inside: avoid;
+    }
+    .area-header {
+      background: #eff6ff;
+      padding: 10px 12px;
+      font-weight: 700;
+      color: #1e3a8a;
+      border-bottom: 1px solid #dbeafe;
+    }
+    .comp-block {
+      padding: 8px 12px 8px 20px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .comp-block:last-child { border-bottom: none; }
+    .comp-title {
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+    .comp-table { margin-top: 4px; margin-left: 12px; }
+    .comp-table td, .comp-table th { padding: 5px 8px; font-size: 10px; }
+    .muted { color: #6b7280; font-size: 10px; }
   </style>
 </head>
 <body>
@@ -143,7 +205,7 @@
       </div>
       <div class="header-center">
         <div class="report-title">Reporte de examen</div>
-        <div class="report-subtitle">Informe analítico de desempeño ICFES</div>
+        <div class="report-subtitle">Informe analítico de desempeño ICFES · EducaSaber</div>
       </div>
       <div style="text-align:right;">
         {{#if schoolLogo}}<img src="{{schoolLogo}}" alt="{{schoolName}}" class="logo">{{/if}}
@@ -166,21 +228,45 @@
       </div>
 
       <div class="score-banner">
-        <div>
-          <div class="score-label">Puntaje obtenido</div>
-          <div class="score-value">{{score}}%</div>
-          <div class="score-label">Nivel: {{performanceLevel}}</div>
-        </div>
-        <div>
+        <div class="score-block">
+          <div class="score-label">Calificación del intento</div>
+          <div>
+            <span class="score-value">{{score}}</span>
+            <span class="score-suffix">/ 100 pts</span>
+          </div>
           <div class="stats-row">
-            <span class="stat-pill">Puntaje: {{score}}%</span>
             <span class="stat-pill">
               {{#if isPassed}}<span class="badge-pass">Aprobado</span>{{else}}<span class="badge-fail">No aprobado</span>{{/if}}
             </span>
           </div>
         </div>
+        {{#if icfesGlobalScore}}
+        <div class="icfes-box">
+          <div class="score-label">Puntaje ICFES estimado</div>
+          <div>
+            <span class="icfes-value">{{icfesGlobalScore}}</span>
+            <span class="score-suffix">/ 500</span>
+          </div>
+          <p class="muted" style="margin-top:4px;color:rgba(255,255,255,0.8);">Ponderación Saber 11 según áreas presentes</p>
+        </div>
+        {{/if}}
       </div>
     </div>
+
+    {{#if performanceLevelsByArea.length}}
+    <div class="section">
+      <div class="section-title">Nivel de desempeño por área</div>
+      {{#each performanceLevelsByArea}}
+      <div class="level-card">
+        <strong>{{areaLabel}}</strong>
+        <span>{{percent}}/100 pts</span>
+        {{#if level}}<span class="level-badge">{{level.label}}</span>{{/if}}
+        {{#if level.description}}<p class="muted" style="margin-top:6px;">{{level.description}}</p>{{/if}}
+        <div class="progress-wrap"><div class="progress-fill" style="width: {{percent}}%;"></div></div>
+      </div>
+      {{/each}}
+    </div>
+    {{/if}}
 
     <div class="section">
       <div class="section-title">Desempeño por área (este examen)</div>
@@ -189,7 +275,8 @@
           <tr>
             <th>Área ICFES</th>
             <th class="center">% prueba</th>
-            <th class="center">Acierto</th>
+            <th class="center">Puntaje</th>
+            <th class="center">Aciertos</th>
           </tr>
         </thead>
         <tbody>
@@ -200,106 +287,51 @@
               <div class="progress-wrap"><div class="progress-fill" style="width: {{percent}}%;"></div></div>
             </td>
             <td class="center">{{sharePercent}}%</td>
-            <td class="center"><strong>{{percent}}%</strong></td>
+            <td class="center"><strong>{{percent}}/100</strong></td>
+            <td class="center">{{correct}}/{{total}}</td>
           </tr>
           {{/each}}
         </tbody>
       </table>
     </div>
 
-    {{#if competenciaBreakdown.length}}
+    {{#if areaHierarchy.length}}
     <div class="section">
-      <div class="section-title">Desempeño por competencia (este examen)</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Competencia</th>
-            <th class="center">% prueba</th>
-            <th class="center">Acierto</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{#each competenciaBreakdown}}
-          <tr>
-            <td>{{label}}</td>
-            <td class="center">{{sharePercent}}%</td>
-            <td class="center">{{percent}}%</td>
-          </tr>
-          {{/each}}
-        </tbody>
-      </table>
-    </div>
-    {{/if}}
-
-    {{#if componenteBreakdown.length}}
-    <div class="section">
-      <div class="section-title">Desempeño por componente (este examen)</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Componente</th>
-            <th class="center">% prueba</th>
-            <th class="center">Acierto</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{#each componenteBreakdown}}
-          <tr>
-            <td>{{label}}</td>
-            <td class="center">{{sharePercent}}%</td>
-            <td class="center">{{percent}}%</td>
-          </tr>
-          {{/each}}
-        </tbody>
-      </table>
-    </div>
-    {{/if}}
-
-    {{#if temaBreakdown.length}}
-    <div class="section">
-      <div class="section-title">Desempeño por tema (este examen)</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Tema</th>
-            <th class="center">% prueba</th>
-            <th class="center">Acierto</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{#each temaBreakdown}}
-          <tr>
-            <td>{{label}}</td>
-            <td class="center">{{sharePercent}}%</td>
-            <td class="center">{{percent}}%</td>
-          </tr>
-          {{/each}}
-        </tbody>
-      </table>
-    </div>
-    {{/if}}
-
-    {{#if subtemaBreakdown.length}}
-    <div class="section">
-      <div class="section-title">Desempeño por subtema (este examen)</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Subtema</th>
-            <th class="center">% prueba</th>
-            <th class="center">Acierto</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{#each subtemaBreakdown}}
-          <tr>
-            <td>{{label}}</td>
-            <td class="center">{{sharePercent}}%</td>
-            <td class="center">{{percent}}%</td>
-          </tr>
-          {{/each}}
-        </tbody>
-      </table>
+      <div class="section-title">Detalle por área · competencias · componentes</div>
+      {{#each areaHierarchy}}
+      <div class="area-block">
+        <div class="area-header">
+          {{areaLabel}} — {{percent}}% acierto ({{correct}}/{{total}} preguntas)
+        </div>
+        {{#each competencias}}
+        <div class="comp-block">
+          <div class="comp-title">{{label}} — {{percent}}% · {{correct}}/{{total}}</div>
+          {{#if componentes.length}}
+          <table class="comp-table">
+            <thead>
+              <tr>
+                <th>Componente</th>
+                <th class="center">Acierto</th>
+                <th class="center">Correctas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each componentes}}
+              <tr>
+                <td>{{label}}</td>
+                <td class="center">{{percent}}%</td>
+                <td class="center">{{correct}}/{{total}}</td>
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+          {{else}}
+          <p class="muted">Sin componentes clasificados.</p>
+          {{/if}}
+        </div>
+        {{/each}}
+      </div>
+      {{/each}}
     </div>
     {{/if}}
 
@@ -307,8 +339,8 @@
       <div class="section-title">Comparación por área ICFES</div>
       <div class="chart-row">
         <div>
-          {{{competencyComparisonChart areas attemptScoresForRadar studentScoresForRadar schoolScoresForRadar platformScoresForRadar}}}
-          <p class="note">Este examen (morado), tu promedio (azul), colegio (naranja) y plataforma (verde).</p>
+          {{{competencyComparisonChart areas attemptScoresForRadar studentScoresForRadar schoolScoresForRadar}}}
+          <p class="note">Este examen (morado), tu promedio (azul) y colegio (naranja). Escala 0–100.</p>
         </div>
         <div>
           <table>
@@ -318,17 +350,15 @@
                 <th class="center">Este examen</th>
                 <th class="center">Tu prom.</th>
                 <th class="center">Colegio</th>
-                <th class="center">Plataforma</th>
               </tr>
             </thead>
             <tbody>
               {{#each comparisonRows}}
               <tr>
                 <td>{{name}}</td>
-                <td class="center">{{attempt}}%</td>
-                <td class="center">{{student}}%</td>
-                <td class="center">{{school}}%</td>
-                <td class="center">{{platform}}%</td>
+                <td class="center">{{attempt}}/100</td>
+                <td class="center">{{student}}/100</td>
+                <td class="center">{{school}}/100</td>
               </tr>
               {{/each}}
             </tbody>
@@ -337,15 +367,29 @@
       </div>
     </div>
 
+    {{#if weakTopicsByArea.length}}
+    <div class="section">
+      <div class="section-title">Temas a reforzar</div>
+      {{#each weakTopicsByArea}}
+      <p class="weak-area-title">{{areaLabel}}</p>
+      <ul class="weak-list">
+        {{#each topics}}
+        <li><span>{{label}}</span><strong>{{percent}}% · {{correct}}/{{total}}</strong></li>
+        {{/each}}
+      </ul>
+      {{/each}}
+    </div>
+    {{else}}
     {{#if weakTopics.length}}
     <div class="section">
       <div class="section-title">Temas a reforzar</div>
       <ul class="weak-list">
         {{#each weakTopics}}
-        <li><span>{{label}}</span><strong>{{percent}}% acierto</strong></li>
+        <li><span>{{label}}</span><strong>{{percent}}% · {{correct}}/{{total}}</strong></li>
         {{/each}}
       </ul>
     </div>
+    {{/if}}
     {{/if}}
 
     <div class="footer">

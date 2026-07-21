@@ -11,11 +11,13 @@ export type ScoreByArea = {
  * Un "área" es la materia: Matemáticas, Lectura Crítica, etc.
  */
 export type AreaRadarData = {
-  areas: Array<{ id: string; displayName: string }>
+  areas: Array<{ id: string; displayName: string; slug?: string }>
   attemptScores: ScoreByArea[]
   studentScores: ScoreByArea[]
   schoolScores: ScoreByArea[]
   platformScores: ScoreByArea[]
+  /** Slugs de áreas con preguntas en este intento */
+  activeAreaIds: string[]
 }
 
 export type BreakdownItem = {
@@ -41,6 +43,26 @@ export type ExamAttemptAnalytics = {
   byComponente: BreakdownItem[]
   byTema: BreakdownItem[]
   bySubtema: BreakdownItem[]
+  /** Jerarquía área → competencia → componente para reporte ICFES */
+  areaHierarchy: AreaHierarchyNode[]
+}
+
+export type AreaHierarchyNode = {
+  areaId?: string
+  areaSlug: string
+  areaLabel: string
+  correct: number
+  total: number
+  percent: number
+  competencias: CompetenciaHierarchyNode[]
+}
+
+export type CompetenciaHierarchyNode = {
+  label: string
+  correct: number
+  total: number
+  percent: number
+  componentes: BreakdownItem[]
 }
 
 type ExamQuestionRow = {
@@ -117,6 +139,116 @@ function aggregateBreakdown(
     .sort((a, b) => a.label.localeCompare(b.label, 'es'))
 }
 
+function statsFromQuestions(
+  questionIds: string[],
+  answerMap: Map<string, boolean | undefined>
+): { correct: number; total: number; percent: number } {
+  const total = questionIds.length
+  const correct = questionIds.filter((id) => answerMap.get(id)).length
+  return {
+    correct,
+    total,
+    percent: total > 0 ? Math.round((correct / total) * 100) : 0,
+  }
+}
+
+function buildAreaHierarchy(
+  questions: ExamQuestionRow[],
+  answers: AnswerRow[],
+  defaultAreaLabel: string
+): AreaHierarchyNode[] {
+  const answerMap = new Map(answers.map((a) => [a.questionId, a.isCorrect]))
+  const byAreaKey = new Map<
+    string,
+    {
+      areaId?: string
+      areaSlug: string
+      areaLabel: string
+      questionIds: string[]
+    }
+  >()
+
+  for (const q of questions) {
+    const areaSlug = q.competency?.name?.toLowerCase() || 'general'
+    const areaLabel = q.competency
+      ? resolveAreaDisplayName(
+          { id: q.competencyId, name: q.competency.name, displayName: q.competency.displayName },
+          defaultAreaLabel
+        )
+      : defaultAreaLabel
+    const key = q.competencyId || areaSlug
+    const bucket = byAreaKey.get(key) || {
+      areaId: q.competencyId || undefined,
+      areaSlug,
+      areaLabel,
+      questionIds: [],
+    }
+    bucket.questionIds.push(q.id)
+    byAreaKey.set(key, bucket)
+  }
+
+  const hierarchy: AreaHierarchyNode[] = []
+
+  for (const area of byAreaKey.values()) {
+    const areaStats = statsFromQuestions(area.questionIds, answerMap)
+    const areaQuestions = questions.filter((q) => area.questionIds.includes(q.id))
+
+    const byCompetencia = new Map<string, string[]>()
+    for (const q of areaQuestions) {
+      const compLabel = q.competencia?.trim() || 'Sin clasificar'
+      if (!byCompetencia.has(compLabel)) byCompetencia.set(compLabel, [])
+      byCompetencia.get(compLabel)!.push(q.id)
+    }
+
+    const competencias: CompetenciaHierarchyNode[] = []
+    for (const [compLabel, compQIds] of byCompetencia.entries()) {
+      const compStats = statsFromQuestions(compQIds, answerMap)
+      const compQuestions = areaQuestions.filter((q) => compQIds.includes(q.id))
+
+      const byComponente = new Map<string, string[]>()
+      for (const q of compQuestions) {
+        const compoLabel = q.componente?.trim() || 'Sin clasificar'
+        if (!byComponente.has(compoLabel)) byComponente.set(compoLabel, [])
+        byComponente.get(compoLabel)!.push(q.id)
+      }
+
+      const componentes: BreakdownItem[] = Array.from(byComponente.entries())
+        .map(([label, ids]) => {
+          const s = statsFromQuestions(ids, answerMap)
+          return {
+            label,
+            total: s.total,
+            correct: s.correct,
+            incorrect: s.total - s.correct,
+            percent: s.percent,
+            sharePercent:
+              areaStats.total > 0 ? Math.round((s.total / areaStats.total) * 100) : 0,
+          }
+        })
+        .filter((c) => c.label !== 'Sin clasificar' || c.total > 0)
+        .sort((a, b) => a.label.localeCompare(b, 'es'))
+
+      competencias.push({
+        label: compLabel,
+        ...compStats,
+        componentes,
+      })
+    }
+
+    hierarchy.push({
+      areaId: area.areaId,
+      areaSlug: area.areaSlug,
+      areaLabel: area.areaLabel,
+      ...areaStats,
+      competencias: competencias
+        .filter((c) => c.label !== 'Sin clasificar' || c.total > 0)
+        .sort((a, b) => a.label.localeCompare(b, 'es')),
+    })
+  }
+
+  return hierarchy.sort((a, b) => a.areaLabel.localeCompare(b.areaLabel, 'es'))
+}
+
 export function buildExamAttemptBreakdown(
   questions: ExamQuestionRow[],
   answers: AnswerRow[],
@@ -139,6 +271,7 @@ export function buildExamAttemptBreakdown(
     byComponente: aggregateBreakdown(questions, answers, (q) => q.componente),
     byTema: aggregateBreakdown(questions, answers, (q) => q.tema),
     bySubtema: aggregateBreakdown(questions, answers, (q) => q.subtema),
+    areaHierarchy: buildAreaHierarchy(questions, answers, defaultAreaLabel),
   }
 }
 
@@ -149,7 +282,8 @@ export function buildExamAttemptBreakdown(
 export async function getAreaRadarComparison(
   userId: string,
   schoolId: string | null | undefined,
-  attemptBreakdown?: ExamAttemptAnalytics
+  attemptBreakdown?: ExamAttemptAnalytics,
+  options?: { activeAreaIdsOnly?: boolean }
 ): Promise<AreaRadarData> {
   const icfesAreas = await prisma.area.findMany({
     where: { name: { in: ICFES_AREA_SLUGS } },
@@ -194,14 +328,31 @@ export async function getAreaRadarComparison(
     return { id: areaId, score: item?.percent ?? 0 }
   })
 
+  const activeAreaIds =
+    attemptBreakdown?.byArea
+      .filter((a) => a.total > 0 && a.id)
+      .map((a) => a.id!)
+    ?? []
+
+  const displayAreas =
+    options?.activeAreaIdsOnly && activeAreaIds.length > 0
+      ? areas.filter((a) => activeAreaIds.includes(a.id))
+      : areas
+
   return {
-    areas: areas.map((a) => ({
+    areas: displayAreas.map((a) => ({
       id: a.id,
       displayName: resolveAreaDisplayName(a),
+      slug: a.name,
     })),
-    attemptScores,
-    studentScores: averageScoresByArea(studentExamResults, areaIds),
-    schoolScores: averageScoresByArea(schoolExamResults, areaIds),
-    platformScores: averageScoresByArea(platformExamResults, areaIds),
+    attemptScores: attemptScores.filter((s) =>
+      options?.activeAreaIdsOnly && activeAreaIds.length > 0
+        ? activeAreaIds.includes(s.id)
+        : true
+    ),
+    studentScores: averageScoresByArea(studentExamResults, displayAreas.map((a) => a.id)),
+    schoolScores: averageScoresByArea(schoolExamResults, displayAreas.map((a) => a.id)),
+    platformScores: averageScoresByArea(platformExamResults, displayAreas.map((a) => a.id)),
+    activeAreaIds,
   }
 }
