@@ -61,3 +61,23 @@ export const ICFES_AREA_SLUGS = [
   'comunicacion_escrita',
   'ingles',
 ]
+
+type QuestionAreaSource = {
+  competency?: AreaLike | null
+  componente?: string | null
+}
+
+/**
+ * Etiqueta visible del área ICFES para una pregunta de examen.
+ * Usa resolveAreaDisplayName cuando hay relación Area; mantiene fallback a
+ * componente solo para simulacros legacy sin competencyId.
+ */
+export function getQuestionAreaLabel(
+  question: QuestionAreaSource,
+  fallback = 'General'
+): string {
+  if (question.competency) {
+    return resolveAreaDisplayName(question.competency, fallback)
+  }
+  return question.componente?.trim() || fallback
+}

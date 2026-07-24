@@ -23,6 +23,7 @@ const examSchema = z.object({
   closeDate: z.string().optional(),
   includedModules: z.array(z.string()).optional(),
   questionsPerModule: z.number().min(1).default(5),
+  performanceLevelProfileId: z.string().optional().nullable(),
 })
 
 export async function GET(request: NextRequest) {
@@ -291,6 +292,11 @@ export async function POST(request: NextRequest) {
       openDate: validatedData.openDate ? new Date(validatedData.openDate) : null,
       closeDate: validatedData.closeDate ? new Date(validatedData.closeDate) : null,
       questionsPerModule: validatedData.questionsPerModule,
+      performanceLevelProfileId:
+        validatedData.performanceLevelProfileId &&
+        validatedData.performanceLevelProfileId !== ''
+          ? validatedData.performanceLevelProfileId
+          : null,
     }
     console.log('🔍 [DEBUG] Datos finales para crear examen:', examData)
 

@@ -23,6 +23,7 @@ const examUpdateSchema = z.object({
   closeDate: z.string().optional(),
   includedModules: z.array(z.string()).optional(),
   questionsPerModule: z.number().min(1).optional(),
+  performanceLevelProfileId: z.string().optional().nullable(),
 })
 
 export async function GET(
@@ -284,6 +285,15 @@ export async function PUT(
         ? { closeDate: validatedData.closeDate ? new Date(validatedData.closeDate) : null }
         : {}),
       ...(validatedData.questionsPerModule !== undefined ? { questionsPerModule: validatedData.questionsPerModule } : {}),
+      ...(validatedData.performanceLevelProfileId !== undefined
+        ? {
+            performanceLevelProfileId:
+              validatedData.performanceLevelProfileId &&
+              validatedData.performanceLevelProfileId !== ''
+                ? validatedData.performanceLevelProfileId
+                : null,
+          }
+        : {}),
     }
 
     updateData.isIcfesExam = nextIsIcfesExam

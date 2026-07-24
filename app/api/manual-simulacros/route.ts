@@ -15,6 +15,7 @@ const manualSimulacroSchema = z.object({
   closeDate: z.string().optional(),
   isPredefined: z.boolean().default(false),
   isPublished: z.boolean().default(false),
+  performanceLevelProfileId: z.string().optional().nullable(),
 })
 
 export async function GET(request: NextRequest) {
@@ -216,6 +217,11 @@ export async function POST(request: NextRequest) {
         closeDate: validatedData.closeDate ? new Date(validatedData.closeDate) : null,
         questionsPerModule: 0, // No aplica para simulacros manuales
         totalQuestions: 0, // Se actualizará cuando se agreguen preguntas
+        performanceLevelProfileId:
+          validatedData.performanceLevelProfileId &&
+          validatedData.performanceLevelProfileId !== ''
+            ? validatedData.performanceLevelProfileId
+            : null,
       },
       include: {
         createdBy: {

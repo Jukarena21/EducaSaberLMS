@@ -19,6 +19,7 @@ export interface ExamData {
   includedModules?: string[] // Array de module_ids
   questionsPerModule: number
   totalQuestions?: number
+  performanceLevelProfileId?: string | null
   // Campos para simulacros manuales
   isManualSimulacro?: boolean
   isPredefined?: boolean
@@ -71,6 +72,8 @@ export interface ExamFormData {
   closeDate: string
   includedModules: string[]
   questionsPerModule: number
+  /** Tabla de niveles ICFES; vacío = usar default por grado/año */
+  performanceLevelProfileId?: string
 }
 
 export interface ExamQuestionData {

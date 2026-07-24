@@ -12,6 +12,7 @@ export interface ManualSimulacroFormData {
   closeDate?: string
   isPredefined: boolean // Si es predefinido de EducaSaber
   isPublished: boolean
+  performanceLevelProfileId?: string
 }
 
 // Pregunta de simulacro manual con metadatos

@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { QuestionPreviewProps } from '@/types/question';
 import { QuestionRenderer } from '@/components/QuestionRenderer';
+import { decodeMaybeEscapedHtml } from '@/lib/htmlContent';
 import { 
   Clock, 
   Image as ImageIcon, 
@@ -60,30 +61,20 @@ export function QuestionPreview({
   const isCorrect = selectedAnswer === question.correctOption;
   const showResult = isSubmitted && showCorrectAnswer;
 
-  // Renderizado específico para modo examen
+  // Renderizado alineado con ExamInterface (mismo QuestionRenderer, sin duplicar enunciado)
   if (mode === 'exam') {
     return (
       <div className="bg-white rounded-lg p-6 h-full flex flex-col max-w-4xl mx-auto">
-        <div className="flex-1">
-          <div className="mb-6">
-            <p className="text-gray-800 text-lg leading-relaxed whitespace-pre-line">
-              {question.questionText}
-            </p>
-          </div>
-
-          {/* Imagen de la pregunta si existe */}
-          {question.questionImage && (
-            <div className="mb-6">
-              <img 
-                src={question.questionImage} 
-                alt="Imagen de la pregunta"
-                className="max-w-full h-auto rounded-lg border"
-                style={{ maxHeight: '400px' }}
-              />
-            </div>
+        <div className="flex-1 space-y-6">
+          {(question as { lessonUrl?: string }).lessonUrl && (
+            <div
+              className="p-4 bg-gray-50 rounded-lg border prose max-w-none"
+              dangerouslySetInnerHTML={{
+                __html: decodeMaybeEscapedHtml((question as { lessonUrl?: string }).lessonUrl!),
+              }}
+            />
           )}
 
-          {/* Renderizar pregunta usando QuestionRenderer */}
           <QuestionRenderer
             question={question}
             selectedAnswer={selectedAnswer}
@@ -94,20 +85,19 @@ export function QuestionPreview({
           />
         </div>
 
-        {/* Información de la materia y tema */}
         <div className="mt-6 pt-4 border-t">
           <div className="flex items-center justify-between">
             <div>
               <div className="font-semibold text-gray-800">
-                {question.lesson?.modules?.[0]?.competency?.name || 'Competencia'}
+                {question.lesson?.modules?.[0]?.competency?.displayName ||
+                  question.lesson?.modules?.[0]?.competency?.name ||
+                  'Área'}
               </div>
               <div className="text-sm text-gray-600">
                 {question.lesson?.title || 'Lección'}
               </div>
             </div>
-            <div className="text-sm text-gray-600">
-              Pregunta de ejemplo
-            </div>
+            <div className="text-sm text-gray-600">Vista previa — modo examen</div>
           </div>
         </div>
       </div>

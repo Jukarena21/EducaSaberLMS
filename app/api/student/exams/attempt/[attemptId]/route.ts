@@ -2,20 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-
-const getQuestionAreaName = (question: any) => {
-  return (
-    question?.competency?.displayName ||
-    question?.competency?.name ||
-    question?.componente ||
-    'General'
-  )
-}
+import { getQuestionAreaLabel } from '@/lib/icfesAreas'
 
 const sortQuestionsByArea = (questions: any[]) => {
   return [...questions].sort((a, b) => {
-    const areaA = getQuestionAreaName(a).toLowerCase()
-    const areaB = getQuestionAreaName(b).toLowerCase()
+    const areaA = getQuestionAreaLabel(a).toLowerCase()
+    const areaB = getQuestionAreaLabel(b).toLowerCase()
 
     if (areaA !== areaB) {
       return areaA.localeCompare(areaB, 'es', { sensitivity: 'base' })
@@ -132,7 +124,7 @@ export async function GET(
         { id: 'C', text: eq.optionC, isCorrect: false },
         { id: 'D', text: eq.optionD, isCorrect: false }
       ],
-      competency: getQuestionAreaName(eq)
+      competency: getQuestionAreaLabel(eq)
     }))
 
     return NextResponse.json({

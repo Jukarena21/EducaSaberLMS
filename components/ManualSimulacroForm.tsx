@@ -38,7 +38,12 @@ export function ManualSimulacroForm({
     closeDate: '',
     isPredefined: false,
     isPublished: false,
+    performanceLevelProfileId: '',
   })
+
+  const [performanceLevelProfiles, setPerformanceLevelProfiles] = useState<
+    Array<{ id: string; name: string; isDefault: boolean }>
+  >([])
 
   const [openDate, setOpenDate] = useState<Date>()
   const [closeDate, setCloseDate] = useState<Date>()
@@ -56,6 +61,7 @@ export function ManualSimulacroForm({
         closeDate: simulacro.closeDate || '',
         isPredefined: simulacro.isPredefined || false,
         isPublished: simulacro.isPublished || false,
+        performanceLevelProfileId: simulacro.performanceLevelProfileId || '',
       })
 
       if (simulacro.openDate) {
@@ -70,6 +76,13 @@ export function ManualSimulacroForm({
       }
     }
   }, [simulacro])
+
+  useEffect(() => {
+    fetch('/api/admin/performance-levels')
+      .then((res) => (res.ok ? res.json() : { profiles: [] }))
+      .then((data) => setPerformanceLevelProfiles(data.profiles || []))
+      .catch(() => setPerformanceLevelProfiles([]))
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -168,6 +181,35 @@ export function ManualSimulacroForm({
             onChange={(e) => setFormData({ ...formData, passingScore: parseInt(e.target.value) || 0 })}
             required
           />
+        </div>
+
+        <div className="md:col-span-2">
+          <Label htmlFor="performanceLevelProfileId">Tabla de niveles ICFES</Label>
+          <Select
+            value={formData.performanceLevelProfileId || 'default'}
+            onValueChange={(value) =>
+              setFormData({
+                ...formData,
+                performanceLevelProfileId: value === 'default' ? '' : value,
+              })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Usar tabla por defecto" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Por defecto (tabla global)</SelectItem>
+              {performanceLevelProfiles.map((profile) => (
+                <SelectItem key={profile.id} value={profile.id}>
+                  {profile.name}
+                  {profile.isDefault ? ' · default' : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Bandas de desempeño (Satisfactorio, B1, etc.) en el reporte del estudiante.
+          </p>
         </div>
 
         <div>

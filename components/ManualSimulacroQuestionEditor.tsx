@@ -13,7 +13,7 @@ import { buildQuestionAreaNumberMaps } from '@/lib/examAnswerValidation'
 import { resolveAreaDisplayName } from '@/lib/icfesAreas'
 import {
   getComponentsForArea,
-  getCompetenciasForComponent,
+  getCompetenciasForArea,
   OTRO_OPTION,
 } from '@/lib/icfesTaxonomy'
 import { 
@@ -325,10 +325,7 @@ export function ManualSimulacroQuestionEditor({
 
   const selectedAreaSlug = getAreaSlug(formData.competencyId)
   const componentOptions = getComponentsForArea(selectedAreaSlug)
-  const competenciaOptions = getCompetenciasForComponent(
-    selectedAreaSlug,
-    formData.componente === OTRO_OPTION ? undefined : formData.componente
-  )
+  const competenciaOptions = getCompetenciasForArea(selectedAreaSlug)
 
   // Estilos visuales suaves por área para facilitar escaneo del listado
   const getAreaTintClasses = (competencyId?: string) => {
@@ -715,7 +712,14 @@ export function ManualSimulacroQuestionEditor({
                 <Label htmlFor="competencyId">Área *</Label>
                 <Select
                   value={formData.competencyId}
-                  onValueChange={(value) => setFormData({ ...formData, competencyId: value })}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      competencyId: value,
+                      competencia: '',
+                      componente: '',
+                    })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar área" />
@@ -780,40 +784,6 @@ export function ManualSimulacroQuestionEditor({
               </div>
 
               <div>
-                <Label htmlFor="componente">Componente *</Label>
-                <Select
-                  value={componentOptions.includes(formData.componente) ? formData.componente : OTRO_OPTION}
-                  onValueChange={(value) =>
-                    setFormData({
-                      ...formData,
-                      componente: value === OTRO_OPTION ? '' : value,
-                      competencia: '',
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar componente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {componentOptions.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {(!formData.componente || !componentOptions.includes(formData.componente)) && (
-                  <Input
-                    className="mt-2"
-                    value={formData.componente}
-                    onChange={(e) => setFormData({ ...formData, componente: e.target.value })}
-                    placeholder="Especifique el componente (Otro)"
-                    required
-                  />
-                )}
-              </div>
-
-              <div>
                 <Label htmlFor="competencia">Competencia *</Label>
                 <Select
                   value={
@@ -846,6 +816,39 @@ export function ManualSimulacroQuestionEditor({
                     value={formData.competencia || ''}
                     onChange={(e) => setFormData({ ...formData, competencia: e.target.value })}
                     placeholder="Especifique la competencia (Otro)"
+                    required
+                  />
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="componente">Componente *</Label>
+                <Select
+                  value={componentOptions.includes(formData.componente) ? formData.componente : OTRO_OPTION}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      componente: value === OTRO_OPTION ? '' : value,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar componente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {componentOptions.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(!formData.componente || !componentOptions.includes(formData.componente)) && (
+                  <Input
+                    className="mt-2"
+                    value={formData.componente}
+                    onChange={(e) => setFormData({ ...formData, componente: e.target.value })}
+                    placeholder="Especifique el componente (Otro)"
                     required
                   />
                 )}

@@ -50,7 +50,12 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
     closeDate: '',
     includedModules: [],
     questionsPerModule: 5,
+    performanceLevelProfileId: '',
   })
+
+  const [performanceLevelProfiles, setPerformanceLevelProfiles] = useState<
+    Array<{ id: string; name: string; isDefault: boolean; academicGrade?: string | null }>
+  >([])
 
   const [selectedModules, setSelectedModules] = useState<Array<{
     moduleId: string
@@ -103,6 +108,7 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
         closeDate: exam.closeDate || '',
         includedModules: exam.includedModules || [],
         questionsPerModule: exam.questionsPerModule,
+        performanceLevelProfileId: exam.performanceLevelProfileId || '',
       })
 
       if (exam.openDate) {
@@ -116,6 +122,13 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
       setExamTypeSelected(false) // Si está creando, necesita seleccionar tipo primero
     }
   }, [exam])
+
+  useEffect(() => {
+    fetch('/api/admin/performance-levels')
+      .then((res) => (res.ok ? res.json() : { profiles: [] }))
+      .then((data) => setPerformanceLevelProfiles(data.profiles || []))
+      .catch(() => setPerformanceLevelProfiles([]))
+  }, [])
 
   // Cargar módulos seleccionados
   useEffect(() => {
@@ -1199,6 +1212,39 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
                         />
                       </div>
                     </div>
+
+                    {(formData.isIcfesExam || isIcfesForced) && (
+                      <div className="space-y-2">
+                        <Label htmlFor="performanceLevelProfileId">Tabla de niveles ICFES</Label>
+                        <Select
+                          value={formData.performanceLevelProfileId || 'default'}
+                          onValueChange={(value) =>
+                            handleInputChange(
+                              'performanceLevelProfileId',
+                              value === 'default' ? '' : value
+                            )
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Usar tabla por defecto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">
+                              Por defecto (según grado escolar del examen)
+                            </SelectItem>
+                            {performanceLevelProfiles.map((profile) => (
+                              <SelectItem key={profile.id} value={profile.id}>
+                                {profile.name}
+                                {profile.isDefault ? ' · default' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Define bandas como Satisfactorio o B1 en el reporte del estudiante.
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 

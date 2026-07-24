@@ -14,6 +14,7 @@ const manualSimulacroSchema = z.object({
   closeDate: z.string().optional(),
   isPredefined: z.boolean().optional(),
   isPublished: z.boolean().optional(),
+  performanceLevelProfileId: z.string().optional().nullable(),
 })
 
 export async function GET(
@@ -195,6 +196,13 @@ export async function PUT(
     }
     if (validatedData.closeDate !== undefined) {
       updateData.closeDate = validatedData.closeDate ? new Date(validatedData.closeDate) : null
+    }
+    if (validatedData.performanceLevelProfileId !== undefined) {
+      updateData.performanceLevelProfileId =
+        validatedData.performanceLevelProfileId &&
+        validatedData.performanceLevelProfileId !== ''
+          ? validatedData.performanceLevelProfileId
+          : null
     }
 
     const updatedExam = await prisma.exam.update({

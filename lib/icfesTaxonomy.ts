@@ -1,97 +1,78 @@
 /**
- * Taxonomía ICFES Saber 11: Área → Componentes (hasta 4) → Competencias (hasta 3 por componente).
+ * Taxonomía ICFES Saber 11 por área: competencias y componentes oficiales.
+ * Listas independientes por área; al crear preguntas se seleccionan de aquí.
  * Incluye opción "Otro" para texto libre.
- *
- * Fuente: marcos de referencia ICFES + reportes de referencia del cliente.
- * Editable en código por ahora; futuro: catálogo en BD por año escolar.
  */
 import { ICFES_AREA_SLUGS } from '@/lib/icfesAreas'
 
 export const OTRO_OPTION = 'Otro'
 
-export type IcfesComponentDef = {
-  name: string
-  competencias: string[]
-}
-
 export type IcfesAreaTaxonomy = {
   areaSlug: string
-  components: IcfesComponentDef[]
+  competencias: string[]
+  componentes: string[]
 }
 
-/** Competencias transversales cuando el área solo tiene una competencia global */
 export const ICFES_AREA_TAXONOMY: IcfesAreaTaxonomy[] = [
   {
-    areaSlug: 'lectura_critica',
-    components: [
-      {
-        name: 'Comprensión e interpretación de textos',
-        competencias: ['Competencia interpretativa', 'Competencia argumentativa', 'Competencia propositiva'],
-      },
-      {
-        name: 'Reflexión sobre el contenido del texto',
-        competencias: ['Comunicativa-Lectora', OTRO_OPTION],
-      },
-      {
-        name: 'Uso eficiente del lenguaje',
-        competencias: [OTRO_OPTION],
-      },
-      {
-        name: 'Identificación de contenidos locales',
-        competencias: [OTRO_OPTION],
-      },
-    ],
-  },
-  {
     areaSlug: 'razonamiento_cuantitativo',
-    components: [
-      {
-        name: 'Álgebra y cálculo',
-        competencias: [
-          'Competencia de planteamiento y resolución de problemas',
-          'Competencia de razonamiento y argumentación',
-          'Competencia de comunicación, representación y modelación',
-        ],
-      },
-      { name: 'Geometría y medida', competencias: [OTRO_OPTION] },
-      { name: 'Estadística', competencias: [OTRO_OPTION] },
-      { name: 'Probabilidad', competencias: [OTRO_OPTION] },
+    competencias: [
+      'Interpretación y representación',
+      'Formulación y ejecución',
+      'Argumentación',
     ],
+    componentes: ['Estadística', 'Geometría', 'Álgebra y cálculo'],
   },
   {
-    areaSlug: 'competencias_ciudadanas',
-    components: [
-      {
-        name: 'Competencias ciudadanas',
-        competencias: ['Competencias Ciudadanas', OTRO_OPTION],
-      },
-      { name: 'Contextos sociales y políticos', competencias: [OTRO_OPTION] },
-      { name: 'Perspectivas y argumentación', competencias: [OTRO_OPTION] },
-      { name: 'Organizaciones sociales', competencias: [OTRO_OPTION] },
+    areaSlug: 'lectura_critica',
+    competencias: ['Lectora'],
+    componentes: [
+      'Identificar y ubicar información local.',
+      'Relacionar e interpretar información para dar sentido global.',
+      'Evaluar y reflexionar sobre la forma y el contenido de los textos.',
     ],
   },
   {
     areaSlug: 'comunicacion_escrita',
-    components: [
-      {
-        name: 'Biología',
-        competencias: ['Explicación de fenómenos', 'Uso comprensivo del conocimiento científico', 'Indagar'],
-      },
-      { name: 'Física', competencias: [OTRO_OPTION] },
-      { name: 'Química', competencias: [OTRO_OPTION] },
-      { name: 'Ciencia, tecnología y sociedad', competencias: [OTRO_OPTION] },
+    competencias: [
+      'Explicación de fenómenos',
+      'Uso comprensivo del conocimiento científico',
+      'Indagación',
+    ],
+    componentes: [
+      'Biológico',
+      'Físico',
+      'Químico',
+      'Ciencia, Tecnología y Sociedad (CTS)',
+    ],
+  },
+  {
+    areaSlug: 'competencias_ciudadanas',
+    competencias: [
+      'Pensamiento social',
+      'Interpretación y análisis de perspectivas',
+      'Pensamiento reflexivo y sistémico',
+    ],
+    componentes: [
+      'Capacidad para identificar y usar conceptos básicos de las ciencias sociales.',
+      'Capacidad para identificar dimensiones temporales y espaciales de eventos y problemáticas sociales.',
+      'Reconocimiento de diversas opiniones, posturas e intereses.',
+      'Análisis crítico de fuentes y argumentos.',
+      'Identificar modelos conceptuales que orientan decisiones sociales.',
+      'Establecer relaciones entre dimensiones presentes en una situación problemática y sus posibles alternativas de solución.',
     ],
   },
   {
     areaSlug: 'ingles',
-    components: [
-      {
-        name: 'Comprensión de lectura',
-        competencias: ['Comunicativa', OTRO_OPTION],
-      },
-      { name: 'Uso del lenguaje', competencias: [OTRO_OPTION] },
-      { name: 'Comprensión auditiva', competencias: [OTRO_OPTION] },
-      { name: 'Interacción comunicativa', competencias: [OTRO_OPTION] },
+    competencias: ['Lingüística'],
+    componentes: [
+      'Conocimiento lexical (T1)',
+      'Conocimiento pragmático (T2)',
+      'Conocimiento comunicativo (T3)',
+      'Conocimiento gramatical (T4)',
+      'Comprensión de lectura literal (T5)',
+      'Comprensión de lectura inferencial (T6)',
+      'Conocimiento gramatical y lexical (T7)',
     ],
   },
 ]
@@ -105,30 +86,25 @@ export function getTaxonomyForAreaSlug(areaSlug?: string | null): IcfesAreaTaxon
 export function getComponentsForArea(areaSlug?: string | null): string[] {
   const tax = getTaxonomyForAreaSlug(areaSlug)
   if (!tax) return [OTRO_OPTION]
-  return [...tax.components.map((c) => c.name), OTRO_OPTION]
+  return [...tax.componentes, OTRO_OPTION]
 }
 
-export function getCompetenciasForComponent(
-  areaSlug?: string | null,
-  componentName?: string | null
-): string[] {
-  const tax = getTaxonomyForAreaSlug(areaSlug)
-  if (!tax || !componentName) return [OTRO_OPTION]
-  const comp = tax.components.find((c) => c.name === componentName)
-  if (!comp) return [OTRO_OPTION]
-  const list = [...comp.competencias]
-  if (!list.includes(OTRO_OPTION)) list.push(OTRO_OPTION)
-  return list
-}
-
-/** Todas las competencias posibles de un área (aplanado, sin duplicados) */
-export function getAllCompetenciasForArea(areaSlug?: string | null): string[] {
+export function getCompetenciasForArea(areaSlug?: string | null): string[] {
   const tax = getTaxonomyForAreaSlug(areaSlug)
   if (!tax) return [OTRO_OPTION]
-  const set = new Set<string>()
-  tax.components.forEach((c) => c.competencias.forEach((comp) => set.add(comp)))
-  set.add(OTRO_OPTION)
-  return Array.from(set)
+  return [...tax.competencias, OTRO_OPTION]
+}
+
+/** @deprecated Usar getCompetenciasForArea; las competencias ya no dependen del componente. */
+export function getCompetenciasForComponent(
+  areaSlug?: string | null,
+  _componentName?: string | null
+): string[] {
+  return getCompetenciasForArea(areaSlug)
+}
+
+export function getAllCompetenciasForArea(areaSlug?: string | null): string[] {
+  return getCompetenciasForArea(areaSlug)
 }
 
 export function isValidIcfesAreaSlug(slug: string): boolean {
