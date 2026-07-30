@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { upsertExamQuestionAnswer } from '@/lib/examAnswerPersistence'
 
 export async function POST(
   request: NextRequest,
@@ -16,61 +17,39 @@ export async function POST(
     const { attemptId } = await params
     const userId = session.user.id
     const { questionId, selectedOptionId, answerText } = await request.json()
-    
-    // answerText puede ser string (para fill_blank, essay) o JSON string (para matching)
-    let processedAnswerText = answerText
-    if (answerText && typeof answerText === 'object') {
-      processedAnswerText = JSON.stringify(answerText)
+
+    if (!questionId) {
+      return NextResponse.json({ error: 'questionId requerido' }, { status: 400 })
     }
 
-    // Verificar que el resultado de examen existe y pertenece al usuario
     const result = await prisma.examResult.findFirst({
-      where: {
-        id: attemptId,
-        userId
-      }
+      where: { id: attemptId, userId },
     })
 
     if (!result) {
       return NextResponse.json({ error: 'Resultado de examen no encontrado' }, { status: 404 })
     }
 
-    // Buscar o crear la respuesta
-    const existingAnswer = await prisma.examQuestionAnswer.findFirst({
-      where: {
-        examResultId: attemptId,
-        questionId
-      }
-    })
-
-    if (existingAnswer) {
-      // Actualizar respuesta existente
-      await prisma.examQuestionAnswer.update({
-        where: { id: existingAnswer.id },
-        data: {
-          selectedOption: selectedOptionId || null,
-          answerText: processedAnswerText || null,
-          isCorrect: false, // Se calculará al final
-          timeSpentSeconds: 0 // Se puede calcular si es necesario
-        }
-      })
-    } else {
-      // Crear nueva respuesta
-      await prisma.examQuestionAnswer.create({
-        data: {
-          examResultId: attemptId,
-          questionId,
-          selectedOption: selectedOptionId || null,
-          answerText: processedAnswerText || null,
-          isCorrect: false, // Se calculará al final
-          timeSpentSeconds: 0,
-          userId
-        }
-      })
+    if (result.completedAt) {
+      return NextResponse.json({ error: 'Este examen ya fue enviado' }, { status: 400 })
     }
 
-    return NextResponse.json({ success: true })
+    let processedAnswerText = answerText
+    if (answerText && typeof answerText === 'object') {
+      processedAnswerText = JSON.stringify(answerText)
+    }
 
+    if (!selectedOptionId && !processedAnswerText) {
+      return NextResponse.json({ error: 'Respuesta vacía' }, { status: 400 })
+    }
+
+    await upsertExamQuestionAnswer(attemptId, userId, {
+      questionId,
+      selectedOptionId: selectedOptionId || undefined,
+      answerText: processedAnswerText || undefined,
+    })
+
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error saving answer:', error)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })

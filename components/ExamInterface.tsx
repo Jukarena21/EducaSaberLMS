@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,7 +19,9 @@ import {
 import { QuestionRenderer } from "@/components/QuestionRenderer"
 import {
   buildQuestionAreaNumberMaps,
+  buildAnswerSavePayload,
   isClientExamAnswerComplete,
+  type AnswerSaveInput,
 } from "@/lib/examAnswerValidation"
 import { decodeMaybeEscapedHtml } from "@/lib/htmlContent"
 
@@ -73,6 +75,13 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false)
   const [showPendingAlert, setShowPendingAlert] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const pendingSavesRef = useRef<Map<string, Promise<void>>>(new Map())
+  const answersRef = useRef<Record<string, any>>({})
+
+  useEffect(() => {
+    answersRef.current = answers
+  }, [answers])
 
   // Inicializar respuestas existentes
   useEffect(() => {
@@ -192,45 +201,73 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
   }, [startedAt, exam.timeLimitMinutes])
 
   // Auto-save answers
-  const saveAnswer = useCallback(async (questionId: string, answer: any) => {
-    // En modo preview, no guardar respuestas
-    if (previewMode) {
-      return
-    }
-    
-    try {
-      // Adaptar la respuesta al formato esperado por el API
-      const payload: any = { questionId }
-      
-      if (typeof answer === 'string') {
-        // Para opción múltiple o verdadero/falso
-        payload.selectedOptionId = answer
-      } else if (typeof answer === 'object') {
-        if (answer.optionId) {
-          payload.selectedOptionId = answer.optionId
-        }
-        if (answer.text) {
-          payload.answerText = answer.text
-        }
-        // Para matching, convertir el objeto a JSON string
-        if (Object.keys(answer).length > 0 && !answer.optionId && !answer.text) {
-          payload.answerText = JSON.stringify(answer)
-        }
-      }
-      
-      await fetch(`/api/student/exams/${attemptId}/answer`, {
+  const persistAnswerPayload = useCallback(
+    async (payload: AnswerSaveInput) => {
+      const response = await fetch(`/api/student/exams/${attemptId}/answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          questionId: payload.questionId,
+          selectedOptionId: payload.selectedOptionId,
+          answerText: payload.answerText,
+        }),
       })
-    } catch (error) {
-      console.error('Error saving answer:', error)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'No se pudo guardar la respuesta')
+      }
+    },
+    [attemptId]
+  )
+
+  const saveAnswer = useCallback(
+    async (questionId: string, answer: any) => {
+      if (previewMode) return
+
+      const question = questions.find((q) => q.id === questionId)
+      const payload = buildAnswerSavePayload(
+        questionId,
+        answer,
+        question?.questionType || question?.type
+      )
+      if (!payload) return
+
+      const savePromise = persistAnswerPayload(payload).finally(() => {
+        pendingSavesRef.current.delete(questionId)
+      })
+
+      pendingSavesRef.current.set(questionId, savePromise)
+      await savePromise
+    },
+    [previewMode, questions, persistAnswerPayload]
+  )
+
+  const flushAllAnswers = useCallback(async () => {
+    await Promise.allSettled(Array.from(pendingSavesRef.current.values()))
+
+    const payloads: AnswerSaveInput[] = []
+    for (const question of questions) {
+      const payload = buildAnswerSavePayload(
+        question.id,
+        answersRef.current[question.id],
+        question.questionType || question.type
+      )
+      if (payload) payloads.push(payload)
     }
-  }, [attemptId, previewMode])
+
+    await Promise.all(payloads.map((payload) => persistAnswerPayload(payload)))
+    return payloads
+  }, [questions, persistAnswerPayload])
 
   const handleAnswerChange = (questionId: string, answer: any) => {
-    setAnswers(prev => ({ ...prev, [questionId]: answer }))
-    saveAnswer(questionId, answer)
+    setAnswers((prev) => {
+      const next = { ...prev, [questionId]: answer }
+      answersRef.current = next
+      return next
+    })
+    void saveAnswer(questionId, answer).catch((error) => {
+      console.error('Error saving answer:', error)
+    })
   }
 
   const handleNext = () => {
@@ -246,34 +283,42 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
   }
 
   const handleSubmitExam = async () => {
-    // En modo preview, no permitir submit
     if (previewMode) {
       alert('Esta es una vista previa. No se puede enviar el examen.')
       return
     }
-    
+
     setIsSubmitting(true)
+    setSubmitError(null)
     try {
+      const syncedAnswers = await flushAllAnswers()
+
       const response = await fetch(`/api/student/exams/${attemptId}/submit`, {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers: syncedAnswers }),
       })
-      
+
       if (response.ok) {
         const result = await response.json()
-        console.log('Exam submitted successfully:', result)
         router.push(`/estudiante/examen/resultado/${result.resultId}`)
-      } else {
-        const errorData = await response.json()
-        console.error('Submit error:', errorData)
-        if (errorData.pending?.length) {
-          setShowConfirmSubmit(false)
-          setShowPendingAlert(true)
-        }
-        throw new Error(errorData.error || 'Error al enviar el examen')
+        return
       }
+
+      const errorData = await response.json().catch(() => ({}))
+      if (errorData.pending?.length) {
+        setShowConfirmSubmit(false)
+        setShowPendingAlert(true)
+        setSubmitError(
+          `Faltan ${errorData.pending.length} pregunta(s) por guardar en el servidor. Revisa las marcadas en la navegación.`
+        )
+        return
+      }
+
+      setSubmitError(errorData.error || 'Error al enviar el examen. Inténtalo de nuevo.')
     } catch (error) {
       console.error('Error submitting exam:', error)
-      alert('Error al enviar el examen. Inténtalo de nuevo.')
+      setSubmitError('Error de conexión al enviar el examen. Verifica tu internet e inténtalo de nuevo.')
     } finally {
       setIsSubmitting(false)
     }
@@ -425,7 +470,7 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
               </div>
 
               <div className="flex items-center space-x-2">
-                {currentQuestionIndex < questions.length - 1 ? (
+                {currentQuestionIndex < questions.length - 1 && (
                   <Button
                     onClick={handleNext}
                     className="flex items-center space-x-2"
@@ -433,11 +478,11 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
                     <span>Siguiente</span>
                     <ArrowRight className="h-4 w-4" />
                   </Button>
-                ) : (
+                )}
+                {!previewMode && allQuestionsAnswered && (
                   <Button
                     onClick={handleRequestSubmit}
-                    disabled={!allQuestionsAnswered}
-                    className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 disabled:opacity-50"
+                    className="flex items-center space-x-2 bg-green-600 hover:bg-green-700"
                   >
                     <CheckCircle className="h-4 w-4" />
                     <span>Finalizar Examen</span>
@@ -585,6 +630,12 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
               <p className="text-gray-600">
                 Has respondido las {questions.length} preguntas. ¿Estás seguro de que quieres finalizar el examen?
               </p>
+              {submitError && (
+                <Alert className="border-red-200 bg-red-50">
+                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="text-red-800">{submitError}</AlertDescription>
+                </Alert>
+              )}
               <div className="flex space-x-3">
                 <Button
                   variant="outline"

@@ -3,7 +3,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { AchievementService } from '@/lib/achievementService'
-import { findUnansweredExamQuestions } from '@/lib/examAnswerValidation'
+import { upsertExamQuestionAnswers } from '@/lib/examAnswerPersistence'
+import {
+  findUnansweredExamQuestions,
+  type AnswerSaveInput,
+} from '@/lib/examAnswerValidation'
 
 export async function POST(
   request: NextRequest,
@@ -17,6 +21,18 @@ export async function POST(
 
     const { attemptId } = await params
     const userId = session.user.id
+
+    let syncAnswers: AnswerSaveInput[] = []
+    try {
+      const body = await request.json()
+      if (Array.isArray(body?.answers)) {
+        syncAnswers = body.answers.filter(
+          (a: AnswerSaveInput) => a?.questionId && (a.selectedOptionId || a.answerText)
+        )
+      }
+    } catch {
+      // cuerpo vacío permitido (compatibilidad)
+    }
 
     // Obtener el resultado de examen
     const result = await prisma.examResult.findFirst({
@@ -38,6 +54,24 @@ export async function POST(
 
     if (!result) {
       return NextResponse.json({ error: 'Resultado de examen no encontrado' }, { status: 404 })
+    }
+
+    if (result.completedAt) {
+      return NextResponse.json({
+        resultId: result.id,
+        score: result.score,
+        correctAnswers: result.correctAnswers,
+        incorrectAnswers: result.incorrectAnswers,
+        totalQuestions: result.totalQuestions,
+        isPassed: result.isPassed,
+        timeTakenMinutes: result.timeTakenMinutes,
+        alreadySubmitted: true,
+      })
+    }
+
+    // Sincronizar respuestas enviadas desde el cliente (respaldo si falló autoguardado)
+    if (syncAnswers.length > 0) {
+      await upsertExamQuestionAnswers(attemptId, userId, syncAnswers)
     }
 
     // Obtener las respuestas del estudiante

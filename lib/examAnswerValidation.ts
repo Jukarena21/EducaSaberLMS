@@ -7,6 +7,56 @@ export type ExamAnswerPayload = {
   answerText?: string | null
 }
 
+export type AnswerSaveInput = {
+  questionId: string
+  selectedOptionId?: string
+  answerText?: string
+}
+
+/** Convierte respuesta en memoria del cliente al payload del API /answer. */
+export function buildAnswerSavePayload(
+  questionId: string,
+  answer: unknown,
+  questionType?: string
+): AnswerSaveInput | null {
+  if (answer == null) return null
+
+  const type = questionType || 'multiple_choice'
+  const payload: AnswerSaveInput = { questionId }
+
+  if (typeof answer === 'string') {
+    const trimmed = answer.trim()
+    if (!trimmed) return null
+    if (type === 'fill_blank' || type === 'essay') {
+      payload.answerText = trimmed
+    } else {
+      payload.selectedOptionId = trimmed
+    }
+    return payload
+  }
+
+  if (typeof answer === 'object' && answer !== null) {
+    const obj = answer as Record<string, unknown>
+    const optionId = typeof obj.optionId === 'string' ? obj.optionId.trim() : ''
+    const text = typeof obj.text === 'string' ? obj.text.trim() : ''
+
+    if (optionId) payload.selectedOptionId = optionId
+    if (text) payload.answerText = text
+
+    // matching u otros objetos sin optionId/text
+    if (!payload.selectedOptionId && !payload.answerText) {
+      const keys = Object.keys(obj).filter((k) => k !== 'answer' && k !== 'isCorrect')
+      if (keys.length > 0) {
+        payload.answerText = JSON.stringify(obj)
+      }
+    }
+
+    if (payload.selectedOptionId || payload.answerText) return payload
+  }
+
+  return null
+}
+
 /** Respuesta en memoria del cliente (ExamInterface). */
 export function isClientExamAnswerComplete(
   questionType: string | undefined,
