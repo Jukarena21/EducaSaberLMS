@@ -6,7 +6,7 @@ export async function upsertExamQuestionAnswer(
   userId: string,
   input: AnswerSaveInput
 ) {
-  const { questionId, selectedOptionId, answerText } = input
+  const { questionId, selectedOptionId, answerText, timeSpentSeconds } = input
 
   let processedAnswerText: string | null = answerText ?? null
   if (processedAnswerText && typeof processedAnswerText === 'object') {
@@ -17,17 +17,27 @@ export async function upsertExamQuestionAnswer(
     where: { examResultId, questionId },
   })
 
+  // El cliente envía el acumulado total de la pregunta. Nos quedamos con el
+  // mayor valor visto para que un reenvío tardío no reduzca el tiempo ya guardado.
+  const reportedTime =
+    typeof timeSpentSeconds === 'number' && Number.isFinite(timeSpentSeconds)
+      ? Math.max(0, Math.round(timeSpentSeconds))
+      : null
+
   const data = {
     selectedOption: selectedOptionId || null,
     answerText: processedAnswerText || null,
     isCorrect: false,
-    timeSpentSeconds: 0,
+    timeSpentSeconds: reportedTime ?? 0,
   }
 
   if (existing) {
     await prisma.examQuestionAnswer.update({
       where: { id: existing.id },
-      data,
+      data: {
+        ...data,
+        timeSpentSeconds: Math.max(existing.timeSpentSeconds ?? 0, reportedTime ?? 0),
+      },
     })
     return existing.id
   }

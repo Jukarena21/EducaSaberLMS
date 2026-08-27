@@ -11,6 +11,8 @@ export type AnswerSaveInput = {
   questionId: string
   selectedOptionId?: string
   answerText?: string
+  /** Segundos acumulados con la pregunta a la vista. Métrica informativa. */
+  timeSpentSeconds?: number
 }
 
 /** Convierte respuesta en memoria del cliente al payload del API /answer. */

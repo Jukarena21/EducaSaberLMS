@@ -571,12 +571,8 @@ export class AchievementService {
           return 0.3
         }
         
-        const getTimeFactor = (timeSpentSeconds: number | null): number => {
-          if (!timeSpentSeconds) return 1.0
-          if (timeSpentSeconds < 5) return 0.8
-          if (timeSpentSeconds < 30) return 1.0
-          return 1.1
-        }
+        // Factor de tiempo neutral: el tiempo por pregunta es informativo y no pondera.
+        const getTimeFactor = (_timeSpentSeconds: number | null): number => 1.0
         
         const competencyScores: Record<string, { 
           obtained: number

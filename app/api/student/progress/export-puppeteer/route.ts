@@ -226,13 +226,9 @@ async function calculateIcfesScoreFromQuestions(userId: string): Promise<number>
       return 0.3                            // Más de 12 meses: casi sin relevancia
     }
     
-    // 5. Factor de tiempo
-    const getTimeFactor = (timeSpentSeconds: number | null): number => {
-      if (!timeSpentSeconds) return 1.0
-      if (timeSpentSeconds < 5) return 0.8      // Muy rápido, posible al azar
-      if (timeSpentSeconds < 30) return 1.0     // Normal
-      return 1.1                                 // Reflexión profunda
-    }
+    // 5. Factor de tiempo: neutral.
+    // El tiempo por pregunta es una métrica informativa y no pondera el puntaje.
+    const getTimeFactor = (_timeSpentSeconds: number | null): number => 1.0
     
     // 6. Agrupar por competencia
     const competencyScores: Record<string, { 

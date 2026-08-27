@@ -78,6 +78,9 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
   const [submitError, setSubmitError] = useState<string | null>(null)
   const pendingSavesRef = useRef<Map<string, Promise<void>>>(new Map())
   const answersRef = useRef<Record<string, any>>({})
+  // Segundos acumulados con cada pregunta a la vista y activa
+  const timeSpentRef = useRef<Record<string, number>>({})
+  const lastActivityRef = useRef<number>(Date.now())
 
   useEffect(() => {
     answersRef.current = answers
@@ -200,6 +203,41 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
     return () => clearInterval(interval)
   }, [startedAt, exam.timeLimitMinutes])
 
+  /**
+   * Acumula el tiempo dedicado a la pregunta visible.
+   *
+   * Solo cuenta mientras la pestaña está visible y hubo interacción reciente,
+   * para que dejar el examen abierto y desatendido no infle la métrica.
+   */
+  useEffect(() => {
+    const questionId = questions[currentQuestionIndex]?.id
+    if (!questionId) return
+
+    const INACTIVITY_TIMEOUT_MS = 90_000
+
+    const registerActivity = () => {
+      lastActivityRef.current = Date.now()
+    }
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart']
+    activityEvents.forEach((event) =>
+      window.addEventListener(event, registerActivity, { passive: true })
+    )
+
+    registerActivity()
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      if (Date.now() - lastActivityRef.current > INACTIVITY_TIMEOUT_MS) return
+      timeSpentRef.current[questionId] = (timeSpentRef.current[questionId] || 0) + 1
+    }, 1000)
+
+    return () => {
+      clearInterval(interval)
+      activityEvents.forEach((event) => window.removeEventListener(event, registerActivity))
+    }
+  }, [currentQuestionIndex, questions])
+
   // Auto-save answers
   const persistAnswerPayload = useCallback(
     async (payload: AnswerSaveInput) => {
@@ -210,6 +248,7 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
           questionId: payload.questionId,
           selectedOptionId: payload.selectedOptionId,
           answerText: payload.answerText,
+          timeSpentSeconds: payload.timeSpentSeconds,
         }),
       })
       if (!response.ok) {
@@ -232,6 +271,8 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
       )
       if (!payload) return
 
+      payload.timeSpentSeconds = timeSpentRef.current[questionId] || 0
+
       const savePromise = persistAnswerPayload(payload).finally(() => {
         pendingSavesRef.current.delete(questionId)
       })
@@ -252,7 +293,10 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
         answersRef.current[question.id],
         question.questionType || question.type
       )
-      if (payload) payloads.push(payload)
+      if (payload) {
+        payload.timeSpentSeconds = timeSpentRef.current[question.id] || 0
+        payloads.push(payload)
+      }
     }
 
     await Promise.all(payloads.map((payload) => persistAnswerPayload(payload)))

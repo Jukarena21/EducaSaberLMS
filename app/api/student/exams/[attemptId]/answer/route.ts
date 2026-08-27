@@ -16,7 +16,8 @@ export async function POST(
 
     const { attemptId } = await params
     const userId = session.user.id
-    const { questionId, selectedOptionId, answerText } = await request.json()
+    const { questionId, selectedOptionId, answerText, timeSpentSeconds } =
+      await request.json()
 
     if (!questionId) {
       return NextResponse.json({ error: 'questionId requerido' }, { status: 400 })
@@ -47,6 +48,8 @@ export async function POST(
       questionId,
       selectedOptionId: selectedOptionId || undefined,
       answerText: processedAnswerText || undefined,
+      timeSpentSeconds:
+        typeof timeSpentSeconds === 'number' ? timeSpentSeconds : undefined,
     })
 
     return NextResponse.json({ success: true })
