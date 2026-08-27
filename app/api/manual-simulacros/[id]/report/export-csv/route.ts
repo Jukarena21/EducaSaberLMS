@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireRole } from '@/lib/rbac'
 import { prisma } from '@/lib/prisma'
+import { buildQuestionReportRows } from '@/lib/reports/manualSimulacroReport'
 
 function csvEscape(value: any): string {
   if (value === null || value === undefined) return ''
@@ -44,11 +45,15 @@ export async function GET(
         examQuestions: {
           select: {
             id: true,
+            orderIndex: true,
             tema: true,
             subtema: true,
             componente: true,
-            competencyId: true,
-          }
+            competencia: true,
+            difficultyLevel: true,
+            competency: { select: { id: true, name: true, displayName: true } },
+          },
+          orderBy: { orderIndex: 'asc' },
         }
       }
     })
@@ -106,47 +111,30 @@ export async function GET(
       ? Math.round((results.filter(r => r.isPassed).length / totalStudents) * 100)
       : 0
 
-    // Agregados por metadatos y por pregunta
+    // Una fila por pregunta, numeradas igual que en el PDF
+    const questionRows = buildQuestionReportRows(
+      exam.examQuestions,
+      results.flatMap((r) =>
+        r.examQuestionAnswers.map((a) => ({ questionId: a.questionId, isCorrect: a.isCorrect }))
+      )
+    )
+
+    // Agregados por metadatos, derivados de las filas ya normalizadas
     const byTema: Record<string, { correct: number; total: number }> = {}
     const bySubtema: Record<string, { correct: number; total: number }> = {}
     const byComponente: Record<string, { correct: number; total: number }> = {}
-    const byQuestion: Record<string, { correct: number; total: number; meta: any }> = {}
 
-    for (const result of results) {
-      for (const answer of result.examQuestionAnswers) {
-        const q = answer.question
-        const isCorrect = answer.isCorrect ?? false
-
-        if (q?.tema) {
-          if (!byTema[q.tema]) byTema[q.tema] = { correct: 0, total: 0 }
-          byTema[q.tema].total++
-          if (isCorrect) byTema[q.tema].correct++
-        }
-        if (q?.subtema) {
-          if (!bySubtema[q.subtema]) bySubtema[q.subtema] = { correct: 0, total: 0 }
-          bySubtema[q.subtema].total++
-          if (isCorrect) bySubtema[q.subtema].correct++
-        }
-        if (q?.componente) {
-          if (!byComponente[q.componente]) byComponente[q.componente] = { correct: 0, total: 0 }
-          byComponente[q.componente].total++
-          if (isCorrect) byComponente[q.componente].correct++
-        }
-        if (q) {
-          if (!byQuestion[q.id]) {
-            byQuestion[q.id] = {
-              correct: 0,
-              total: 0,
-              meta: {
-                tema: q.tema,
-                subtema: q.subtema,
-                componente: q.componente,
-              }
-            }
-          }
-          byQuestion[q.id].total++
-          if (isCorrect) byQuestion[q.id].correct++
-        }
+    for (const row of questionRows) {
+      const buckets: Array<[Record<string, { correct: number; total: number }>, string]> = [
+        [byTema, row.tema],
+        [bySubtema, row.subtema],
+        [byComponente, row.componente],
+      ]
+      for (const [target, key] of buckets) {
+        if (key === '—') continue
+        if (!target[key]) target[key] = { correct: 0, total: 0 }
+        target[key].correct += row.correct
+        target[key].total += row.total
       }
     }
 
@@ -205,18 +193,20 @@ export async function GET(
     lines.push("")
 
     // Sección por pregunta
-    lines.push("Preguntas (más y menos respondidas)")
-    lines.push("PreguntaID,Tema,Subtema,Componente,Correctas,Total,Porcentaje")
-    Object.entries(byQuestion).forEach(([qid, data]) => {
-      const pct = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0
+    lines.push("Análisis pregunta por pregunta")
+    lines.push("N° Pregunta,Área,Competencia,Componente,Tema,Subtema,Dificultad,Correctas,Total,Porcentaje")
+    questionRows.forEach((row) => {
       lines.push([
-        qid,
-        csvEscape(data.meta.tema || ''),
-        csvEscape(data.meta.subtema || ''),
-        csvEscape(data.meta.componente || ''),
-        data.correct,
-        data.total,
-        `${pct}%`
+        row.number,
+        csvEscape(row.area),
+        csvEscape(row.competencia),
+        csvEscape(row.componente),
+        csvEscape(row.tema),
+        csvEscape(row.subtema),
+        csvEscape(row.dificultad),
+        row.correct,
+        row.total,
+        `${row.pct}%`
       ].join(","))
     })
 
