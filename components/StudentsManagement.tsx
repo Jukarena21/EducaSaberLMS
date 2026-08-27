@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useUsers } from '@/hooks/useUsers';
 import { useSchools } from '@/hooks/useSchools';
 import { useCourses } from '@/hooks/useCourses';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { StudentForm } from './StudentForm';
 import { useSession } from 'next-auth/react';
 import { UserFilters } from '@/types/user';
@@ -53,6 +54,10 @@ export function StudentsManagement() {
   
   const [filters, setFilters] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
+  // El input responde al instante, pero solo consultamos al servidor cuando
+  // el usuario hace una pausa. Todas las acciones usan este valor aplicado
+  // para que coincidan con lo que la tabla está mostrando.
+  const appliedSearch = useDebouncedValue(searchTerm);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [showAddUser, setShowAddUser] = useState(false);
@@ -86,7 +91,7 @@ export function StudentsManagement() {
           limit: pageSize, // Tamaño de página configurable
           role: 'student', // Filtrar solo estudiantes en el backend
           schoolId: effectiveSchoolId,
-          search: searchTerm || undefined,
+          search: appliedSearch || undefined,
         };
         
         await fetchUsers(apiFilters);
@@ -95,7 +100,7 @@ export function StudentsManagement() {
       loadUsers();
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }
-  }, [session?.user?.role, session?.user?.schoolId, currentPage, pageSize, searchTerm, effectiveSchoolId]);
+  }, [session?.user?.role, session?.user?.schoolId, currentPage, pageSize, appliedSearch, effectiveSchoolId]);
 
   // Resetear a página 1 cuando cambian los filtros de búsqueda
   // Solo resetear si el filtro realmente requiere recarga del API
@@ -107,7 +112,7 @@ export function StudentsManagement() {
       // Si cambia a 'all' o 'none', también resetear pero no recargar del API
       setCurrentPage(1);
     }
-  }, [searchTerm, filters.academicGrade, filters.status]);
+  }, [appliedSearch, filters.academicGrade, filters.status]);
   
   // Resetear página cuando cambia schoolId a un valor específico (que requiere recarga)
   useEffect(() => {
@@ -181,7 +186,7 @@ export function StudentsManagement() {
       schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
         ? session.user.schoolId 
         : (filters.schoolId || ''),
-      search: searchTerm || undefined,
+      search: appliedSearch || undefined,
     };
     await fetchUsers(apiFilters);
     toast({
@@ -199,7 +204,7 @@ export function StudentsManagement() {
       schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
         ? session.user.schoolId 
         : (filters.schoolId || ''),
-      search: searchTerm || undefined,
+      search: appliedSearch || undefined,
     };
     await fetchUsers(apiFilters);
     toast({
@@ -229,7 +234,7 @@ export function StudentsManagement() {
         schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
           ? session.user.schoolId 
           : (filters.schoolId || ''),
-        search: searchTerm || undefined,
+        search: appliedSearch || undefined,
       };
       await fetchUsers(apiFilters);
       toast({
@@ -325,8 +330,8 @@ export function StudentsManagement() {
       }
 
       // Agregar búsqueda si existe
-      if (searchTerm) {
-        params.append('search', searchTerm);
+      if (appliedSearch) {
+        params.append('search', appliedSearch);
       }
 
       // Hacer llamada al API para obtener todos los estudiantes que cumplan los filtros
@@ -383,7 +388,7 @@ export function StudentsManagement() {
       });
       
       // Seleccionar todos los IDs
-      const allIds = new Set(finalFiltered.map((s: any) => s.id));
+      const allIds = new Set<string>(finalFiltered.map((s: any) => s.id));
       setSelectedStudentIds(allIds);
       
       toast({
@@ -475,7 +480,7 @@ export function StudentsManagement() {
         schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
           ? session.user.schoolId 
           : (filters.schoolId || ''),
-        search: searchTerm || undefined,
+        search: appliedSearch || undefined,
       };
       await fetchUsers(apiFilters);
     } catch (error: any) {
@@ -531,7 +536,7 @@ export function StudentsManagement() {
         schoolId: session?.user?.role === 'school_admin' && session?.user?.schoolId 
           ? session.user.schoolId 
           : (filters.schoolId || ''),
-        search: searchTerm || undefined,
+        search: appliedSearch || undefined,
       };
       await fetchUsers(apiFilters);
     } catch (error: any) {
@@ -633,7 +638,7 @@ export function StudentsManagement() {
           limit: 10,
           role: 'student',
           schoolId: effectiveSchoolId,
-          search: searchTerm || undefined,
+          search: appliedSearch || undefined,
         };
         await fetchUsers(apiFilters);
         
@@ -695,7 +700,7 @@ export function StudentsManagement() {
           limit: 10,
           role: 'student',
           schoolId: effectiveSchoolId,
-          search: searchTerm || undefined,
+          search: appliedSearch || undefined,
         };
         await fetchUsers(apiFilters);
         
@@ -716,7 +721,10 @@ export function StudentsManagement() {
     }
   };
 
-  if (usersLoading) {
+  // Solo ocultamos toda la vista en la carga inicial. En las recargas por
+  // búsqueda o filtro mantenemos la tabla montada: si no, el campo de texto se
+  // desmonta y se pierde el foco mientras se escribe.
+  if (usersLoading && users.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="text-center">
@@ -852,8 +860,11 @@ export function StudentsManagement() {
                   placeholder="Nombre, apellido o email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 pr-10"
                 />
+                {usersLoading && (
+                  <div className="absolute right-3 top-3 h-4 w-4 animate-spin rounded-full border-b-2 border-[#73A2D3]" />
+                )}
               </div>
             </div>
             
