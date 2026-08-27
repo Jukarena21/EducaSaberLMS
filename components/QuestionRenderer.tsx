@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label'
 import { CheckCircle, XCircle, AlertCircle, GripVertical } from 'lucide-react'
 import { SafeImage } from '@/components/SafeImage'
 import { decodeMaybeEscapedHtml } from '@/lib/htmlContent'
+import { buildMatchingItemId, splitMatchingOption } from '@/lib/questions/matching'
+import { seededShuffle } from '@/lib/questions/shuffle'
 
 interface QuestionRendererProps {
   question: {
@@ -66,19 +68,6 @@ export function QuestionRenderer({
   // Estados para drag and drop de matching (siempre inicializados, pero solo usados para matching)
   const [draggedItem, setDraggedItem] = useState<string | null>(null)
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null)
-
-  // Helper para dividir opciones de matching
-  const splitMatchingOption = (option: string): [string, string] => {
-    if (!option) return ['', '']
-    const separators = ['|', '→', '->']
-    for (const sep of separators) {
-      if (option.includes(sep)) {
-        const parts = option.split(sep).map(s => s.trim())
-        return [parts[0] || '', parts[1] || '']
-      }
-    }
-    return [option, '']
-  }
 
   const handleMultipleChoiceSelect = (option: string) => {
     if (!disabled && onAnswerChange) {
@@ -299,6 +288,14 @@ export function QuestionRenderer({
     // Si hay distractores, mostrar como opciones múltiples
     const hasDistractors = distractors.length > 0
 
+    // La correcta se guarda siempre en optionA, así que sin barajar quedaría
+    // siempre de primera y sería adivinable. El orden depende del id de la
+    // pregunta para que no cambie entre renders ni en la vista de resultados.
+    const displayedOptions = seededShuffle(
+      [correctAnswer, ...distractors],
+      `fill-${question.id}`
+    )
+
     return (
       <div className="space-y-4">
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -312,7 +309,7 @@ export function QuestionRenderer({
         {hasDistractors ? (
           // Mostrar como opciones múltiples si hay distractores
           <div className="space-y-3">
-            {[correctAnswer, ...distractors].map((option, index) => {
+            {displayedOptions.map((option, index) => {
               const optionKey = String.fromCharCode(65 + index) // A, B, C, D
               const isSelected = userAnswer?.toLowerCase().trim() === option.toLowerCase().trim()
               const isCorrectOption = option === correctAnswer
@@ -437,8 +434,8 @@ export function QuestionRenderer({
       const [leftElement, rightElement] = splitMatchingOption(pair.option || '')
       if (leftElement && rightElement) {
         // Usar key + texto para garantizar IDs únicos
-        const leftId = `${pair.key}-${leftElement}`
-        const rightId = `${pair.key}-${rightElement}`
+        const leftId = buildMatchingItemId(pair.key, leftElement)
+        const rightId = buildMatchingItemId(pair.key, rightElement)
         leftItems.push({ id: leftId, text: leftElement, key: pair.key })
         rightItems.push({ id: rightId, text: rightElement, key: pair.key })
         correctPairs[leftId] = rightId

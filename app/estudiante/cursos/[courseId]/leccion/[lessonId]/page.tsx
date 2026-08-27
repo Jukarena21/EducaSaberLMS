@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { QuestionRenderer } from "@/components/QuestionRenderer"
 import { StudentHeader } from "@/components/StudentHeader"
+import { isMatchingAnswerCorrect } from "@/lib/questions/matching"
 
 interface Lesson {
   id: string
@@ -238,7 +239,8 @@ export default function LessonPage({
   }
 
   const checkAnswer = (question: Question, userAnswer: any): boolean => {
-    if (!question.correctOption) return false
+    // Emparejar no usa correctOption: la respuesta correcta son las propias parejas
+    if (!question.correctOption && question.questionType !== 'matching') return false
 
     switch (question.questionType) {
       case 'multiple_choice':
@@ -248,26 +250,7 @@ export default function LessonPage({
         const correctAnswer = question.optionA || ''
         return userAnswer?.toLowerCase().trim() === correctAnswer.toLowerCase().trim()
       case 'matching':
-        // Para matching, comparar cada par
-        if (typeof userAnswer !== 'object') return false
-        const pairs = [
-          { key: 'A', option: question.optionA },
-          { key: 'B', option: question.optionB },
-          { key: 'C', option: question.optionC },
-          { key: 'D', option: question.optionD }
-        ].filter(p => p.option)
-        
-        for (const pair of pairs) {
-          if (!pair.option) continue
-          const separator = pair.option.includes('|') ? '|' : pair.option.includes('→') ? '→' : pair.option.includes('->') ? '->' : null
-          if (!separator) continue
-          const [leftElement, correctRight] = pair.option.split(separator).map(s => s.trim())
-          const userRight = userAnswer[leftElement]
-          if (userRight?.toLowerCase().trim() !== correctRight.toLowerCase().trim()) {
-            return false
-          }
-        }
-        return true
+        return isMatchingAnswerCorrect(question, userAnswer)
       case 'essay':
         // Los ensayos no tienen respuesta correcta única, se evalúan manualmente
         return true // Siempre se considera "correcto" si hay respuesta

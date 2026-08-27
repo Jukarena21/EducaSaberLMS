@@ -8,6 +8,7 @@ import {
   findUnansweredExamQuestions,
   type AnswerSaveInput,
 } from '@/lib/examAnswerValidation'
+import { isMatchingAnswerCorrect } from '@/lib/questions/matching'
 
 export async function POST(
   request: NextRequest,
@@ -94,7 +95,8 @@ export async function POST(
 
     // Helper para validar respuestas según el tipo de pregunta
     const checkAnswer = (question: any, userAnswer: any): boolean => {
-      if (!question.correctOption) return false
+      // Emparejar no usa correctOption: la respuesta correcta son las propias parejas
+      if (!question.correctOption && question.questionType !== 'matching') return false
 
       switch (question.questionType) {
         case 'multiple_choice':
@@ -107,44 +109,7 @@ export async function POST(
           return userText.toLowerCase().trim() === correctAnswer.toLowerCase().trim()
         
         case 'matching':
-          // Para matching, parsear el JSON string si existe
-          let matchingPairs: Record<string, string> = {}
-          if (userAnswer.answerText && userAnswer.answerText.startsWith('{')) {
-            try {
-              matchingPairs = JSON.parse(userAnswer.answerText)
-            } catch (e) {
-              return false
-            }
-          } else {
-            return false
-          }
-          
-          // Validar cada par
-          const pairs = [
-            { key: 'A', option: question.optionA },
-            { key: 'B', option: question.optionB },
-            { key: 'C', option: question.optionC },
-            { key: 'D', option: question.optionD }
-          ].filter(p => p.option)
-          
-          for (const pair of pairs) {
-            const separators = ['|', '→', '->']
-            let separator: string | null = null
-            for (const sep of separators) {
-              if (pair.option?.includes(sep)) {
-                separator = sep
-                break
-              }
-            }
-            if (!separator) continue
-            
-            const [leftElement, correctRight] = pair.option.split(separator).map(s => s.trim())
-            const userRight = matchingPairs[leftElement]
-            if (!userRight || userRight.toLowerCase().trim() !== correctRight.toLowerCase().trim()) {
-              return false
-            }
-          }
-          return true
+          return isMatchingAnswerCorrect(question, userAnswer.answerText)
         
         case 'essay':
           // Los ensayos no tienen respuesta correcta única, se evalúan manualmente
