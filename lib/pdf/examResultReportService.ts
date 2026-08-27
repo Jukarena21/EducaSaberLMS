@@ -155,7 +155,19 @@ export class ExamResultReportError extends Error {
   }
 }
 
-export async function generateExamResultReportPdf(resultId: string, userId: string) {
+export type ExamResultReportOptions = {
+  /**
+   * Permite generar el reporte aunque el examen todavía no haya liberado
+   * retroalimentación a los estudiantes. Solo para roles administrativos.
+   */
+  bypassFeedbackGate?: boolean
+}
+
+export async function generateExamResultReportPdf(
+  resultId: string,
+  userId: string,
+  options: ExamResultReportOptions = {}
+) {
   const result = await prisma.examResult.findFirst({
     where: { id: resultId, userId },
     include: {
@@ -178,7 +190,7 @@ export async function generateExamResultReportPdf(resultId: string, userId: stri
   if (!result.completedAt) {
     throw new ExamResultReportError('El examen aún no ha sido completado', 400)
   }
-  if (!isExamFeedbackReleased(result.exam)) {
+  if (!options.bypassFeedbackGate && !isExamFeedbackReleased(result.exam)) {
     throw new ExamResultReportError(
       'El reporte estará disponible cuando finalice el periodo de la prueba (fecha de cierre del examen).',
       403

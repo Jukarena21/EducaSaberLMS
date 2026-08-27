@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { isExamFeedbackReleased } from '@/lib/examFeedbackPolicy'
 
 export async function GET(request: NextRequest) {
   try {
@@ -159,15 +160,23 @@ export async function GET(request: NextRequest) {
       const completedResult = exam.examResults.find(r => r.completedAt !== null)
       const lastResult = inProgressResult || completedResult || exam.examResults[0]
       
+      // El puntaje solo se revela cuando el examen ya liberó retroalimentación
+      const feedbackReleased = isExamFeedbackReleased({ closeDate: effectiveCloseDate })
+
       // Determinar el estado del examen
-      let status: 'not_attempted' | 'in_progress' | 'passed' | 'failed' = 'not_attempted'
+      let status: 'not_attempted' | 'in_progress' | 'submitted' | 'passed' | 'failed' =
+        'not_attempted'
       let canRetake = false
-      
+
       if (lastResult) {
         // Si completedAt es null, el examen está en progreso
         if (lastResult.completedAt === null) {
           status = 'in_progress'
           canRetake = true // Puede continuar el examen en progreso
+        } else if (!feedbackReleased) {
+          // Entregado pero aún sin liberar resultados: estado neutro
+          status = 'submitted'
+          canRetake = false
         } else {
           // El examen está completado
           status = lastResult.isPassed ? 'passed' : 'failed'
@@ -190,10 +199,11 @@ export async function GET(request: NextRequest) {
         passingScore: exam.passingScore,
         openDate: effectiveOpenDate ? effectiveOpenDate.toISOString() : null,
         closeDate: effectiveCloseDate ? effectiveCloseDate.toISOString() : null,
+        feedbackReleased,
         lastAttempt: lastResult ? {
           resultId: lastResult.id,
-          score: lastResult.score,
-          passed: lastResult.isPassed || false,
+          score: feedbackReleased ? lastResult.score : null,
+          passed: feedbackReleased ? lastResult.isPassed || false : null,
           completedAt: lastResult.completedAt ? lastResult.completedAt.toISOString() : null,
           startedAt: lastResult.startedAt ? lastResult.startedAt.toISOString() : null
         } : null,

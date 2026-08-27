@@ -1318,7 +1318,16 @@ export function ExamManagement({ schoolId, showResultsOnly = false, userRole = '
                         />
                       </TableCell>
                       <TableCell className="font-medium">
-                        {student.user.firstName} {student.user.lastName}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            window.open(`/admin/resultado/${student.resultId}`, '_blank', 'noopener')
+                          }
+                          className="text-blue-600 hover:text-blue-800 hover:underline text-left"
+                          title="Abrir el resumen de este examen en una pestaña nueva"
+                        >
+                          {student.user.firstName} {student.user.lastName}
+                        </button>
                       </TableCell>
                       <TableCell>{student.user.email}</TableCell>
                       <TableCell>
@@ -1354,18 +1363,32 @@ export function ExamManagement({ schoolId, showResultsOnly = false, userRole = '
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedStudentIds([student.resultId])
-                            setReactivateMode('single')
-                            setShowReactivateDialog(true)
-                          }}
-                          className="text-orange-600 hover:text-orange-700"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              window.open(`/admin/resultado/${student.resultId}`, '_blank', 'noopener')
+                            }
+                            className="text-blue-600 hover:text-blue-700"
+                            title="Ver resumen y descargar PDF"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedStudentIds([student.resultId])
+                              setReactivateMode('single')
+                              setShowReactivateDialog(true)
+                            }}
+                            className="text-orange-600 hover:text-orange-700"
+                            title="Reactivar examen"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

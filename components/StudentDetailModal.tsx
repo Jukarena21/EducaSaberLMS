@@ -563,6 +563,17 @@ export function StudentDetailModal({ studentId, isOpen, onClose }: StudentDetail
                               </div>
                             </div>
                           </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0 bg-white"
+                            onClick={() =>
+                              window.open(`/admin/resultado/${exam.id}`, '_blank', 'noopener')
+                            }
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            Ver examen
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>

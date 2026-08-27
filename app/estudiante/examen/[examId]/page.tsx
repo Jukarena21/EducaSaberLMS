@@ -131,6 +131,53 @@ export default function ExamPage({ params }: ExamPageProps) {
     )
   }
 
+  // Entregado pero con resultados aún sin publicar
+  if (examData.status === 'submitted') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="w-full max-w-md mx-4">
+          <CardHeader>
+            <CardTitle className="text-center text-amber-600">Examen entregado</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-center space-y-1">
+              <p className="text-sm text-gray-600">
+                Presentado el{' '}
+                {examData.lastAttempt?.completedAt
+                  ? new Date(examData.lastAttempt.completedAt).toLocaleString()
+                  : '-'}
+              </p>
+              <p className="text-sm text-gray-600">
+                Los resultados se publican
+                {examData.closeDate
+                  ? ` el ${new Date(examData.closeDate).toLocaleString()}`
+                  : ' próximamente'}
+                .
+              </p>
+            </div>
+            {examData.lastAttempt?.resultId && (
+              <Button
+                onClick={() =>
+                  router.push(`/estudiante/examen/resultado/${examData.lastAttempt.resultId}`)
+                }
+                className="w-full"
+              >
+                Ver resumen de entrega
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => router.push('/estudiante')}
+              className="w-full"
+            >
+              Volver al Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   // Verificar si el examen ya fue completado
   if (examData.status === 'passed' && !examData.canRetake) {
     return (
@@ -216,9 +263,19 @@ export default function ExamPage({ params }: ExamPageProps) {
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    Último intento: {examData.lastAttempt.score}% 
-                    ({examData.lastAttempt.passed ? 'Aprobado' : 'No aprobado'}) - 
-                    {new Date(examData.lastAttempt.completedAt).toLocaleDateString()}
+                    {typeof examData.lastAttempt.score === 'number' ? (
+                      <>
+                        Último intento: {examData.lastAttempt.score}%
+                        ({examData.lastAttempt.passed ? 'Aprobado' : 'No aprobado'}) -
+                        {new Date(examData.lastAttempt.completedAt).toLocaleDateString()}
+                      </>
+                    ) : (
+                      <>
+                        Último intento entregado el{' '}
+                        {new Date(examData.lastAttempt.completedAt).toLocaleDateString()} -
+                        resultados aún sin publicar
+                      </>
+                    )}
                   </AlertDescription>
                 </Alert>
               )}

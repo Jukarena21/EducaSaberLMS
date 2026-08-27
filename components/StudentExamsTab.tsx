@@ -41,15 +41,16 @@ interface Exam {
   passingScore: number
   openDate?: string
   closeDate?: string
+  feedbackReleased?: boolean
   lastAttempt?: {
     resultId: string
-    score: number
-    passed: boolean
+    score: number | null
+    passed: boolean | null
     completedAt: string | null
     startedAt?: string | null
   }
   canRetake: boolean
-  status: 'not_attempted' | 'in_progress' | 'passed' | 'failed'
+  status: 'not_attempted' | 'in_progress' | 'submitted' | 'passed' | 'failed'
 }
 
 export function StudentExamsTab() {
@@ -101,6 +102,9 @@ export function StudentExamsTab() {
     }
     if (exam.status === 'in_progress') {
       return <Badge className="bg-blue-100 text-blue-800">En Progreso</Badge>
+    }
+    if (exam.status === 'submitted') {
+      return <Badge className="bg-amber-100 text-amber-800">Entregado</Badge>
     }
     return <Badge variant="outline">Disponible</Badge>
   }
@@ -204,8 +208,10 @@ export function StudentExamsTab() {
   // Calcular estadísticas generales
   const totalExams = exams.length
   const passedExams = exams.filter(e => e.status === 'passed').length
-  // Solo considerar exámenes completados (con completedAt) para el promedio
-  const completedExamsWithScore = exams.filter(e => e.lastAttempt?.completedAt && e.lastAttempt?.score !== undefined)
+  // Solo considerar exámenes completados con puntaje ya publicado
+  const completedExamsWithScore = exams.filter(
+    e => e.lastAttempt?.completedAt && typeof e.lastAttempt?.score === 'number'
+  )
   const averageScore = completedExamsWithScore.length > 0
     ? Math.round(completedExamsWithScore.reduce((acc, e) => acc + (e.lastAttempt?.score || 0), 0) / completedExamsWithScore.length)
     : 0
@@ -504,22 +510,45 @@ export function StudentExamsTab() {
                   <div className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <div className={`p-2 rounded-lg ${exam.lastAttempt.passed ? 'bg-green-100' : 'bg-red-100'}`}>
-                          {exam.lastAttempt.passed ? (
-                            <CheckCircle className="h-5 w-5 text-green-600" />
-                          ) : (
-                            <XCircle className="h-5 w-5 text-red-600" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-600">Resultado</p>
-                          <p className="font-bold text-lg">
-                            {exam.lastAttempt.score}% - {exam.lastAttempt.passed ? '¡Aprobado!' : 'No aprobado'}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {new Date(exam.lastAttempt.completedAt).toLocaleString()}
-                          </p>
-                        </div>
+                        {exam.status === 'submitted' ? (
+                          <>
+                            <div className="p-2 rounded-lg bg-amber-100">
+                              <Clock className="h-5 w-5 text-amber-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Resultado</p>
+                              <p className="font-bold text-lg text-amber-700">
+                                Pendiente de publicación
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {exam.closeDate
+                                  ? `Se libera el ${new Date(exam.closeDate).toLocaleString()}`
+                                  : 'Disponible próximamente'}
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className={`p-2 rounded-lg ${exam.lastAttempt.passed ? 'bg-green-100' : 'bg-red-100'}`}>
+                              {exam.lastAttempt.passed ? (
+                                <CheckCircle className="h-5 w-5 text-green-600" />
+                              ) : (
+                                <XCircle className="h-5 w-5 text-red-600" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Resultado</p>
+                              <p className="font-bold text-lg">
+                                {exam.lastAttempt.score}% - {exam.lastAttempt.passed ? '¡Aprobado!' : 'No aprobado'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {exam.lastAttempt.completedAt
+                                  ? new Date(exam.lastAttempt.completedAt).toLocaleString()
+                                  : ''}
+                              </p>
+                            </div>
+                          </>
+                        )}
                       </div>
                       <Button
                         variant="outline"
@@ -528,7 +557,7 @@ export function StudentExamsTab() {
                         className="hover:bg-blue-50"
                       >
                         <Eye className="h-4 w-4 mr-1" />
-                        Ver Detalles
+                        {exam.status === 'submitted' ? 'Ver Resumen' : 'Ver Detalles'}
                       </Button>
                     </div>
                   </div>
