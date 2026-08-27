@@ -62,6 +62,72 @@ export const ICFES_AREA_SLUGS = [
   'ingles',
 ]
 
+/**
+ * Identificadores que corresponden a las áreas oficiales de Saber.
+ *
+ * Se incluyen ids sembrados, slugs y nombres visibles (incluidas variantes
+ * históricas) porque en la base conviven registros creados en distintos momentos.
+ *
+ * Cualquier área que NO esté aquí se considera de uso general: las áreas de
+ * Saber y las generales nunca deben mezclarse entre sí.
+ */
+const ICFES_AREA_IDENTIFIERS = new Set(
+  [
+    // Ids sembrados
+    'comp-lectura-critica',
+    'comp-razonamiento-cuantitativo',
+    'comp-competencias-ciudadanas',
+    'comp-comunicacion-escrita',
+    'comp-ingles',
+    // Slugs internos
+    ...ICFES_AREA_SLUGS,
+    'matematicas',
+    'ciencias_naturales',
+    'ciencias_sociales',
+    // Nombres visibles actuales e históricos
+    'lectura crítica',
+    'razonamiento cuantitativo',
+    'competencias ciudadanas',
+    'comunicación escrita',
+    'inglés',
+    'matemáticas',
+    'ciencias naturales',
+    'ciencias sociales',
+    'ciencias sociales y ciudadanas',
+  ].map((value) => value.toLowerCase())
+)
+
+/**
+ * Indica si un área pertenece a la taxonomía oficial de Saber.
+ *
+ * Fuente única de verdad para separar áreas Saber de áreas generales.
+ * Las áreas nuevas creadas por un administrador siempre resultan generales,
+ * de modo que jamás aparecen en contextos Saber.
+ */
+export function isIcfesArea(area?: AreaLike | null): boolean {
+  if (!area) return false
+  const candidates = [area.id, area.name, area.displayName]
+  return candidates.some(
+    (value) => value && ICFES_AREA_IDENTIFIERS.has(value.trim().toLowerCase())
+  )
+}
+
+/** Contrapartida de `isIcfesArea`: áreas de uso libre fuera de Saber. */
+export function isGeneralArea(area?: AreaLike | null): boolean {
+  return !isIcfesArea(area)
+}
+
+/**
+ * Filtra una lista de áreas según el contexto.
+ * `icfes` devuelve solo áreas Saber; `general` devuelve solo las demás.
+ */
+export function filterAreasByScope<T extends AreaLike>(
+  areas: T[],
+  scope: 'icfes' | 'general'
+): T[] {
+  return areas.filter((area) => (scope === 'icfes' ? isIcfesArea(area) : isGeneralArea(area)))
+}
+
 type QuestionAreaSource = {
   competency?: AreaLike | null
   componente?: string | null

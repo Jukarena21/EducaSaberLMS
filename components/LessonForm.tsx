@@ -11,6 +11,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { LessonData, LessonFormData } from '@/types/lesson';
 import { ACADEMIC_YEARS, academicGradeToYear } from '@/lib/academicGrades';
+import { filterAreasByScope } from '@/lib/icfesAreas';
+import { useSession } from 'next-auth/react';
+import { AreaQuickCreate } from '@/components/AreaQuickCreate';
 import { RichTextEditor } from './RichTextEditor';
 import { LessonContentViewer } from './LessonContentViewer';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -41,7 +44,10 @@ interface LessonFormProps {
 
 export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
   const { toast } = useToast();
-  const { competencies } = useCompetencies();
+  const { competencies, refreshCompetencies } = useCompetencies();
+  const { data: session } = useSession();
+  // Solo teacher_admin puede crear áreas nuevas
+  const canManageAreas = session?.user?.role === 'teacher_admin';
   const isEditing = !!lesson;
   const [lessonTypeSelected, setLessonTypeSelected] = useState(!!lesson);
   
@@ -60,28 +66,6 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
   const [previewMode, setPreviewMode] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  // Competencias ICFES (nombres exactos)
-  const icfesCompetencyNames = [
-    'Lectura Crítica',
-    'Razonamiento Cuantitativo',
-    'Competencias Ciudadanas',
-    'Comunicación Escrita',
-    'Inglés',
-    // slugs / nombres internos
-    'lectura_critica',
-    'razonamiento_cuantitativo',
-    'competencias_ciudadanas',
-    'comunicacion_escrita',
-    'ingles',
-    // variantes antiguas (para compatibilidad)
-    'Matemáticas',
-    'Ciencias Naturales',
-    'Ciencias Sociales y Ciudadanas',
-    'matematicas',
-    'ciencias_naturales',
-    'ciencias_sociales',
-  ];
-
   // Obtener la competencia actual de la lección (si está editando)
   const currentLessonCompetency = useMemo(() => {
     if (lesson?.competencyId) {
@@ -90,24 +74,14 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
     return null;
   }, [lesson, competencies]);
 
-  // Filtrar competencias según el tipo de lección
+  // Filtrar competencias según el tipo de lección.
+  // Las áreas de Saber y las generales nunca se mezclan.
   const availableCompetencies = useMemo(() => {
-    let filtered: typeof competencies = [];
-    
-    if (formData.isIcfesLesson) {
-      // Si es ICFES, solo mostrar competencias ICFES
-      filtered = competencies.filter(c => 
-        icfesCompetencyNames.includes(c.name) || 
-        icfesCompetencyNames.includes(c.displayName || '')
-      );
-    } else {
-      // Si no es ICFES (General), solo mostrar competencias NO ICFES
-      filtered = competencies.filter(c => 
-        !icfesCompetencyNames.includes(c.name) && 
-        !icfesCompetencyNames.includes(c.displayName || '')
-      );
-    }
-    
+    let filtered = filterAreasByScope(
+      competencies,
+      formData.isIcfesLesson ? 'icfes' : 'general'
+    );
+
     // Si estamos editando y la competencia actual no está en la lista filtrada, agregarla al inicio
     if (currentLessonCompetency && !filtered.some(c => c.id === currentLessonCompetency.id)) {
       filtered = [currentLessonCompetency, ...filtered];
@@ -489,6 +463,14 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
                       ? 'Solo se muestran áreas ICFES. Usada para filtrar lecciones en módulos y preguntas.'
                       : 'Solo se muestran áreas NO ICFES. Usada para filtrar lecciones en módulos y preguntas.'}
                   </p>
+                  {!formData.isIcfesLesson && !isEditing && canManageAreas && (
+                    <AreaQuickCreate
+                      onCreated={async (area) => {
+                        await refreshCompetencies();
+                        handleInputChange('competencyId', area.id);
+                      }}
+                    />
+                  )}
                 </div>
               </CardContent>
             </Card>

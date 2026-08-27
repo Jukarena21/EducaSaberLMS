@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { ACADEMIC_YEARS, yearToAcademicGrade } from '@/lib/academicGrades';
+import { filterAreasByScope } from '@/lib/icfesAreas';
 
 export function QuestionFormNew({ 
   question, 
@@ -122,20 +123,6 @@ export function QuestionFormNew({
   const [lessonFilterYear, setLessonFilterYear] = useState<string>('all');
   const [lessonFilterCompetency, setLessonFilterCompetency] = useState<string>('all');
 
-  // Competencias ICFES (nombres exactos)
-  const icfesCompetencyNames = [
-    'Lectura Crítica',
-    'Matemáticas',
-    'Ciencias Naturales',
-    'Ciencias Sociales y Ciudadanas',
-    'Inglés',
-    'lectura_critica',
-    'matematicas',
-    'ciencias_naturales',
-    'ciencias_sociales',
-    'ingles'
-  ];
-
   // Filtrar lecciones según los filtros seleccionados
   const filteredLessons = useMemo(() => {
     let filtered = lessons;
@@ -164,20 +151,11 @@ export function QuestionFormNew({
     return filtered;
   }, [lessons, lessonFilterIcfes, lessonFilterYear, lessonFilterCompetency]);
 
-  // Obtener competencias disponibles según el filtro de tipo
+  // Obtener competencias disponibles según el filtro de tipo.
+  // Las áreas de Saber y las generales nunca se mezclan.
   const availableCompetenciesForFilter = useMemo(() => {
-    if (lessonFilterIcfes === 'icfes') {
-      return competencies.filter(c => 
-        icfesCompetencyNames.includes(c.name) || 
-        icfesCompetencyNames.includes(c.displayName || '')
-      );
-    } else if (lessonFilterIcfes === 'general') {
-      return competencies.filter(c => 
-        !icfesCompetencyNames.includes(c.name) && 
-        !icfesCompetencyNames.includes(c.displayName || '')
-      );
-    }
-    return competencies;
+    if (lessonFilterIcfes === 'all') return competencies;
+    return filterAreasByScope(competencies, lessonFilterIcfes);
   }, [competencies, lessonFilterIcfes]);
 
   useEffect(() => {

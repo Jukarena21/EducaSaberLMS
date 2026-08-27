@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { requireRole } from '@/lib/rbac';
+import { isIcfesArea } from '@/lib/icfesAreas';
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,6 +59,19 @@ export async function POST(request: NextRequest) {
     if (existing) {
       return NextResponse.json(
         { error: 'Ya existe una competencia con ese nombre' },
+        { status: 400 }
+      );
+    }
+
+    // Las áreas nuevas siempre son de uso general. Si el nombre coincide con la
+    // taxonomía oficial de Saber, quedaría clasificada como área Saber y se
+    // mezclaría con los simulacros, así que se rechaza.
+    if (isIcfesArea({ name, displayName })) {
+      return NextResponse.json(
+        {
+          error:
+            'Ese nombre pertenece a las áreas oficiales de Saber. Usa un nombre distinto para un área general.',
+        },
         { status: 400 }
       );
     }

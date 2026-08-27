@@ -17,7 +17,7 @@ const setCompetenciesCache = (data: CompetencyData[]) => {
   competenciesCache = { data, timestamp: Date.now() };
 };
 
-const invalidateCompetenciesCache = () => {
+export const invalidateCompetenciesCache = () => {
   competenciesCache = null;
 };
 
@@ -64,10 +64,17 @@ export function useCompetencies() {
     fetchCompetencies({ skipCache: false });
   }, []);
 
+  /** Vuelve a leer del servidor ignorando el caché compartido. */
+  const refreshCompetencies = async () => {
+    invalidateCompetenciesCache();
+    await fetchCompetencies({ skipCache: true });
+  };
+
   return {
     competencies,
     loading,
     error,
     fetchCompetencies,
+    refreshCompetencies,
   };
 }

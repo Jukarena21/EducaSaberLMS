@@ -24,6 +24,7 @@ type CompetencyData = {
 };
 import { SchoolData } from '@/types/school';
 import { ACADEMIC_YEARS } from '@/lib/academicGrades';
+import { filterAreasByScope, isGeneralArea, isIcfesArea } from '@/lib/icfesAreas';
 import { 
   BookOpen, 
   Clock, 
@@ -219,28 +220,6 @@ export function CourseForm({
       : schools.filter(school => school.id === userSchoolId);
   }, [userRole, schools, userSchoolId]);
 
-  // Competencias ICFES (nombres exactos)
-  const icfesCompetencyNames = [
-    'Lectura Crítica',
-    'Razonamiento Cuantitativo',
-    'Competencias Ciudadanas',
-    'Comunicación Escrita',
-    'Inglés',
-    // slugs / nombres internos
-    'lectura_critica',
-    'razonamiento_cuantitativo',
-    'competencias_ciudadanas',
-    'comunicacion_escrita',
-    'ingles',
-    // variantes antiguas (para compatibilidad)
-    'Matemáticas',
-    'Ciencias Naturales',
-    'Ciencias Sociales y Ciudadanas',
-    'matematicas',
-    'ciencias_naturales',
-    'ciencias_sociales',
-  ];
-
   // Obtener la competencia actual del curso (si está editando)
   const currentCourseCompetency = useMemo(() => {
     if (course?.competencyId) {
@@ -249,23 +228,13 @@ export function CourseForm({
     return null;
   }, [course, competencies]);
 
-  // Filtrar competencias según el tipo de curso
+  // Filtrar competencias según el tipo de curso.
+  // Las áreas de Saber y las generales nunca se mezclan.
   const availableCompetencies = useMemo(() => {
-    let filtered: typeof competencies = [];
-    
-    if (formData.isIcfesCourse) {
-      // Si es ICFES, solo mostrar competencias ICFES (excluir "otros" y otras no ICFES)
-      filtered = competencies.filter(c => 
-        icfesCompetencyNames.includes(c.name) || 
-        icfesCompetencyNames.includes(c.displayName || '')
-      );
-    } else {
-      // Si no es ICFES (General), solo mostrar competencias NO ICFES (excluir competencias ICFES)
-      filtered = competencies.filter(c => 
-        !icfesCompetencyNames.includes(c.name) && 
-        !icfesCompetencyNames.includes(c.displayName || '')
-      );
-    }
+    let filtered = filterAreasByScope(
+      competencies,
+      formData.isIcfesCourse ? 'icfes' : 'general'
+    );
     
     // Si estamos editando y la competencia actual no está en la lista filtrada, agregarla al inicio
     if (currentCourseCompetency && !filtered.some(c => c.id === currentCourseCompetency.id)) {
@@ -279,26 +248,14 @@ export function CourseForm({
   const availableModules = useMemo(() => {
     let filtered = modules;
     
-    // Primero filtrar por tipo de curso
-    if (formData.isIcfesCourse) {
-      // Si es ICFES, solo mostrar módulos de competencias ICFES
-      filtered = filtered.filter(module => {
-        const moduleCompetency = competencies.find(c => c.id === module.competencyId);
-        return moduleCompetency && (
-          icfesCompetencyNames.includes(moduleCompetency.name) || 
-          icfesCompetencyNames.includes(moduleCompetency.displayName || '')
-        );
-      });
-    } else {
-      // Si no es ICFES, solo mostrar módulos de competencias NO ICFES
-      filtered = filtered.filter(module => {
-        const moduleCompetency = competencies.find(c => c.id === module.competencyId);
-        return moduleCompetency && (
-          !icfesCompetencyNames.includes(moduleCompetency.name) && 
-          !icfesCompetencyNames.includes(moduleCompetency.displayName || '')
-        );
-      });
-    }
+    // Primero filtrar por tipo de curso: los módulos deben ser del mismo ámbito
+    filtered = filtered.filter(module => {
+      const moduleCompetency = competencies.find(c => c.id === module.competencyId);
+      if (!moduleCompetency) return false;
+      return formData.isIcfesCourse
+        ? isIcfesArea(moduleCompetency)
+        : isGeneralArea(moduleCompetency);
+    });
     
     // Luego filtrar por competencia seleccionada (si hay una seleccionada)
     if (formData.competencyId) {
@@ -487,11 +444,11 @@ export function CourseForm({
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Error al crear el área');
-      }
+      const newCompetency = await response.json().catch(() => ({}));
 
-      const newCompetency = await response.json();
+      if (!response.ok) {
+        throw new Error(newCompetency.error || 'Error al crear el área');
+      }
       
       // Actualizar el formData con la nueva competencia
       handleInputChange('competencyId', newCompetency.id);
@@ -751,7 +708,7 @@ export function CourseForm({
                                     {competency.displayName || competency.name}
                                   </SelectItem>
                                 ))}
-                                {!formData.isIcfesCourse && (
+                                {!formData.isIcfesCourse && userRole === 'teacher_admin' && (
                                   <SelectItem value="new">+ Crear nueva área</SelectItem>
                                 )}
                               </SelectContent>
@@ -770,7 +727,10 @@ export function CourseForm({
                           )}
                           {!formData.isIcfesCourse && (
                             <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                              Solo se muestran áreas NO ICFES. Puedes crear una nueva área si no encuentras la que necesitas.
+                              Solo se muestran áreas NO ICFES.
+                              {userRole === 'teacher_admin'
+                                ? ' Puedes crear una nueva área si no encuentras la que necesitas.'
+                                : ''}
                             </p>
                           )}
                         </>

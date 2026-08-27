@@ -23,6 +23,7 @@ import { useModules } from '@/hooks/useModules'
 import { ExamPreview } from '@/components/ExamPreview'
 import { useToast } from '@/hooks/use-toast'
 import { academicGradeToYear } from '@/lib/academicGrades'
+import { filterAreasByScope, isGeneralArea, isIcfesArea } from '@/lib/icfesAreas'
 
 interface ExamFormProps {
   exam?: ExamData
@@ -262,8 +263,35 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
     }
   }, [selectedModules.length, formData.questionsPerModule, formData.timeLimitMinutes])
 
+  // Ámbito del examen: Saber o general. Nunca se mezclan sus áreas ni su contenido.
+  const examScope: 'icfes' | 'general' =
+    formData.isIcfesExam || isIcfesForced ? 'icfes' : 'general'
+
+  // Cursos y áreas ofrecidos según el ámbito del examen
+  const scopedCourses = useMemo(
+    () =>
+      courses.filter(c =>
+        examScope === 'icfes' ? c.isIcfesCourse !== false : c.isIcfesCourse === false
+      ),
+    [courses, examScope]
+  )
+
+  const scopedCompetencies = useMemo(
+    () => filterAreasByScope(competencies, examScope),
+    [competencies, examScope]
+  )
+
+  // Un módulo pertenece al ámbito del examen si su área lo hace
+  const moduleMatchesScope = (module: { competencyId?: string | null }) => {
+    const area = competencies.find(c => c.id === module.competencyId)
+    if (!area) return examScope === 'general'
+    return examScope === 'icfes' ? isIcfesArea(area) : isGeneralArea(area)
+  }
+
   // Filtrar módulos según el tipo de examen
   const availableModules = modules.filter(module => {
+    if (!moduleMatchesScope(module)) return false
+
     switch (formData.examType) {
       case 'simulacro_completo':
         // Para simulacro completo, mostrar módulos del año escolar seleccionado
@@ -572,12 +600,12 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
 
   // Renderizar selección personalizada de módulos (para personalizado y diagnóstico)
   const renderCustomModuleSelection = () => {
-    // Agrupar módulos por competencia
-    const modulesByCompetency = competencies.map(competency => {
-      const competencyModules = modules.filter(module => 
+    // Agrupar módulos por competencia, respetando el ámbito del examen
+    const modulesByCompetency = scopedCompetencies.map(competency => {
+      const competencyModules = availableModules.filter(module =>
         module.competencyId === competency.id
       )
-      
+
       return {
         competency,
         modules: competencyModules
@@ -958,7 +986,7 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
                           <SelectValue placeholder="Seleccionar curso" />
                         </SelectTrigger>
                         <SelectContent>
-                          {courses.map((course) => (
+                          {scopedCourses.map((course) => (
                             <SelectItem key={course.id} value={course.id}>
                               {course.title} - {course.competency?.displayName || course.competency?.name || 'Sin competencia'}
                             </SelectItem>
@@ -980,7 +1008,7 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
                           <SelectValue placeholder="Seleccionar competencia" />
                         </SelectTrigger>
                         <SelectContent>
-                          {competencies.map((competency) => (
+                          {scopedCompetencies.map((competency) => (
                             <SelectItem key={competency.id} value={competency.id}>
                               {competency.displayName}
                             </SelectItem>

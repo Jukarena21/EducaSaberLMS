@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { FormDialog } from '@/components/FormDialog'
 import { buildQuestionAreaNumberMaps } from '@/lib/examAnswerValidation'
-import { resolveAreaDisplayName } from '@/lib/icfesAreas'
+import { filterAreasByScope, resolveAreaDisplayName } from '@/lib/icfesAreas'
 import {
   getComponentsForArea,
   getCompetenciasForArea,
@@ -405,31 +405,7 @@ export function ManualSimulacroQuestionEditor({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas las áreas</SelectItem>
-              {competencies
-                .filter((comp) => {
-                  // Filtrar solo las 5 competencias ICFES que están en la BD
-                  const allowedIds = [
-                    'comp-lectura-critica',
-                    'comp-razonamiento-cuantitativo',
-                    'comp-competencias-ciudadanas',
-                    'comp-comunicacion-escrita',
-                    'comp-ingles'
-                  ]
-                  
-                  const allowedNames = [
-                    'lectura_critica',
-                    'razonamiento_cuantitativo',
-                    'competencias_ciudadanas',
-                    'comunicacion_escrita',
-                    'ingles'
-                  ]
-                  
-                  const compName = comp.name?.toLowerCase() || ''
-                  const compId = comp.id || ''
-                  
-                  return allowedIds.includes(compId) || 
-                         allowedNames.includes(compName)
-                })
+              {filterAreasByScope(competencies, 'icfes')
                 .filter(comp => {
                   // Solo mostrar áreas que tienen preguntas asignadas
                   return questions.some(q => q.competencyId === comp.id)
@@ -725,31 +701,8 @@ export function ManualSimulacroQuestionEditor({
                     <SelectValue placeholder="Seleccionar área" />
                   </SelectTrigger>
                   <SelectContent>
-                    {competencies
-                      .filter((comp) => {
-                        // Filtrar solo las 5 competencias ICFES que están en la BD
-                        const allowedIds = [
-                          'comp-lectura-critica',              // Lectura Crítica
-                          'comp-razonamiento-cuantitativo',     // Razonamiento Cuantitativo → Matemáticas
-                          'comp-competencias-ciudadanas',       // Competencias Ciudadanas → Ciencias Sociales
-                          'comp-comunicacion-escrita',          // Comunicación Escrita → Ciencias Naturales
-                          'comp-ingles'                         // Inglés
-                        ]
-                        
-                        const allowedNames = [
-                          'lectura_critica',
-                          'razonamiento_cuantitativo',
-                          'competencias_ciudadanas',
-                          'comunicacion_escrita',
-                          'ingles'
-                        ]
-                        
-                        const compName = comp.name?.toLowerCase() || ''
-                        const compId = comp.id || ''
-                        
-                        return allowedIds.includes(compId) || 
-                               allowedNames.includes(compName)
-                      })
+                    {/* Un simulacro Saber solo admite áreas oficiales de Saber */}
+                    {filterAreasByScope(competencies, 'icfes')
                       .map((comp) => {
                         return (
                           <SelectItem key={comp.id} value={comp.id}>

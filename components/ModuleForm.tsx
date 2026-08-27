@@ -18,6 +18,9 @@ import { useCompetencies } from '@/hooks/useCompetencies';
 import { Award, BookMarked, ArrowRight } from 'lucide-react';
 import { useMemo } from 'react';
 import { ACADEMIC_YEARS, yearToAcademicGrade, academicGradeToYear } from '@/lib/academicGrades';
+import { filterAreasByScope } from '@/lib/icfesAreas';
+import { useSession } from 'next-auth/react';
+import { AreaQuickCreate } from '@/components/AreaQuickCreate';
 import {
   DndContext,
   closestCenter,
@@ -107,8 +110,11 @@ function SortableLessonItem({
 export function ModuleForm({ module, onSubmit, onCancel }: ModuleFormProps) {
   const { toast } = useToast();
   const { lessons, loading: lessonsLoading, fetchLessons } = useLessons();
-  const { competencies } = useCompetencies();
-  
+  const { competencies, refreshCompetencies } = useCompetencies();
+  const { data: session } = useSession();
+  // Solo teacher_admin puede crear áreas nuevas
+  const canManageAreas = session?.user?.role === 'teacher_admin';
+
   const isEditing = !!module;
   const [moduleTypeSelected, setModuleTypeSelected] = useState(!!module);
   
@@ -152,43 +158,12 @@ export function ModuleForm({ module, onSubmit, onCancel }: ModuleFormProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.competencyId, lastFetchedCompetency]);
 
-  // Competencias ICFES (nombres exactos)
-  const icfesCompetencyNames = [
-    'Lectura Crítica',
-    'Razonamiento Cuantitativo',
-    'Competencias Ciudadanas',
-    'Comunicación Escrita',
-    'Inglés',
-    // slugs / nombres internos
-    'lectura_critica',
-    'razonamiento_cuantitativo',
-    'competencias_ciudadanas',
-    'comunicacion_escrita',
-    'ingles',
-    // variantes antiguas
-    'Matemáticas',
-    'Ciencias Naturales',
-    'Ciencias Sociales y Ciudadanas',
-    'matematicas',
-    'ciencias_naturales',
-    'ciencias_sociales',
-  ];
-
-  // Filtrar competencias según el tipo de módulo
-  const availableCompetencies = useMemo(() => {
-    if (formData.isIcfesModule) {
-      // Si es ICFES, solo mostrar competencias ICFES
-      return competencies.filter(c => 
-        icfesCompetencyNames.includes(c.name) || 
-        icfesCompetencyNames.includes(c.displayName || '')
-      );
-    }
-    // Si no es ICFES (General), solo mostrar competencias NO ICFES
-    return competencies.filter(c => 
-      !icfesCompetencyNames.includes(c.name) && 
-      !icfesCompetencyNames.includes(c.displayName || '')
-    );
-  }, [competencies, formData.isIcfesModule]);
+  // Filtrar competencias según el tipo de módulo.
+  // Las áreas de Saber y las generales nunca se mezclan.
+  const availableCompetencies = useMemo(
+    () => filterAreasByScope(competencies, formData.isIcfesModule ? 'icfes' : 'general'),
+    [competencies, formData.isIcfesModule]
+  );
 
   // Cargar datos del módulo si se está editando
   useEffect(() => {
@@ -635,6 +610,14 @@ export function ModuleForm({ module, onSubmit, onCancel }: ModuleFormProps) {
                     ? 'Solo se muestran competencias ICFES. Usamos esta información para filtrar lecciones relacionadas y generar reportes ICFES.'
                     : 'Solo se muestran competencias NO ICFES. Usamos esta información para filtrar lecciones relacionadas.'}
                 </p>
+                {!formData.isIcfesModule && !isEditing && canManageAreas && (
+                  <AreaQuickCreate
+                    onCreated={async (area) => {
+                      await refreshCompetencies();
+                      handleInputChange('competencyId', area.id);
+                    }}
+                  />
+                )}
               </div>
 
               <div className="bg-muted/50 p-4 rounded-lg">
