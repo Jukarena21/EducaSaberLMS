@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { isLessonCompletedStatus } from '@/lib/progress/lessonProgress'
 
 export async function GET(request: NextRequest) {
   try {
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
       const completedLessons = lessonProgress.filter(lp => 
         course.courseModules.some(cm => 
           cm.module.moduleLessons.some(ml => ml.lessonId === lp.lessonId)
-        ) && lp.status === 'completed'
+        ) && isLessonCompletedStatus(lp.status)
       ).length
 
       // Calcular tiempo total invertido
@@ -109,7 +110,7 @@ export async function GET(request: NextRequest) {
       const modulesProgress = course.courseModules.map(cm => {
         const moduleLessons = cm.module.moduleLessons
         const completedModuleLessons = lessonProgress.filter(lp => 
-          moduleLessons.some(ml => ml.lessonId === lp.lessonId) && lp.status === 'completed'
+          moduleLessons.some(ml => ml.lessonId === lp.lessonId) && isLessonCompletedStatus(lp.status)
         ).length
         
         const moduleTimeMinutes = contentProgress
@@ -153,7 +154,7 @@ export async function GET(request: NextRequest) {
       for (const cm of course.courseModules.sort((a, b) => a.module.orderIndex - b.module.orderIndex)) {
         for (const ml of cm.module.moduleLessons.sort((a, b) => a.orderIndex - b.orderIndex)) {
           const lessonProg = lessonProgress.find(lp => lp.lessonId === ml.lessonId)
-          if (!lessonProg || lessonProg.status !== 'completed') {
+          if (!lessonProg || !isLessonCompletedStatus(lessonProg.status)) {
             nextLesson = {
               id: ml.lesson.id,
               title: ml.lesson.title,
@@ -166,8 +167,22 @@ export async function GET(request: NextRequest) {
         if (nextLesson) break
       }
 
-      // Calcular días desde última actividad
-      const lastActivityDate = enrollment.lastActivityAt || enrollment.enrolledAt
+      // La matrícula no guarda una fecha de última actividad, así que la
+      // derivamos del progreso más reciente entre las lecciones del curso.
+      // Antes se leía un campo inexistente y el cálculo caía siempre en la
+      // fecha de inscripción, mostrando "sin actividad" para alumnos activos.
+      const courseLessonIds = new Set(
+        course.courseModules.flatMap(cm => cm.module.moduleLessons.map(ml => ml.lessonId))
+      )
+      const lastActivityAt = lessonProgress
+        .filter(lp => courseLessonIds.has(lp.lessonId))
+        .reduce<Date | null>((latest, lp) => {
+          const updatedAt = lp.updatedAt ? new Date(lp.updatedAt) : null
+          if (!updatedAt) return latest
+          return !latest || updatedAt > latest ? updatedAt : latest
+        }, null)
+
+      const lastActivityDate = lastActivityAt || enrollment.enrolledAt
       const daysSinceLastActivity = lastActivityDate
         ? Math.floor((new Date().getTime() - new Date(lastActivityDate).getTime()) / (1000 * 60 * 60 * 24))
         : null
@@ -186,10 +201,10 @@ export async function GET(request: NextRequest) {
         progressPercentage,
         timeSpentMinutes: totalTimeMinutes,
         averageTimePerLesson,
-        estimatedTimeMinutes: course.estimatedTimeMinutes || 0,
+        estimatedTimeMinutes: (course.durationHours || 0) * 60,
         modules: modulesProgress.sort((a, b) => a.orderIndex - b.orderIndex),
         enrolledAt: enrollment.enrolledAt,
-        lastActivityAt: enrollment.lastActivityAt,
+        lastActivityAt,
         daysSinceLastActivity,
         nextLesson
       }

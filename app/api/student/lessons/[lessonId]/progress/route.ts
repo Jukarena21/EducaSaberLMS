@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { LESSON_PASSING_ACCURACY } from '@/lib/progress/lessonProgress'
 import { AchievementService } from '@/lib/achievementService'
 
 export async function GET(
@@ -96,15 +97,26 @@ export async function POST(
       return NextResponse.json({ error: 'Sin acceso a esta lección' }, { status: 403 })
     }
 
-    // Calcular progreso basado en las acciones
+    // La lección se compone de tres actividades con peso similar.
+    // Los ejercicios solo cuentan completos cuando se alcanza el mínimo de
+    // aciertos; por debajo suman de forma proporcional para que el avance se
+    // note, pero la lección no queda terminada.
     let progressPercentage = 0
-    
+
     if (videoViewed) progressPercentage += 33
     if (theoryViewed) progressPercentage += 33
-    
-    if (exercisesCompleted && totalQuestions > 0) {
-      const exerciseProgress = (correctAnswers / totalQuestions) * 34 // 34% para ejercicios
-      progressPercentage += exerciseProgress
+
+    // Una lección sin ejercicios no puede exigirlos para darse por terminada
+    const hasExercises = totalQuestions > 0
+    const accuracy = hasExercises ? correctAnswers / totalQuestions : 1
+    const exercisesPassed = hasExercises
+      ? exercisesCompleted && accuracy >= LESSON_PASSING_ACCURACY
+      : true
+
+    if (exercisesPassed) {
+      progressPercentage += 34
+    } else if (exercisesCompleted) {
+      progressPercentage += Math.round(34 * accuracy)
     }
 
     // Determinar estado de la lección

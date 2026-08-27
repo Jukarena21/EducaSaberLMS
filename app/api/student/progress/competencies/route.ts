@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import {
+  isLessonCompletedStatus,
+  isLessonInProgressStatus,
+  toProgressPercentage,
+} from '@/lib/progress/lessonProgress'
 
 export async function GET(request: NextRequest) {
   try {
@@ -125,6 +130,42 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Total real de lecciones publicadas por competencia dentro de los cursos
+    // en los que el estudiante está matriculado.
+    //
+    // Antes el denominador eran únicamente las lecciones que ya tenían registro
+    // de progreso, así que una sola lección abierta y terminada daba 100% en el
+    // área completa.
+    const enrolledModuleLessons = await prisma.moduleLesson.findMany({
+      where: {
+        module: {
+          competencyId: { in: competencyIds },
+          courseModules: {
+            some: {
+              course: {
+                courseEnrollments: { some: { userId, isActive: true } },
+              },
+            },
+          },
+        },
+        lesson: { isPublished: true },
+      },
+      select: {
+        lessonId: true,
+        module: { select: { competencyId: true } },
+      },
+    })
+
+    const lessonIdsByCompetency = new Map<string, Set<string>>()
+    for (const moduleLesson of enrolledModuleLessons) {
+      const competencyId = moduleLesson.module.competencyId
+      if (!competencyId) continue
+      if (!lessonIdsByCompetency.has(competencyId)) {
+        lessonIdsByCompetency.set(competencyId, new Set())
+      }
+      lessonIdsByCompetency.get(competencyId)!.add(moduleLesson.lessonId)
+    }
+
     // Filtrar contenido que pertenece a las competencias relevantes
     const filteredContentProgress = contentProgress.filter((cp: any) => 
       cp.lesson.moduleLessons?.some((ml: any) => competencyIds.includes(ml.module.competencyId))
@@ -186,10 +227,19 @@ export async function GET(request: NextRequest) {
         er.exam.competencyId === competency.id
       )
 
-      // Calcular estadísticas
-      const totalLessons = competencyLessons.length
-      const completedLessons = competencyLessons.filter((lp: any) => lp.status === 'completed').length
-      const inProgressLessons = competencyLessons.filter((lp: any) => lp.status === 'in_progress').length
+      // Calcular estadísticas sobre TODAS las lecciones del área, no solo las
+      // que ya tienen registro de progreso
+      const competencyLessonIds = lessonIdsByCompetency.get(competency.id) ?? new Set<string>()
+      const totalLessons = competencyLessonIds.size
+      const trackedLessons = competencyLessons.filter((lp: any) =>
+        competencyLessonIds.has(lp.lessonId)
+      )
+      const completedLessons = trackedLessons.filter((lp: any) =>
+        isLessonCompletedStatus(lp.status)
+      ).length
+      const inProgressLessons = trackedLessons.filter((lp: any) =>
+        isLessonInProgressStatus(lp.status)
+      ).length
 
       const totalTimeMinutes = competencyContent.reduce((acc: number, cp: any) => 
         acc + (cp.totalTimeMinutes || 0), 0
@@ -210,9 +260,7 @@ export async function GET(request: NextRequest) {
           }, 0) / totalExams)
         : 0
 
-      const progressPercentage = totalLessons > 0 
-        ? Math.round((completedLessons / totalLessons) * 100)
-        : 0
+      const progressPercentage = toProgressPercentage(completedLessons, totalLessons)
 
       // Calcular promedio del grupo (estudiantes de la misma escuela en la misma competencia)
       let groupAverageScore = 0
