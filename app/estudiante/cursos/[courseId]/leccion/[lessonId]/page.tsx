@@ -21,7 +21,9 @@ import {
 } from "lucide-react"
 import { QuestionRenderer } from "@/components/QuestionRenderer"
 import { StudentHeader } from "@/components/StudentHeader"
-import { isMatchingAnswerCorrect } from "@/lib/questions/matching"
+import { LessonContentViewer } from "@/components/LessonContentViewer"
+import { isMatchingAnswerCorrect, isMatchingAnswerComplete } from "@/lib/questions/matching"
+import { isFillBlankAnswerCorrect, isFillBlankAnswerComplete } from "@/lib/questions/fillBlank"
 
 interface Lesson {
   id: string
@@ -228,9 +230,9 @@ export default function LessonPage({
       case 'true_false':
         return typeof answer === 'string' && answer.length > 0
       case 'fill_blank':
-        return typeof answer === 'string' && answer.trim().length > 0
+        return isFillBlankAnswerComplete(question, answer)
       case 'matching':
-        return typeof answer === 'object' && Object.keys(answer).length > 0
+        return isMatchingAnswerComplete(question, answer)
       case 'essay':
         return typeof answer === 'string' && answer.trim().length > 0
       default:
@@ -240,15 +242,14 @@ export default function LessonPage({
 
   const checkAnswer = (question: Question, userAnswer: any): boolean => {
     // Emparejar no usa correctOption: la respuesta correcta son las propias parejas
-    if (!question.correctOption && question.questionType !== 'matching') return false
+    if (!question.correctOption && question.questionType !== 'matching' && question.questionType !== 'fill_blank') return false
 
     switch (question.questionType) {
       case 'multiple_choice':
       case 'true_false':
         return userAnswer === question.correctOption
       case 'fill_blank':
-        const correctAnswer = question.optionA || ''
-        return userAnswer?.toLowerCase().trim() === correctAnswer.toLowerCase().trim()
+        return isFillBlankAnswerCorrect(question, userAnswer)
       case 'matching':
         return isMatchingAnswerCorrect(question, userAnswer)
       case 'essay':
@@ -509,10 +510,7 @@ export default function LessonPage({
                   </CardHeader>
                   <CardContent>
                     {lesson.theoryContent ? (
-                      <div 
-                        className="prose max-w-none"
-                        dangerouslySetInnerHTML={{ __html: lesson.theoryContent }}
-                      />
+                      <LessonContentViewer content={lesson.theoryContent} className="prose max-w-none" />
                     ) : (
                       <div className="text-center py-8">
                         <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -558,75 +556,117 @@ export default function LessonPage({
                         {/* Mostrar preguntas y respuestas solo si no está en estado "ya completado" */}
                         {!(exercisesCompleted && showResults) ? (
                         <div className="space-y-6">
-                          <div className="text-center">
-                            <p className="text-gray-600 mb-2">
-                              Pregunta {currentExercise + 1} de {lesson.questions.length}
-                            </p>
-                            <div className="flex justify-center space-x-2 mb-4">
-                              {lesson.questions.map((_, index) => (
-                                <div
-                                  key={index}
-                                  className={`w-3 h-3 rounded-full ${
-                                    userAnswers[index] !== undefined
-                                      ? 'bg-green-500'
-                                      : index === currentExercise
-                                      ? 'bg-blue-500'
-                                      : 'bg-gray-300'
-                                  }`}
-                                  title={userAnswers[index] !== undefined ? 'Respondida' : index === currentExercise ? 'Actual' : 'Pendiente'}
-                                />
-                              ))}
-                            </div>
-                            <Progress 
-                              value={((currentExercise + 1) / lesson.questions.length) * 100} 
-                              className="w-full"
+                          <div>
+                            <Progress
+                              value={
+                                lesson.questions.length > 0
+                                  ? (lesson.questions.filter((_, index) => isQuestionAnswered(index)).length /
+                                      lesson.questions.length) *
+                                    100
+                                  : 0
+                              }
+                              className="h-2"
                             />
-                            <p className="text-xs text-gray-500 mt-2">
-                              {lesson.questions.filter((_, index) => isQuestionAnswered(index)).length} de {lesson.questions.length} respondidas
-                            </p>
+                            <div className="flex justify-between text-sm text-gray-600 mt-1">
+                              <span>
+                                Pregunta {currentExercise + 1} de {lesson.questions.length}
+                              </span>
+                              <span>
+                                {lesson.questions.filter((_, index) => isQuestionAnswered(index)).length}/
+                                {lesson.questions.length} respondidas
+                              </span>
+                            </div>
                           </div>
 
-                          <div className="space-y-4">
-                            {/* Renderizar pregunta usando QuestionRenderer */}
-                            {lesson.questions[currentExercise] && (
-                              <QuestionRenderer
-                                question={lesson.questions[currentExercise]}
-                                selectedAnswer={userAnswers[currentExercise]}
-                                onAnswerChange={(answer) => handleAnswer(currentExercise, answer)}
-                                showCorrectAnswer={showResults}
-                                isSubmitted={showResults}
-                                disabled={showResults}
-                              />
-                            )}
-                          </div>
+                          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                            <div className="lg:col-span-3 space-y-4">
+                              {lesson.questions[currentExercise] && (
+                                <>
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <h3 className="text-lg font-semibold text-gray-900">
+                                        {courseData?.course.competency || 'Área'} — Pregunta{' '}
+                                        {currentExercise + 1}
+                                      </h3>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <Badge variant="outline">
+                                          {lesson.questions[currentExercise].difficultyLevel}
+                                        </Badge>
+                                        {isQuestionAnswered(currentExercise) && (
+                                          <Badge className="bg-green-100 text-green-700">Respondida</Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {isQuestionAnswered(currentExercise) && (
+                                      <CheckCircle className="h-5 w-5 text-green-600" />
+                                    )}
+                                  </div>
+                                  <QuestionRenderer
+                                    question={lesson.questions[currentExercise]}
+                                    selectedAnswer={userAnswers[currentExercise]}
+                                    onAnswerChange={(answer) => handleAnswer(currentExercise, answer)}
+                                    showCorrectAnswer={showResults}
+                                    isSubmitted={showResults}
+                                    disabled={showResults}
+                                  />
+                                </>
+                              )}
 
-                          <div className="flex justify-between">
-                            <Button
-                              variant="outline"
-                              onClick={() => setCurrentExercise(Math.max(0, currentExercise - 1))}
-                              disabled={currentExercise === 0}
-                            >
-                              Anterior
-                            </Button>
-                            
-                            {currentExercise < lesson.questions.length - 1 ? (
-                              <Button
-                                onClick={() => setCurrentExercise(currentExercise + 1)}
-                                disabled={!isQuestionAnswered(currentExercise)}
-                              >
-                                Siguiente
-                              </Button>
-                            ) : (
-                              <Button
-                                onClick={checkAnswers}
-                                disabled={!isQuestionAnswered(currentExercise)}
-                                className="bg-green-600 hover:bg-green-700"
-                              >
-                                Finalizar Ejercicios
-                              </Button>
-                            )}
-                          </div>
+                              <div className="flex justify-between pt-2">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setCurrentExercise(Math.max(0, currentExercise - 1))}
+                                  disabled={currentExercise === 0}
+                                >
+                                  Anterior
+                                </Button>
+                                {currentExercise < lesson.questions.length - 1 ? (
+                                  <Button onClick={() => setCurrentExercise(currentExercise + 1)}>
+                                    Siguiente
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    onClick={checkAnswers}
+                                    disabled={
+                                      !lesson.questions.every((_, index) => isQuestionAnswered(index))
+                                    }
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    Finalizar Ejercicios
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
 
+                            <div className="lg:col-span-1">
+                              <div className="rounded-lg border bg-gray-50 p-3">
+                                <p className="text-xs font-semibold text-gray-700 mb-2">Preguntas</p>
+                                <div className="grid grid-cols-5 gap-2">
+                                  {lesson.questions.map((_, index) => (
+                                    <button
+                                      key={index}
+                                      type="button"
+                                      onClick={() => setCurrentExercise(index)}
+                                      className={`h-10 w-10 rounded-md text-sm font-medium border ${
+                                        index === currentExercise
+                                          ? 'bg-blue-600 text-white border-blue-600'
+                                          : isQuestionAnswered(index)
+                                          ? 'bg-green-100 text-green-800 border-green-300'
+                                          : 'bg-white text-gray-700 border-gray-300'
+                                      }`}
+                                    >
+                                      {index + 1}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="mt-3 space-y-1 text-xs text-gray-500">
+                                  <p>Azul: actual</p>
+                                  <p>Verde: respondida</p>
+                                  <p>Blanco: pendiente</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                         ) : null}
                         

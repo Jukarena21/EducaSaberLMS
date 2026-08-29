@@ -9,6 +9,7 @@ import {
   type AnswerSaveInput,
 } from '@/lib/examAnswerValidation'
 import { isMatchingAnswerCorrect } from '@/lib/questions/matching'
+import { isFillBlankAnswerCorrect } from '@/lib/questions/fillBlank'
 
 export async function POST(
   request: NextRequest,
@@ -96,7 +97,7 @@ export async function POST(
     // Helper para validar respuestas según el tipo de pregunta
     const checkAnswer = (question: any, userAnswer: any): boolean => {
       // Emparejar no usa correctOption: la respuesta correcta son las propias parejas
-      if (!question.correctOption && question.questionType !== 'matching') return false
+      if (!question.correctOption && question.questionType !== 'matching' && question.questionType !== 'fill_blank') return false
 
       switch (question.questionType) {
         case 'multiple_choice':
@@ -104,9 +105,7 @@ export async function POST(
           return userAnswer.selectedOption === question.correctOption
         
         case 'fill_blank':
-          const correctAnswer = question.optionA || ''
-          const userText = userAnswer.answerText || ''
-          return userText.toLowerCase().trim() === correctAnswer.toLowerCase().trim()
+          return isFillBlankAnswerCorrect(question, userAnswer.answerText)
         
         case 'matching':
           return isMatchingAnswerCorrect(question, userAnswer.answerText)

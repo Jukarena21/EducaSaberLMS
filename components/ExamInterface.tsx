@@ -100,8 +100,17 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
           // Para opción múltiple, guardar como string
           formattedAnswers[questionId] = answer.optionId
         } else if (answer.text) {
-          // Para fill_blank o essay, guardar como string
-          formattedAnswers[questionId] = answer.text
+          // fill_blank puede ser un JSON de huecos o un string plano
+          const text = answer.text
+          if (typeof text === 'string' && text.trim().startsWith('{')) {
+            try {
+              formattedAnswers[questionId] = JSON.parse(text)
+            } catch {
+              formattedAnswers[questionId] = text
+            }
+          } else {
+            formattedAnswers[questionId] = text
+          }
         }
       })
       setAnswers(formattedAnswers)
@@ -149,7 +158,8 @@ export function ExamInterface({ exam, questions, attemptId, startedAt, existingA
     const answer = answers[questionId]
     return isClientExamAnswerComplete(
       question.questionType || question.type,
-      answer
+      answer,
+      question
     )
   }
 

@@ -71,6 +71,7 @@ export interface QuestionAnswer {
 }
 
 export interface QuestionFormData {
+  id?: string
   lessonId: string
   
   // Contenido de la pregunta
@@ -107,10 +108,15 @@ export interface QuestionFormProps {
   lessons: Array<{ 
     id: string; 
     title: string; 
-    competencyId: string; 
+    competencyId?: string | null;
+    competency?: { id: string; name: string; displayName?: string } | null;
     isIcfesCourse?: boolean;
     academicGrade?: string;
     year?: number;
+    modules?: Array<{
+      competency?: { id: string; name: string; displayName?: string }
+      course?: { competency?: { id: string; name: string } }
+    }>
   }>
   onSubmit: (data: QuestionFormData) => Promise<void>
   onCancel: () => void

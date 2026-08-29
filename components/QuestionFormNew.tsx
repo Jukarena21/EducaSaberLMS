@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { QuestionFormData, QuestionFormProps } from '@/types/question';
 import { ImageUpload } from './ImageUpload';
 import { QuestionPreview } from './QuestionPreview';
+import { RichTextEditor } from './RichTextEditor';
 import { Separator } from '@/components/ui/separator';
 import { 
   Save, 
@@ -45,6 +46,43 @@ import {
 import { useMemo } from 'react';
 import { ACADEMIC_YEARS, yearToAcademicGrade } from '@/lib/academicGrades';
 import { filterAreasByScope } from '@/lib/icfesAreas';
+import {
+  MATCHING_MAX_EXTRA_TARGETS,
+  MATCHING_MAX_PAIRS,
+  MATCHING_MIN_PAIRS,
+  parseMatchingConfig,
+  serializeMatchingConfig,
+  type MatchingConfig,
+} from '@/lib/questions/matching';
+import {
+  FILL_BLANK_MAX_DISTRACTORS,
+  FILL_BLANK_TOKEN,
+  countBlankTokens,
+  parseFillBlankConfig,
+  serializeFillBlankConfig,
+  type FillBlankConfig,
+} from '@/lib/questions/fillBlank';
+
+function lessonMatchesCompetency(
+  lesson: {
+    competencyId?: string | null
+    competency?: { id: string } | null
+    modules?: Array<{
+      competency?: { id: string }
+      course?: { competency?: { id: string } }
+    }>
+  },
+  competencyId: string
+): boolean {
+  if (lesson.competencyId === competencyId) return true
+  if (lesson.competency?.id === competencyId) return true
+  return Boolean(
+    lesson.modules?.some(
+      (module) =>
+        module.competency?.id === competencyId || module.course?.competency?.id === competencyId
+    )
+  )
+}
 
 export function QuestionFormNew({ 
   question, 
@@ -115,7 +153,6 @@ export function QuestionFormNew({
   const selectedLesson = lessons.find(lesson => lesson.id === formData.lessonId);
   const questionLessonIsIcfes = (question as any)?.lesson?.modules?.some((module: any) => module.course?.isIcfesCourse);
   const isIcfesLessonContext = Boolean(selectedLesson?.isIcfesCourse || questionLessonIsIcfes);
-
   const isEditing = !!question;
 
   // Estados para filtros de lecciones
@@ -135,7 +172,7 @@ export function QuestionFormNew({
     }
 
     // Filtrar por año escolar (solo si es ICFES)
-    if (lessonFilterIcfes === 'icfes' && lessonFilterYear !== 'all') {
+    if (lessonFilterYear !== 'all' && lessonFilterIcfes !== 'general') {
       const year = parseInt(lessonFilterYear);
       const academicGrade = yearToAcademicGrade(year);
       if (academicGrade) {
@@ -145,7 +182,7 @@ export function QuestionFormNew({
 
     // Filtrar por competencia
     if (lessonFilterCompetency !== 'all') {
-      filtered = filtered.filter(l => l.competencyId === lessonFilterCompetency);
+      filtered = filtered.filter((l) => lessonMatchesCompetency(l, lessonFilterCompetency));
     }
 
     return filtered;
@@ -160,19 +197,18 @@ export function QuestionFormNew({
 
   useEffect(() => {
     if (question) {
-      // Si es una pregunta de tipo matching, asegurar que el formato sea correcto
       let processedQuestion = { ...question };
       if (question.questionType === 'matching') {
-        // Para matching, si las opciones no tienen el formato "left|right", 
-        // intentar parsearlas o dejarlas como están
-        ['A', 'B', 'C', 'D'].forEach((opt) => {
-          const optionKey = `option${opt}` as keyof QuestionFormData;
-          const optionValue = question[optionKey] as string;
-          if (optionValue && !optionValue.includes('|') && !optionValue.includes('→') && !optionValue.includes('->')) {
-            // Si no tiene separador, asumir que es solo el elemento izquierdo
-            processedQuestion = { ...processedQuestion, [optionKey]: `${optionValue}|` };
-          }
-        });
+        processedQuestion = {
+          ...processedQuestion,
+          ...serializeMatchingConfig(parseMatchingConfig(question)),
+        };
+      }
+      if (question.questionType === 'fill_blank') {
+        processedQuestion = {
+          ...processedQuestion,
+          ...serializeFillBlankConfig(parseFillBlankConfig(question)),
+        };
       }
       setFormData(processedQuestion);
       if (setExternalQuestionTypeSelected) {
@@ -280,6 +316,57 @@ export function QuestionFormNew({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // El borrador de emparejar admite parejas a medio escribir; al serializarlo
+  // hacia formData se descartan las incompletas, así que necesita vivir aparte
+  // para que las filas no desaparezcan mientras se teclea.
+  const [matchingDraft, setMatchingDraft] = useState<MatchingConfig>({
+    pairs: [],
+    extraTargets: [],
+  });
+
+  useEffect(() => {
+    if (formData.questionType !== 'matching') return;
+    const parsed = parseMatchingConfig(formData);
+    setMatchingDraft(
+      parsed.pairs.length > 0
+        ? parsed
+        : { pairs: [{ left: '', right: '' }, { left: '', right: '' }], extraTargets: [] }
+    );
+    // Se reinicia solo al abrir otra pregunta o al cambiar de tipo, nunca al escribir
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question?.id, formData.questionType]);
+
+  const updateMatchingDraft = (next: MatchingConfig) => {
+    setMatchingDraft(next);
+    setFormData(prev => ({ ...prev, ...serializeMatchingConfig(next) }));
+  };
+
+  const [fillDraft, setFillDraft] = useState<FillBlankConfig>({
+    blanks: [{ answer: '', distractors: [] }],
+  });
+
+  useEffect(() => {
+    if (formData.questionType !== 'fill_blank') return;
+    const parsed = parseFillBlankConfig(formData);
+    const tokenCount = Math.max(countBlankTokens(formData.questionText), 1);
+    const blanks = [...parsed.blanks];
+    while (blanks.length < tokenCount) blanks.push({ answer: '', distractors: [] });
+    setFillDraft({ blanks: blanks.slice(0, Math.max(tokenCount, parsed.blanks.length || 1)) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question?.id, formData.questionType]);
+
+  const updateFillDraft = (next: FillBlankConfig) => {
+    setFillDraft(next);
+    setFormData((prev) => ({ ...prev, ...serializeFillBlankConfig(next) }));
+  };
+
+  const syncFillDraftToText = (questionText: string, current: FillBlankConfig) => {
+    const tokenCount = Math.max(countBlankTokens(questionText), 1);
+    const blanks = [...current.blanks];
+    while (blanks.length < tokenCount) blanks.push({ answer: '', distractors: [] });
+    updateFillDraft({ blanks: blanks.slice(0, tokenCount) });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -302,22 +389,19 @@ export function QuestionFormNew({
       return;
     }
 
-    // Para matching, asegurar que el formato sea "left|right" antes de guardar
+    // Matching y rellenar persisten su configuración serializada en optionA
     let dataToSubmit = { ...formData };
     if (formData.questionType === 'matching') {
-      ['A', 'B', 'C', 'D'].forEach((opt) => {
-        const optionKey = `option${opt}` as keyof QuestionFormData;
-        const optionValue = dataToSubmit[optionKey] as string;
-        if (optionValue) {
-          // Si tiene separador → o ->, convertirlo a |
-          let formatted = optionValue.replace(/→/g, '|').replace(/->/g, '|');
-          // Si no tiene separador pero tiene contenido, agregar |
-          if (!formatted.includes('|')) {
-            formatted = `${formatted}|`;
-          }
-          dataToSubmit = { ...dataToSubmit, [optionKey]: formatted };
-        }
-      });
+      dataToSubmit = {
+        ...dataToSubmit,
+        ...serializeMatchingConfig(parseMatchingConfig(formData)),
+      };
+    }
+    if (formData.questionType === 'fill_blank') {
+      dataToSubmit = {
+        ...dataToSubmit,
+        ...serializeFillBlankConfig(fillDraft),
+      };
     }
 
     // Validaciones específicas por tipo de pregunta
@@ -335,51 +419,57 @@ export function QuestionFormNew({
         return;
       }
     } else if (formData.questionType === 'fill_blank') {
-      // Para completar, se requieren todas las opciones (A es la correcta, B-D son distractores)
-      if (!formData.optionA.trim() || !formData.optionB.trim() || 
-          !formData.optionC.trim() || !formData.optionD.trim()) {
+      const emptyBlank = fillDraft.blanks.findIndex((blank) => !blank.answer.trim());
+      if (fillDraft.blanks.length === 0 || emptyBlank !== -1) {
         toast({
           title: 'Error',
-          description: 'Se requiere la respuesta correcta (A) y al menos 3 alternativas distractoras (B, C, D)',
+          description:
+            emptyBlank === -1
+              ? 'Agrega al menos un espacio en blanco con su respuesta'
+              : `El espacio ${emptyBlank + 1} necesita la respuesta correcta`,
           variant: 'destructive',
         });
         return;
       }
-      // Asegurar que A sea la correcta
-      if (formData.correctOption !== 'A') {
-        setFormData(prev => ({ ...prev, correctOption: 'A' }));
+      if (countBlankTokens(formData.questionText) === 0) {
+        toast({
+          title: 'Error',
+          description: `Marca cada espacio en el enunciado con ${FILL_BLANK_TOKEN}`,
+          variant: 'destructive',
+        });
+        return;
       }
     } else if (formData.questionType === 'matching') {
-      // Para matching, validar que cada par tenga ambos elementos (izquierdo y derecho)
-      const pairs = ['A', 'B', 'C', 'D'];
-      
-      // Función helper para dividir por el separador específico
-      const splitBySeparator = (str: string, sep: string): string[] => {
-        if (sep === '|') {
-          return str.split('|').map(s => s.trim());
-        } else if (sep === '→') {
-          return str.split('→').map(s => s.trim());
-        } else if (sep === '->') {
-          return str.split('->').map(s => s.trim());
-        }
-        return [str, ''];
-      };
-      
-      for (const opt of pairs) {
-        const optionValue = formData[`option${opt}` as keyof QuestionFormData] as string || '';
-        const separator = optionValue.includes('|') ? '|' : optionValue.includes('→') ? '→' : optionValue.includes('->') ? '->' : null;
-        const parts = separator ? splitBySeparator(optionValue, separator) : [optionValue, ''];
-        const leftElement = parts[0] || '';
-        const rightElement = parts[1] || '';
-        
-        if (!leftElement.trim() || !rightElement.trim()) {
-          toast({
-            title: 'Error',
-            description: `El par ${opt} debe tener tanto el elemento izquierdo como el derecho completos`,
-            variant: 'destructive',
-          });
-          return;
-        }
+      const config = parseMatchingConfig(formData);
+      const incompletePair = matchingDraft.pairs.findIndex(
+        (pair) => !pair.left.trim() || !pair.right.trim()
+      );
+
+      if (incompletePair !== -1) {
+        toast({
+          title: 'Error',
+          description: `La pareja ${incompletePair + 1} necesita la ficha y su casilla de destino`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (config.pairs.length < MATCHING_MIN_PAIRS) {
+        toast({
+          title: 'Error',
+          description: `Se necesitan al menos ${MATCHING_MIN_PAIRS} parejas completas`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (matchingDraft.extraTargets.some((target) => !target.trim())) {
+        toast({
+          title: 'Error',
+          description: 'Hay casillas adicionales vacías: complétalas o elimínalas',
+          variant: 'destructive',
+        });
+        return;
       }
     } else {
       // Opción múltiple - se requieren todas las opciones
@@ -627,8 +717,9 @@ export function QuestionFormNew({
                             value={lessonFilterIcfes} 
                             onValueChange={(value) => {
                               setLessonFilterIcfes(value as 'all' | 'icfes' | 'general');
-                              setLessonFilterYear('all'); // Reset año al cambiar tipo
-                              setLessonFilterCompetency('all'); // Reset competencia al cambiar tipo
+                              setLessonFilterYear('all');
+                              setLessonFilterCompetency('all');
+                              handleInputChange('lessonId', '');
                             }}
                           >
                             <SelectTrigger id="filterIcfes" className="h-9">
@@ -653,12 +744,15 @@ export function QuestionFormNew({
                         </div>
 
                         {/* Filtro por año escolar (solo si es ICFES) */}
-                        {lessonFilterIcfes === 'icfes' && (
+                        {lessonFilterIcfes !== 'general' && (
                           <div className="space-y-2">
                             <Label htmlFor="filterYear" className="text-xs">Año Escolar</Label>
                             <Select 
                               value={lessonFilterYear} 
-                              onValueChange={setLessonFilterYear}
+                              onValueChange={(value) => {
+                                setLessonFilterYear(value);
+                                handleInputChange('lessonId', '');
+                              }}
                             >
                               <SelectTrigger id="filterYear" className="h-9">
                                 <SelectValue placeholder="Todos los años" />
@@ -680,7 +774,10 @@ export function QuestionFormNew({
                           <Label htmlFor="filterCompetency" className="text-xs">Competencia</Label>
                           <Select 
                             value={lessonFilterCompetency} 
-                            onValueChange={setLessonFilterCompetency}
+                            onValueChange={(value) => {
+                              setLessonFilterCompetency(value);
+                              handleInputChange('lessonId', '');
+                            }}
                           >
                             <SelectTrigger id="filterCompetency" className="h-9">
                               <SelectValue placeholder="Todas las competencias" />
@@ -754,35 +851,58 @@ export function QuestionFormNew({
 
                     <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="questionText">Enunciado de la pregunta *</Label>
-                      <Textarea
-                        id="questionText"
-                        value={formData.questionText}
-                        onChange={(e) => handleInputChange('questionText', e.target.value)}
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="questionText">Enunciado de la pregunta *</Label>
+                        {formData.questionType === 'fill_blank' && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const current = formData.questionText || '';
+                              const next = current.includes('</p>')
+                                ? current.replace(/<\/p>(?![\s\S]*<\/p>)/, ` ${FILL_BLANK_TOKEN}</p>`)
+                                : `${current} ${FILL_BLANK_TOKEN}`;
+                              handleInputChange('questionText', next);
+                              syncFillDraftToText(next, fillDraft);
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Insertar espacio
+                          </Button>
+                        )}
+                      </div>
+                      <RichTextEditor
+                        content={formData.questionText}
+                        onChange={(value) => {
+                          handleInputChange('questionText', value);
+                          if (formData.questionType === 'fill_blank') {
+                            syncFillDraftToText(value, fillDraft);
+                          }
+                        }}
                         placeholder={
                           formData.questionType === 'fill_blank'
-                            ? 'Ejemplo: "La capital de Colombia es _____.", "El proceso de _____ es fundamental en biología."'
+                            ? `Escribe el enunciado y marca cada hueco con ${FILL_BLANK_TOKEN}. Ejemplo: La capital de Colombia es ${FILL_BLANK_TOKEN}.`
                             : formData.questionType === 'matching'
-                            ? 'Ejemplo: "Empareja cada capital con su país correspondiente:", "Relaciona cada concepto con su definición:"'
+                            ? 'Describe qué elementos deben emparejarse.'
                             : 'Escribe el enunciado de la pregunta...'
                         }
-                        rows={formData.questionType === 'fill_blank' || formData.questionType === 'matching' ? 3 : 4}
-                        className="resize-none"
-                        required
+                        className="min-h-[180px]"
                       />
                       {formData.questionType === 'fill_blank' && (
                         <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
                           <p className="text-xs text-purple-800">
-                            <strong>💡 Tip:</strong> Usa guiones bajos (____) o corchetes ([BLANK]) para indicar los espacios en blanco. 
-                            Ejemplo: "La fórmula del agua es H___O" o "El proceso de [BLANK] es fundamental."
+                            Cada <strong>{FILL_BLANK_TOKEN}</strong> se convierte en un espacio
+                            en la posición exacta del enunciado. Detectados:{' '}
+                            <strong>{countBlankTokens(formData.questionText)}</strong>.
                           </p>
                         </div>
                       )}
                       {formData.questionType === 'matching' && (
                         <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
                           <p className="text-xs text-orange-800">
-                            <strong>💡 Tip:</strong> Describe qué elementos deben emparejarse. 
-                            Ejemplo: "Empareja cada capital con su país" o "Relaciona cada concepto con su definición".
+                            Describe qué elementos deben emparejarse. Las fichas y casillas
+                            se configuran más abajo.
                           </p>
                         </div>
                       )}
@@ -816,9 +936,9 @@ export function QuestionFormNew({
                         : formData.questionType === 'true_false'
                         ? 'Selecciona si la afirmación es Verdadera o Falsa *'
                         : formData.questionType === 'fill_blank'
-                        ? 'Define la respuesta correcta y las alternativas distractoras *'
+                        ? 'Define la respuesta de cada espacio. Los distractores son opcionales.'
                         : formData.questionType === 'matching'
-                        ? 'Crea pares de elementos relacionados (máximo 4 pares) *'
+                        ? 'Crea las parejas y, si quieres, casillas adicionales como distractores'
                         : 'Define las opciones de respuesta y marca la correcta *'
                       }
                     </CardDescription>
@@ -849,98 +969,163 @@ export function QuestionFormNew({
                                 Pregunta de Emparejar
                               </p>
                               <p className="text-sm text-orange-800">
-                                <strong>Instrucciones:</strong> Crea pares de elementos relacionados. 
-                                Cada par tiene un elemento izquierdo y un elemento derecho que deben emparejarse.
+                                Cada pareja define una <strong>ficha</strong> que el estudiante
+                                arrastra y la <strong>casilla</strong> a la que corresponde.
                               </p>
                               <p className="text-xs text-orange-700 italic">
-                                Ejemplo: Par A: Izquierdo = "París", Derecho = "Francia"
+                                Ejemplo: ficha = &quot;París&quot;, casilla = &quot;Francia&quot;.
+                                Las casillas siempre son visibles y su orden se baraja.
                               </p>
                             </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          {['A', 'B', 'C', 'D'].map((option) => {
-                          const isCorrect = formData.correctOption === option;
-                          // Para matching, parsear el formato "left|right" o "left → right"
-                          const optionValue = formData[`option${option}` as keyof QuestionFormData] as string || '';
-                          const separator = optionValue.includes('|') ? '|' : optionValue.includes('→') ? '→' : optionValue.includes('->') ? '->' : null;
-                          const [leftElement, rightElement] = separator 
-                            ? optionValue.split(separator).map(s => s.trim())
-                            : ['', ''];
-                          
-                          const handleMatchingChange = (side: 'left' | 'right', value: string) => {
-                            const currentOption = formData[`option${option}` as keyof QuestionFormData] as string || '';
-                            const currentSeparator = currentOption.includes('|') ? '|' : currentOption.includes('→') ? '→' : currentOption.includes('->') ? '->' : '|';
-                            
-                            // Función helper para dividir por el separador específico
-                            const splitBySeparator = (str: string, sep: string): string[] => {
-                              if (sep === '|') {
-                                return str.split('|').map(s => s.trim());
-                              } else if (sep === '→') {
-                                return str.split('→').map(s => s.trim());
-                              } else if (sep === '->') {
-                                return str.split('->').map(s => s.trim());
+
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label className="font-medium text-sm">
+                              Parejas ({matchingDraft.pairs.length})
+                            </Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={matchingDraft.pairs.length >= MATCHING_MAX_PAIRS}
+                              onClick={() =>
+                                updateMatchingDraft({
+                                  ...matchingDraft,
+                                  pairs: [...matchingDraft.pairs, { left: '', right: '' }],
+                                })
                               }
-                              return [str, ''];
-                            };
-                            
-                            const currentParts = currentOption.includes('|') || currentOption.includes('→') || currentOption.includes('->')
-                              ? splitBySeparator(currentOption, currentSeparator)
-                              : ['', ''];
-                            
-                            let newValue = '';
-                            if (side === 'left') {
-                              newValue = `${value}|${currentParts[1] || ''}`;
-                            } else {
-                              newValue = `${currentParts[0] || ''}|${value}`;
-                            }
-                            handleInputChange(`option${option}` as keyof QuestionFormData, newValue);
-                          };
-                          
-                          return (
-                            <div 
-                              key={option} 
-                              className={`space-y-3 p-4 border-2 rounded-lg transition-colors ${
-                                isCorrect 
-                                  ? 'border-orange-500 bg-orange-50/50' 
-                                  : 'border-gray-200 bg-white'
-                              }`}
+                            >
+                              <Plus className="w-4 h-4 mr-1" />
+                              Añadir pareja
+                            </Button>
+                          </div>
+
+                          {matchingDraft.pairs.map((pair, index) => (
+                            <div
+                              key={`pair-${index}`}
+                              className="p-4 border-2 border-gray-200 rounded-lg bg-white space-y-3"
                             >
                               <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Label className="font-medium text-sm">
-                                    Par {option}
-                                  </Label>
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  Válido
-                                </div>
+                                <Label className="font-medium text-sm">Pareja {index + 1}</Label>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={matchingDraft.pairs.length <= MATCHING_MIN_PAIRS}
+                                  onClick={() =>
+                                    updateMatchingDraft({
+                                      ...matchingDraft,
+                                      pairs: matchingDraft.pairs.filter((_, i) => i !== index),
+                                    })
+                                  }
+                                  className="text-gray-500 hover:text-red-600"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
                               </div>
-                              <div className="space-y-2">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="space-y-1">
-                                  <Label className="text-xs font-medium">Izquierdo</Label>
+                                  <Label className="text-xs font-medium">Ficha (se arrastra)</Label>
                                   <Input
-                                    value={leftElement}
-                                    onChange={(e) => handleMatchingChange('left', e.target.value)}
-                                    placeholder={`Izquierdo ${option}...`}
+                                    value={pair.left}
+                                    onChange={(e) =>
+                                      updateMatchingDraft({
+                                        ...matchingDraft,
+                                        pairs: matchingDraft.pairs.map((p, i) =>
+                                          i === index ? { ...p, left: e.target.value } : p
+                                        ),
+                                      })
+                                    }
+                                    placeholder={`Ficha ${index + 1}...`}
                                     className="text-sm h-9"
-                                    required
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-xs font-medium">Derecho</Label>
+                                  <Label className="text-xs font-medium">Casilla de destino</Label>
                                   <Input
-                                    value={rightElement}
-                                    onChange={(e) => handleMatchingChange('right', e.target.value)}
-                                    placeholder={`Derecho ${option}...`}
+                                    value={pair.right}
+                                    onChange={(e) =>
+                                      updateMatchingDraft({
+                                        ...matchingDraft,
+                                        pairs: matchingDraft.pairs.map((p, i) =>
+                                          i === index ? { ...p, right: e.target.value } : p
+                                        ),
+                                      })
+                                    }
+                                    placeholder={`Casilla ${index + 1}...`}
                                     className="text-sm h-9"
-                                    required
                                   />
                                 </div>
                               </div>
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
+
+                        <div className="space-y-3 pt-2 border-t">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <Label className="font-medium text-sm">
+                                Casillas adicionales ({matchingDraft.extraTargets.length})
+                              </Label>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Casillas sin ficha correspondiente. Sirven como distractores y
+                                hacen que las columnas queden dispares.
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={
+                                matchingDraft.extraTargets.length >= MATCHING_MAX_EXTRA_TARGETS
+                              }
+                              onClick={() =>
+                                updateMatchingDraft({
+                                  ...matchingDraft,
+                                  extraTargets: [...matchingDraft.extraTargets, ''],
+                                })
+                              }
+                            >
+                              <Plus className="w-4 h-4 mr-1" />
+                              Añadir casilla
+                            </Button>
+                          </div>
+
+                          {matchingDraft.extraTargets.map((target, index) => (
+                            <div key={`extra-${index}`} className="flex items-center gap-2">
+                              <Input
+                                value={target}
+                                onChange={(e) =>
+                                  updateMatchingDraft({
+                                    ...matchingDraft,
+                                    extraTargets: matchingDraft.extraTargets.map((t, i) =>
+                                      i === index ? e.target.value : t
+                                    ),
+                                  })
+                                }
+                                placeholder={`Casilla adicional ${index + 1}...`}
+                                className="text-sm h-9"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  updateMatchingDraft({
+                                    ...matchingDraft,
+                                    extraTargets: matchingDraft.extraTargets.filter(
+                                      (_, i) => i !== index
+                                    ),
+                                  })
+                                }
+                                className="text-gray-500 hover:text-red-600 flex-shrink-0"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ) : formData.questionType === 'true_false' ? (
@@ -993,113 +1178,157 @@ export function QuestionFormNew({
                     ) : formData.questionType === 'fill_blank' ? (
                       <div className="space-y-4">
                         <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                          <div className="flex items-start gap-2">
-                            <Type className="w-5 h-5 text-purple-600 mt-0.5" />
+                          <p className="text-sm text-purple-800">
+                            El orden coincide con los {FILL_BLANK_TOKEN} del enunciado.
+                            Los distractores son opcionales: si los agregas, el estudiante
+                            elige de una lista; si no, escribe la respuesta.
+                          </p>
+                        </div>
+                        {fillDraft.blanks.map((blank, index) => (
+                          <div
+                            key={`blank-${index}`}
+                            className="p-4 border-2 border-purple-200 rounded-lg bg-white space-y-3"
+                          >
+                            <Label className="font-medium text-sm">Espacio {index + 1}</Label>
+                            <Input
+                              value={blank.answer}
+                              onChange={(e) =>
+                                updateFillDraft({
+                                  blanks: fillDraft.blanks.map((item, i) =>
+                                    i === index ? { ...item, answer: e.target.value } : item
+                                  ),
+                                })
+                              }
+                              placeholder="Respuesta correcta..."
+                              className="text-sm h-9"
+                            />
                             <div className="space-y-2">
-                              <p className="text-sm font-medium text-purple-900">
-                                Pregunta de Completar
-                              </p>
-                              <p className="text-sm text-purple-800">
-                                <strong>Instrucciones:</strong> La opción A debe ser la respuesta correcta que completa el espacio en blanco. 
-                                Las opciones B, C, D serán las alternativas distractoras que también podrían completar el espacio.
-                              </p>
-                              <p className="text-xs text-purple-700 italic">
-                                Ejemplo: Si el enunciado es "La capital de Colombia es _____", 
-                                la opción A sería "Bogotá" y las otras opciones serían otras ciudades.
-                              </p>
+                              <div className="flex items-center justify-between">
+                                <Label className="text-xs text-muted-foreground">
+                                  Distractores opcionales
+                                </Label>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  disabled={blank.distractors.length >= FILL_BLANK_MAX_DISTRACTORS}
+                                  onClick={() =>
+                                    updateFillDraft({
+                                      blanks: fillDraft.blanks.map((item, i) =>
+                                        i === index
+                                          ? { ...item, distractors: [...item.distractors, ''] }
+                                          : item
+                                      ),
+                                    })
+                                  }
+                                >
+                                  <Plus className="w-3 h-3 mr-1" />
+                                  Añadir
+                                </Button>
+                              </div>
+                              {blank.distractors.map((distractor, dIndex) => (
+                                <div key={`d-${index}-${dIndex}`} className="flex items-center gap-2">
+                                  <Input
+                                    value={distractor}
+                                    onChange={(e) =>
+                                      updateFillDraft({
+                                        blanks: fillDraft.blanks.map((item, i) =>
+                                          i === index
+                                            ? {
+                                                ...item,
+                                                distractors: item.distractors.map((d, di) =>
+                                                  di === dIndex ? e.target.value : d
+                                                ),
+                                              }
+                                            : item
+                                        ),
+                                      })
+                                    }
+                                    placeholder={`Distractora ${dIndex + 1}...`}
+                                    className="text-sm h-9"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-gray-500 hover:text-red-600"
+                                    onClick={() =>
+                                      updateFillDraft({
+                                        blanks: fillDraft.blanks.map((item, i) =>
+                                          i === index
+                                            ? {
+                                                ...item,
+                                                distractors: item.distractors.filter(
+                                                  (_, di) => di !== dIndex
+                                                ),
+                                              }
+                                            : item
+                                        ),
+                                      })
+                                    }
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          {['A', 'B', 'C', 'D'].map((option) => {
-                            const isCorrectAnswer = option === 'A';
-                            
-                            return (
-                              <div 
-                                key={option} 
-                                className={`space-y-3 p-4 border-2 rounded-lg transition-colors ${
-                                  isCorrectAnswer
-                                    ? 'border-purple-500 bg-purple-50/50' 
-                                    : 'border-gray-200 bg-white'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <Label className="font-medium text-sm">
-                                      {isCorrectAnswer ? '✓ Correcta (A)' : `Distractora ${option}`}
-                                    </Label>
-                                    {isCorrectAnswer && (
-                                      <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700 border-purple-300">
-                                        Correcta
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <Textarea
-                                    value={formData[`option${option}` as keyof QuestionFormData] as string}
-                                    onChange={(e) => handleInputChange(`option${option}` as keyof QuestionFormData, e.target.value)}
-                                    placeholder={
-                                      isCorrectAnswer 
-                                        ? 'Respuesta correcta...' 
-                                        : `Distractora ${option}...`
-                                    }
-                                    rows={2}
-                                    className="resize-none text-sm"
-                                    required
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                        ))}
                       </div>
                     ) : (
-                      // Opción Múltiple (default) - En grilla 2x2
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-3">
+                      <p className="text-sm text-muted-foreground">
+                        Estilo Saber: marca la letra correcta y escribe cada opción.
+                      </p>
+                      <div className="space-y-3">
                         {['A', 'B', 'C', 'D'].map((option) => {
                           const isCorrect = formData.correctOption === option;
-                          
+
                           return (
-                            <div 
-                              key={option} 
-                              className={`space-y-3 p-4 border-2 rounded-lg transition-colors ${
-                                isCorrect 
-                                  ? 'border-green-500 bg-green-50/50' 
+                            <div
+                              key={option}
+                              className={`flex gap-3 p-4 border-2 rounded-lg transition-colors ${
+                                isCorrect
+                                  ? 'border-green-500 bg-green-50/50'
                                   : 'border-gray-200 bg-white'
                               }`}
                             >
-                              <div className="flex items-center justify-between">
-                                <Label className="font-medium text-base">
-                                  Opción {option}
-                                </Label>
-                                <RadioGroup
-                                  value={formData.correctOption}
-                                  onValueChange={(value) => handleInputChange('correctOption', value)}
-                                  className="flex items-center space-x-2"
-                                >
-                                  <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value={option} id={`correct-${option}`} />
-                                    <Label htmlFor={`correct-${option}`} className="text-xs font-medium cursor-pointer">
-                                      {isCorrect ? '✓ Correcta' : 'Marcar'}
-                                    </Label>
-                                  </div>
-                                </RadioGroup>
-                              </div>
-                              
-                              <div className="space-y-2">
+                              <button
+                                type="button"
+                                onClick={() => handleInputChange('correctOption', option)}
+                                className={`w-10 h-10 rounded-full border-2 flex-shrink-0 font-bold ${
+                                  isCorrect
+                                    ? 'border-green-600 bg-green-600 text-white'
+                                    : 'border-gray-400 text-gray-700 hover:border-blue-500'
+                                }`}
+                                title="Marcar como correcta"
+                              >
+                                {option}
+                              </button>
+                              <div className="flex-1 space-y-2">
                                 <Textarea
                                   value={formData[`option${option}` as keyof QuestionFormData] as string}
-                                  onChange={(e) => handleInputChange(`option${option}` as keyof QuestionFormData, e.target.value)}
+                                  onChange={(e) =>
+                                    handleInputChange(
+                                      `option${option}` as keyof QuestionFormData,
+                                      e.target.value
+                                    )
+                                  }
                                   placeholder={`Opción ${option}...`}
                                   rows={2}
                                   className="resize-none text-sm"
                                   required
                                 />
-                                
                                 <ImageUpload
-                                  value={formData[`option${option}Image` as keyof QuestionFormData] as string}
-                                  onChange={(url) => handleInputChange(`option${option}Image` as keyof QuestionFormData, url)}
+                                  value={
+                                    formData[`option${option}Image` as keyof QuestionFormData] as string
+                                  }
+                                  onChange={(url) =>
+                                    handleInputChange(
+                                      `option${option}Image` as keyof QuestionFormData,
+                                      url
+                                    )
+                                  }
                                   placeholder={`Imagen ${option} (opc.)`}
                                   className="max-w-full"
                                 />
@@ -1107,6 +1336,7 @@ export function QuestionFormNew({
                             </div>
                           );
                         })}
+                      </div>
                       </div>
                     )}
                   </CardContent>

@@ -17,10 +17,10 @@ const questionUpdateSchema = z.object({
   usage: z.enum(['lesson', 'exam', 'both']).default('lesson'),
   
   // Opciones de respuesta
-  optionA: z.string().min(1, 'La opción A es requerida'),
-  optionB: z.string().min(1, 'La opción B es requerida'),
-  optionC: z.string().min(1, 'La opción C es requerida'),
-  optionD: z.string().min(1, 'La opción D es requerida'),
+  optionA: z.string().default(''),
+  optionB: z.string().default(''),
+  optionC: z.string().default(''),
+  optionD: z.string().default(''),
   optionAImage: z.string().url().optional().or(z.literal('')),
   optionBImage: z.string().url().optional().or(z.literal('')),
   optionCImage: z.string().url().optional().or(z.literal('')),
@@ -109,7 +109,7 @@ export async function GET(
           { status: 400 }
         );
       }
-      const hasAccess = question.lesson.moduleLessons.some(ml => 
+      const hasAccess = question.lesson?.moduleLessons.some(ml => 
         ml.module.courseModules.some(cm => {
           const courseSchoolIds = cm.course.courseSchools?.map(cs => cs.schoolId) || [];
           return courseSchoolIds.length === 0 || courseSchoolIds.includes(session.user.schoolId!);
@@ -124,7 +124,7 @@ export async function GET(
     }
 
     // Transformar datos
-    const firstModuleLesson = question.lesson.moduleLessons[0];
+    const firstModuleLesson = question.lesson?.moduleLessons[0];
     const module = firstModuleLesson?.module;
     const firstCourseModule = module?.courseModules[0];
     const course = firstCourseModule?.course;

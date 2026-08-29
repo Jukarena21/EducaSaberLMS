@@ -559,7 +559,9 @@ export function LessonForm({ lesson, onSubmit, onCancel }: LessonFormProps) {
                   />
                 )}
                 <p className="text-xs text-muted-foreground mt-2">
-                  * Campo requerido. Usa el editor para formatear texto, agregar imágenes y crear contenido enriquecido.
+                  * Campo requerido. Usa el botón de fórmula (ƒx) para matemáticas y química:
+                  {' '}<code className="text-xs">x^2</code>, {' '}<code className="text-xs">{'\\frac{a}{b}'}</code>, {' '}
+                  <code className="text-xs">{'\\ce{H2O}'}</code>.
                 </p>
               </CardContent>
             </Card>

@@ -22,6 +22,9 @@ import TableHeader from '@tiptap/extension-table-header';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { Extension, Mark } from '@tiptap/core';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
+import 'katex/contrib/mhchem';
 import { Button } from '@/components/ui/button';
 import { 
   Bold, 
@@ -53,11 +56,13 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  FunctionSquare
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -141,6 +146,9 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const { toast } = useToast();
   const [showImageDialog, setShowImageDialog] = useState(false);
+  const [showFormulaDialog, setShowFormulaDialog] = useState(false);
+  const [formulaLatex, setFormulaLatex] = useState('');
+  const [formulaDisplay, setFormulaDisplay] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [imageAlt, setImageAlt] = useState('');
   const [fontSizePopoverOpen, setFontSizePopoverOpen] = useState(false);
@@ -282,7 +290,7 @@ export function RichTextEditor({
     if (contentRef.current !== content) {
       const currentContent = editor.getHTML();
       if (content !== currentContent) {
-        editor.commands.setContent(content, false);
+        editor.commands.setContent(content);
       }
       contentRef.current = content;
     }
@@ -704,6 +712,19 @@ export function RichTextEditor({
           >
             <span className="text-xs font-semibold leading-none">x²</span>
           </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setFormulaLatex('');
+              setFormulaDisplay(false);
+              setShowFormulaDialog(true);
+            }}
+            title="Fórmula matemática o química"
+          >
+            <FunctionSquare className="w-4 h-4" />
+          </Button>
         </div>
 
         {/* Text Alignment */}
@@ -1028,6 +1049,69 @@ export function RichTextEditor({
               Cancelar
             </Button>
             <Button onClick={addImage} disabled={!imageUrl}>
+              Insertar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showFormulaDialog} onOpenChange={setShowFormulaDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Insertar fórmula</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Usa LaTeX para matemáticas. Para química, escribe {'\\ce{...}'}.
+              Ejemplos: {'x^2 + y^2 = z^2'}, {'\\frac{a}{b}'}, {'\\ce{H2SO4}'}.
+            </p>
+            <div className="space-y-2">
+              <Label>Fórmula</Label>
+              <Textarea
+                value={formulaLatex}
+                onChange={(e) => setFormulaLatex(e.target.value)}
+                placeholder="Ej: \ce{2H2 + O2 -> 2H2O}  o  x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}"
+                rows={3}
+                className="font-mono text-sm"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={formulaDisplay}
+                onChange={(e) => setFormulaDisplay(e.target.checked)}
+              />
+              Mostrar centrada (bloque)
+            </label>
+            {formulaLatex.trim() && (
+              <div className="rounded-md border bg-white p-4 overflow-x-auto">
+                <p className="text-xs text-muted-foreground mb-2">Vista previa</p>
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: katex.renderToString(formulaLatex, {
+                      throwOnError: false,
+                      displayMode: formulaDisplay,
+                    }),
+                  }}
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFormulaDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!formulaLatex.trim()}
+              onClick={() => {
+                const snippet = formulaDisplay
+                  ? `$$${formulaLatex.trim()}$$`
+                  : `$${formulaLatex.trim()}$`
+                editor?.chain().focus().insertContent(` ${snippet} `).run()
+                setShowFormulaDialog(false)
+                setFormulaLatex('')
+              }}
+            >
               Insertar
             </Button>
           </DialogFooter>

@@ -191,8 +191,15 @@ export function QuestionManagementNew({ competencies, userRole }: QuestionManage
   };
 
   // Filtrar lecciones por competencia seleccionada
-  const filteredLessons = lessons.filter(lesson => 
-    pendingFilters.competencyId === 'all' || lesson.modules.some(module => module.competency?.id === pendingFilters.competencyId)
+  const filteredLessons = lessons.filter((lesson) =>
+    pendingFilters.competencyId === 'all' ||
+    lesson.competencyId === pendingFilters.competencyId ||
+    lesson.competency?.id === pendingFilters.competencyId ||
+    lesson.modules.some(
+      (module) =>
+        module.competency?.id === pendingFilters.competencyId ||
+        module.course?.competency?.id === pendingFilters.competencyId
+    )
   );
 
   if (error) {

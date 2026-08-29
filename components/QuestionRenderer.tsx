@@ -9,7 +9,18 @@ import { Label } from '@/components/ui/label'
 import { CheckCircle, XCircle, AlertCircle, GripVertical } from 'lucide-react'
 import { SafeImage } from '@/components/SafeImage'
 import { decodeMaybeEscapedHtml } from '@/lib/htmlContent'
-import { buildMatchingItemId, splitMatchingOption } from '@/lib/questions/matching'
+import {
+  buildMatchingItems,
+  describeMatchingAnswer,
+  parseMatchingConfig,
+} from '@/lib/questions/matching'
+import {
+  countBlankTokens,
+  isFillBlankAnswerCorrect,
+  parseFillBlankAnswer,
+  parseFillBlankConfig,
+  splitQuestionByBlanks,
+} from '@/lib/questions/fillBlank'
 import { seededShuffle } from '@/lib/questions/shuffle'
 
 interface QuestionRendererProps {
@@ -58,11 +69,11 @@ export function QuestionRenderer({
     }
     return ''
   })
-  const [fillBlankAnswer, setFillBlankAnswer] = useState<string>(() => {
-    if (question.questionType === 'fill_blank' && selectedAnswer && typeof selectedAnswer === 'string') {
-      return selectedAnswer
+  const [fillBlankAnswers, setFillBlankAnswers] = useState<Record<number, string>>(() => {
+    if (question.questionType === 'fill_blank') {
+      return parseFillBlankAnswer(selectedAnswer)
     }
-    return ''
+    return {}
   })
 
   // Estados para drag and drop de matching (siempre inicializados, pero solo usados para matching)
@@ -81,17 +92,39 @@ export function QuestionRenderer({
     }
   }
 
-  const handleFillBlankChange = (value: string) => {
-    setFillBlankAnswer(value)
-    if (onAnswerChange) {
-      onAnswerChange(value)
-    }
+  const handleFillBlankSlotChange = (index: number, value: string) => {
+    const current =
+      selectedAnswer !== undefined && selectedAnswer !== null
+        ? parseFillBlankAnswer(selectedAnswer)
+        : fillBlankAnswers
+    const next = { ...current, [index]: value }
+    setFillBlankAnswers(next)
+    if (onAnswerChange) onAnswerChange(next)
   }
 
-  const handleMatchingChange = (leftElement: string, rightElement: string) => {
-    const newPairs = { ...matchingPairs, [leftElement]: rightElement }
+  // El componente puede recibir la respuesta desde fuera (examen en curso) o
+  // gestionarla internamente (ejercicios de lección)
+  const currentMatchingPairs: Record<string, string> =
+    selectedAnswer && typeof selectedAnswer === 'object' && !Array.isArray(selectedAnswer)
+      ? (selectedAnswer as Record<string, string>)
+      : matchingPairs
+
+  /** Asigna una ficha a un destino, o la retira si `targetId` es null. */
+  const handleMatchingChange = (sourceId: string, targetId: string | null) => {
+    const newPairs = { ...currentMatchingPairs }
+
+    // Cada destino admite una sola ficha: si ya estaba ocupado, la anterior
+    // vuelve a la columna de fichas disponibles
+    if (targetId) {
+      for (const [existingSource, existingTarget] of Object.entries(newPairs)) {
+        if (existingTarget === targetId) delete newPairs[existingSource]
+      }
+      newPairs[sourceId] = targetId
+    } else {
+      delete newPairs[sourceId]
+    }
+
     setMatchingPairs(newPairs)
-    // Resetear estados de drag cuando se hace un match
     setDraggedItem(null)
     setDragOverTarget(null)
     if (onAnswerChange) {
@@ -271,143 +304,135 @@ export function QuestionRenderer({
     )
   }
 
-  // Renderizar completar espacios
+  // Renderizar completar espacios en la posición correcta dentro del enunciado
   const renderFillBlank = () => {
-    const correctAnswer = question.optionA || ''
-    const distractors = [
-      question.optionB,
-      question.optionC,
-      question.optionD
-    ].filter((d): d is string => Boolean(d))
-    
-    const userAnswer = typeof selectedAnswer === 'string' 
-      ? selectedAnswer 
-      : selectedAnswer?.text || fillBlankAnswer
-    const isCorrect = showCorrectAnswer && userAnswer?.toLowerCase().trim() === correctAnswer.toLowerCase().trim()
+    const { blanks } = parseFillBlankConfig(question)
+    const parts = splitQuestionByBlanks(question.questionText)
+    const tokenCount = countBlankTokens(question.questionText)
+    const blankCount = Math.max(blanks.length, tokenCount, 1)
+    const currentAnswers =
+      selectedAnswer !== undefined && selectedAnswer !== null
+        ? parseFillBlankAnswer(selectedAnswer)
+        : fillBlankAnswers
+    const allCorrect = showCorrectAnswer && isFillBlankAnswerCorrect(question, currentAnswers)
 
-    // Si hay distractores, mostrar como opciones múltiples
-    const hasDistractors = distractors.length > 0
+    const renderSlot = (index: number) => {
+      const blank = blanks[index]
+      const value = currentAnswers[index] || ''
+      const isSlotCorrect =
+        showCorrectAnswer && blank && value.trim().toLowerCase() === blank.answer.trim().toLowerCase()
+      const isSlotIncorrect = showCorrectAnswer && Boolean(value) && !isSlotCorrect
+      const options = blank
+        ? seededShuffle([blank.answer, ...blank.distractors], `fill-${question.id}-${index}`)
+        : []
+      const hasChoices = options.length > 1
+      const slotClass = showCorrectAnswer
+        ? isSlotCorrect
+          ? 'border-green-500 bg-green-50 text-green-800'
+          : isSlotIncorrect
+          ? 'border-red-500 bg-red-50 text-red-800'
+          : 'border-gray-300 bg-white'
+        : value
+        ? 'border-blue-500 bg-blue-50'
+        : 'border-gray-400 bg-white'
 
-    // La correcta se guarda siempre en optionA, así que sin barajar quedaría
-    // siempre de primera y sería adivinable. El orden depende del id de la
-    // pregunta para que no cambie entre renders ni en la vista de resultados.
-    const displayedOptions = seededShuffle(
-      [correctAnswer, ...distractors],
-      `fill-${question.id}`
-    )
+      return (
+        <span key={`blank-${index}`} className="inline-flex items-center align-middle mx-1 my-1">
+          {hasChoices ? (
+            <select
+              value={value}
+              disabled={disabled}
+              onChange={(e) => handleFillBlankSlotChange(index, e.target.value)}
+              className={`min-w-[9rem] max-w-[16rem] rounded-md border-2 px-2 py-1 text-sm font-medium ${slotClass} ${
+                disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'
+              }`}
+            >
+              <option value="">Selecciona…</option>
+              {options.map((option) => (
+                <option key={option} value={option}>
+                  {option.replace(/<[^>]+>/g, '')}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={value}
+              disabled={disabled}
+              onChange={(e) => handleFillBlankSlotChange(index, e.target.value)}
+              placeholder={`Espacio ${index + 1}`}
+              className={`min-w-[7rem] w-32 rounded-md border-b-2 border-x-0 border-t-0 px-2 py-1 text-center text-sm font-medium ${slotClass} ${
+                disabled ? 'cursor-not-allowed opacity-70' : ''
+              }`}
+            />
+          )}
+          {showCorrectAnswer && (
+            <span className="ml-1">
+              {isSlotCorrect ? (
+                <CheckCircle className="inline w-4 h-4 text-green-500" />
+              ) : (
+                <XCircle className="inline w-4 h-4 text-red-500" />
+              )}
+            </span>
+          )}
+        </span>
+      )
+    }
 
     return (
       <div className="space-y-4">
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800 mb-3">
-            <strong>Instrucciones:</strong> {hasDistractors 
-              ? 'Selecciona la opción que completa correctamente el espacio en blanco.'
-              : 'Completa el espacio en blanco con la respuesta correcta.'}
+        <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+          <p className="text-sm text-purple-800">
+            <strong>Instrucciones:</strong>{' '}
+            {blankCount > 1
+              ? `Completa los ${blankCount} espacios en el enunciado.`
+              : 'Completa el espacio en el enunciado.'}
           </p>
         </div>
 
-        {hasDistractors ? (
-          // Mostrar como opciones múltiples si hay distractores
-          <div className="space-y-3">
-            {displayedOptions.map((option, index) => {
-              const optionKey = String.fromCharCode(65 + index) // A, B, C, D
-              const isSelected = userAnswer?.toLowerCase().trim() === option.toLowerCase().trim()
-              const isCorrectOption = option === correctAnswer
-              const isIncorrect = showCorrectAnswer && isSelected && !isCorrectOption
-
-              return (
-                <button
-                  key={index}
-                  onClick={() => !disabled && handleFillBlankChange(option)}
-                  disabled={disabled}
-                  className={`w-full p-4 text-left rounded-lg border-2 transition-all ${
-                    showCorrectAnswer
-                      ? isCorrectOption
-                        ? 'border-green-500 bg-green-50'
-                        : isIncorrect
-                        ? 'border-red-500 bg-red-50'
-                        : 'border-gray-200'
-                      : isSelected
-                      ? 'border-blue-500 bg-blue-50 shadow-md'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  } ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className={`w-6 h-6 rounded-full border-2 mr-3 flex items-center justify-center ${
-                        showCorrectAnswer
-                          ? isCorrectOption
-                            ? 'border-green-500 bg-green-500'
-                            : isIncorrect
-                            ? 'border-red-500 bg-red-500'
-                            : 'border-gray-300'
-                          : isSelected
-                          ? 'border-blue-500 bg-blue-500'
-                          : 'border-gray-300'
-                      }`}>
-                        {(isSelected || showCorrectAnswer) && (
-                          <div className="w-2 h-2 bg-white rounded-full"></div>
-                        )}
-                      </div>
-                      <span className="font-medium text-gray-700 mr-2">{optionKey}.</span>
-                      <span 
-                        className="text-gray-800 prose prose-sm max-w-none"
-                        dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(option) }}
-                      />
-                    </div>
-                    {showCorrectAnswer && (
-                      <div>
-                        {isCorrectOption && <CheckCircle className="w-5 h-5 text-green-500" />}
-                        {isIncorrect && <XCircle className="w-5 h-5 text-red-500" />}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        ) : (
-          // Mostrar como input de texto si no hay distractores
-          <div className="space-y-3">
-            <Input
-              type="text"
-              value={userAnswer}
-              onChange={(e) => handleFillBlankChange(e.target.value)}
-              disabled={disabled}
-              placeholder="Escribe tu respuesta aquí..."
-              className={`w-full text-lg ${
-                showCorrectAnswer
-                  ? isCorrect
-                    ? 'border-green-500 bg-green-50'
-                    : 'border-red-500 bg-red-50'
-                  : ''
-              }`}
-            />
-            {showCorrectAnswer && (
-              <div className={`p-4 rounded-lg ${
-                isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-              }`}>
-                <div className="flex items-center gap-3">
-                  {isCorrect ? (
-                    <CheckCircle className="w-6 h-6 text-green-500 flex-shrink-0" />
-                  ) : (
-                    <XCircle className="w-6 h-6 text-red-500 flex-shrink-0" />
-                  )}
-                  <div>
-                    <p className="text-sm font-medium">
-                      {isCorrect ? '¡Correcto!' : 'Respuesta incorrecta'}
-                    </p>
-                    {!isCorrect && (
-                      <p className="text-sm text-gray-700 mt-1">
-                        La respuesta correcta es:                         <strong 
-                          className="text-green-700 prose prose-sm max-w-none"
-                          dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(correctAnswer) }}
-                        />
-                      </p>
-                    )}
-                  </div>
-                </div>
+        <div className="text-lg font-medium leading-relaxed prose max-w-none">
+          {tokenCount > 0 ? (
+            parts.map((part, index) => (
+              <span key={`part-${index}`}>
+                <span dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(part) }} />
+                {index < tokenCount ? renderSlot(index) : null}
+              </span>
+            ))
+          ) : (
+            <>
+              <span
+                dangerouslySetInnerHTML={{
+                  __html: decodeMaybeEscapedHtml(question.questionText),
+                }}
+              />
+              <div className="mt-4 flex flex-wrap gap-3">
+                {Array.from({ length: blankCount }, (_, index) => renderSlot(index))}
               </div>
+            </>
+          )}
+        </div>
+
+        {showCorrectAnswer && (
+          <div
+            className={`p-4 rounded-lg border ${
+              allCorrect ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+            }`}
+          >
+            <p className="text-sm font-medium mb-2">
+              {allCorrect ? '¡Correcto!' : 'Respuestas correctas:'}
+            </p>
+            {!allCorrect && (
+              <ul className="space-y-1 text-sm text-gray-700">
+                {blanks.map((blank, index) => (
+                  <li key={`sol-${index}`}>
+                    <strong>Espacio {index + 1}:</strong> {blank.answer}
+                    {currentAnswers[index] &&
+                    currentAnswers[index].trim().toLowerCase() !== blank.answer.trim().toLowerCase()
+                      ? ` (tu respuesta: ${currentAnswers[index]})`
+                      : ''}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         )}
@@ -417,58 +442,38 @@ export function QuestionRenderer({
 
   // Renderizar emparejar con drag and drop
   const renderMatching = () => {
-    const pairs = [
-      { key: 'A', option: question.optionA },
-      { key: 'B', option: question.optionB },
-      { key: 'C', option: question.optionC },
-      { key: 'D', option: question.optionD }
-    ].filter(p => p.option)
+    const config = parseMatchingConfig(question)
+    const { sources, targets, correctPairs } = buildMatchingItems(config)
 
-    // Extraer elementos izquierdos y derechos
-    // Usar el key (A, B, C, D) como parte del ID para garantizar unicidad
-    const leftItems: Array<{ id: string; text: string; key: string }> = []
-    const rightItems: Array<{ id: string; text: string; key: string }> = []
-    const correctPairs: Record<string, string> = {}
-
-    pairs.forEach((pair) => {
-      const [leftElement, rightElement] = splitMatchingOption(pair.option || '')
-      if (leftElement && rightElement) {
-        // Usar key + texto para garantizar IDs únicos
-        const leftId = buildMatchingItemId(pair.key, leftElement)
-        const rightId = buildMatchingItemId(pair.key, rightElement)
-        leftItems.push({ id: leftId, text: leftElement, key: pair.key })
-        rightItems.push({ id: rightId, text: rightElement, key: pair.key })
-        correctPairs[leftId] = rightId
-      }
-    })
-
-    // Obtener los pares actuales
-    const currentPairs = typeof selectedAnswer === 'object' && selectedAnswer !== null && !Array.isArray(selectedAnswer)
-      ? selectedAnswer as Record<string, string>
-      : matchingPairs
-
-    const handleDragStart = (leftId: string) => {
-      if (!disabled) {
-        setDraggedItem(leftId)
-      }
+    if (sources.length === 0) {
+      return (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          Esta pregunta de emparejar no tiene parejas configuradas.
+        </div>
+      )
     }
 
-    const handleDragOver = (e: React.DragEvent, rightId: string) => {
+    // Los destinos se barajan para que su orden no delate la correspondencia.
+    // La semilla depende de la pregunta, así el orden es estable entre renders
+    // y coincide con el que vio el estudiante al responder.
+    const shuffledTargets = seededShuffle(targets, `match-${question.id}`)
+    const shuffledSources = seededShuffle(sources, `match-src-${question.id}`)
+    const currentPairs = currentMatchingPairs
+
+    const handleDragStart = (sourceId: string) => {
+      if (!disabled) setDraggedItem(sourceId)
+    }
+
+    const handleDragOver = (e: React.DragEvent, targetId: string) => {
       e.preventDefault()
-      if (!disabled) {
-        setDragOverTarget(rightId)
-      }
+      if (!disabled) setDragOverTarget(targetId)
     }
 
-    const handleDragLeave = () => {
-      setDragOverTarget(null)
-    }
+    const handleDragLeave = () => setDragOverTarget(null)
 
-    const handleDrop = (rightId: string) => {
+    const handleDrop = (targetId: string) => {
       if (draggedItem && !disabled) {
-        handleMatchingChange(draggedItem, rightId)
-        setDraggedItem(null)
-        setDragOverTarget(null)
+        handleMatchingChange(draggedItem, targetId)
       }
     }
 
@@ -477,171 +482,201 @@ export function QuestionRenderer({
       setDragOverTarget(null)
     }
 
-    const getMatchedLeftId = (rightId: string) => {
-      // Buscar el leftId que tiene este rightId como valor
-      return Object.keys(currentPairs).find(leftId => currentPairs[leftId] === rightId) || null
-    }
-    
-    // Función helper para obtener el texto del leftItem desde su ID
-    const getLeftItemText = (leftId: string) => {
-      return leftItems.find(l => l.id === leftId)?.text || ''
-    }
-    
-    // Función helper para obtener el key del leftItem desde su ID
-    const getLeftItemKey = (leftId: string) => {
-      return leftItems.find(l => l.id === leftId)?.key || '?'
-    }
-    
-    // Función helper para obtener el texto del rightItem desde su ID
-    const getRightItemText = (rightId: string) => {
-      return rightItems.find(r => r.id === rightId)?.text || ''
-    }
+    const getSourceForTarget = (targetId: string) =>
+      Object.keys(currentPairs).find((sourceId) => currentPairs[sourceId] === targetId) || null
+
+    const getSourceText = (sourceId: string) =>
+      sources.find((source) => source.id === sourceId)?.text || ''
+
+    const getSourceIndex = (sourceId: string) =>
+      sources.findIndex((source) => source.id === sourceId)
+
+    const pendingSources = shuffledSources.filter((source) => currentPairs[source.id] === undefined)
+    const placedCount = sources.length - pendingSources.length
+    const hasExtraTargets = targets.length > sources.length
 
     return (
       <div className="space-y-4">
         <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-          <p className="text-sm text-orange-800 mb-2">
-            <strong>Instrucciones:</strong> Arrastra cada elemento de la columna izquierda hacia su correspondiente en la columna derecha.
+          <p className="text-sm text-orange-800">
+            <strong>Instrucciones:</strong> arrastra cada ficha de la izquierda hasta la casilla
+            que le corresponde.
           </p>
-          <p className="text-xs text-orange-700">
-            Haz clic y arrastra desde el elemento izquierdo hasta soltarlo sobre el elemento correcto de la derecha.
+          <p className="text-xs text-orange-700 mt-1">
+            {hasExtraTargets
+              ? 'Hay más casillas que fichas: algunas se quedarán vacías.'
+              : 'Cada casilla admite una sola ficha.'}
+            {!disabled && ' Puedes retirar una ficha con el botón de la casilla.'}
           </p>
         </div>
-        
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-600">
+            Emparejadas <strong className="text-gray-900">{placedCount}</strong> de{' '}
+            <strong className="text-gray-900">{sources.length}</strong>
+          </span>
+          {placedCount === sources.length && !showCorrectAnswer && (
+            <span className="text-green-600 font-medium flex items-center gap-1">
+              <CheckCircle className="w-4 h-4" /> Completado
+            </span>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Columna izquierda - Elementos a arrastrar */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Arrastra desde aquí:</h4>
-            {leftItems.map((leftItem) => {
-              const isMatched = currentPairs[leftItem.id] !== undefined
-              const isDragging = draggedItem === leftItem.id
-              
-              return (
-                <div
-                  key={leftItem.id}
-                  draggable={!disabled && !isMatched}
-                  onDragStart={() => handleDragStart(leftItem.id)}
-                  onDragEnd={handleDragEnd}
-                  className={`p-4 border-2 rounded-lg cursor-move transition-all ${
-                    isDragging
-                      ? 'opacity-50 border-blue-400 bg-blue-100'
-                      : isMatched
-                      ? 'border-gray-300 bg-gray-100 opacity-60 cursor-not-allowed'
-                      : showCorrectAnswer && currentPairs[leftItem.id] === correctPairs[leftItem.id]
-                      ? 'border-green-500 bg-green-50'
-                      : showCorrectAnswer && currentPairs[leftItem.id] !== correctPairs[leftItem.id]
-                      ? 'border-red-500 bg-red-50'
-                      : 'border-gray-300 bg-white hover:border-blue-400 hover:bg-blue-50'
-                  } ${disabled ? 'cursor-not-allowed' : ''}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <GripVertical className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-medium flex-shrink-0">
-                      {leftItem.key}
-                    </div>
-                    <span 
-                      className="font-medium text-gray-800 flex-1 prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(leftItem.text) }}
-                    />
-                    {isMatched && !isDragging && (
-                      <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                    )}
-                  </div>
+          {/* Fichas disponibles */}
+          <div>
+            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Fichas para arrastrar</h4>
+            <div className="space-y-3">
+              {pendingSources.length === 0 && (
+                <div className="p-4 border-2 border-dashed border-gray-200 rounded-lg text-sm text-gray-500 text-center">
+                  No quedan fichas por colocar
                 </div>
-              )
-            })}
+              )}
+              {pendingSources.map((source) => {
+                const isDragging = draggedItem === source.id
+                const index = getSourceIndex(source.id)
+
+                return (
+                  <div
+                    key={source.id}
+                    draggable={!disabled}
+                    onDragStart={() => handleDragStart(source.id)}
+                    onDragEnd={handleDragEnd}
+                    className={`p-4 border-2 rounded-lg transition-all ${
+                      disabled ? 'cursor-not-allowed opacity-70' : 'cursor-move'
+                    } ${
+                      isDragging
+                        ? 'opacity-50 border-blue-400 bg-blue-100'
+                        : 'border-gray-300 bg-white hover:border-blue-400 hover:bg-blue-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <GripVertical className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-medium flex-shrink-0">
+                        {index + 1}
+                      </div>
+                      <span
+                        className="font-medium text-gray-800 flex-1 prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(source.text) }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
-          {/* Columna derecha - Zonas de destino */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Suelta aquí:</h4>
-            {rightItems.map((rightItem) => {
-              const matchedLeftId = getMatchedLeftId(rightItem.id)
-              const isCorrect = matchedLeftId && correctPairs[matchedLeftId] === rightItem.id
-              const isDragOver = dragOverTarget === rightItem.id
-              
-              return (
-                <div
-                  key={rightItem.id}
-                  onDragOver={(e) => handleDragOver(e, rightItem.id)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={() => handleDrop(rightItem.id)}
-                  className={`p-4 border-2 rounded-lg transition-all min-h-[60px] flex items-center ${
-                    isDragOver
-                      ? 'border-blue-500 bg-blue-100 scale-105'
-                      : matchedLeftId
-                      ? showCorrectAnswer
-                        ? isCorrect
-                          ? 'border-green-500 bg-green-50'
-                          : 'border-red-500 bg-red-50'
-                        : 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 bg-gray-50'
-                  } ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                >
-                  <div className="flex items-center gap-3 w-full">
-                    {matchedLeftId ? (
-                      <>
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-medium flex-shrink-0">
-                          {getLeftItemKey(matchedLeftId)}
+          {/* Casillas de destino: siempre muestran a qué corresponden */}
+          <div>
+            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Casillas de destino</h4>
+            <div className="space-y-3">
+              {shuffledTargets.map((target) => {
+                const matchedSourceId = getSourceForTarget(target.id)
+                const isCorrect = Boolean(
+                  matchedSourceId && correctPairs[matchedSourceId] === target.id
+                )
+                const isDragOver = dragOverTarget === target.id
+
+                return (
+                  <div
+                    key={target.id}
+                    onDragOver={(e) => handleDragOver(e, target.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={() => handleDrop(target.id)}
+                    className={`p-4 border-2 rounded-lg transition-all ${
+                      isDragOver
+                        ? 'border-blue-500 bg-blue-100'
+                        : matchedSourceId
+                        ? showCorrectAnswer
+                          ? isCorrect
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-red-500 bg-red-50'
+                          : 'border-blue-500 bg-blue-50'
+                        : 'border-gray-300 bg-white'
+                    }`}
+                  >
+                    {/* El enunciado de la casilla es siempre visible */}
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="font-medium text-gray-800 flex-1 prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(target.text) }}
+                      />
+                      {showCorrectAnswer && matchedSourceId && (
+                        <div className="flex-shrink-0">
+                          {isCorrect ? (
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-500" />
+                          )}
                         </div>
-                        <span 
-                          className="font-medium text-gray-800 flex-1 prose prose-sm max-w-none"
-                          dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(rightItem.text) }}
-                        />
-                        {showCorrectAnswer && (
-                          <div className="flex-shrink-0">
-                            {isCorrect ? (
-                              <CheckCircle className="w-5 h-5 text-green-500" />
-                            ) : (
-                              <XCircle className="w-5 h-5 text-red-500" />
-                            )}
+                      )}
+                    </div>
+
+                    {/* Zona donde aterriza la ficha */}
+                    <div className="mt-3">
+                      {matchedSourceId ? (
+                        <div className="flex items-center gap-2 rounded-md bg-white/70 border border-gray-200 px-3 py-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-medium flex-shrink-0">
+                            {getSourceIndex(matchedSourceId) + 1}
                           </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center font-medium flex-shrink-0">
-                          ?
+                          <span
+                            className="text-sm text-gray-800 flex-1 prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{
+                              __html: decodeMaybeEscapedHtml(getSourceText(matchedSourceId)),
+                            }}
+                          />
+                          {!disabled && !showCorrectAnswer && (
+                            <button
+                              type="button"
+                              onClick={() => handleMatchingChange(matchedSourceId, null)}
+                              className="text-xs text-gray-500 hover:text-red-600 underline flex-shrink-0"
+                            >
+                              Quitar
+                            </button>
+                          )}
                         </div>
-                        <span className="text-gray-500 flex-1 italic">
-                          {isDragOver ? 'Suelta aquí' : 'Arrastra un elemento aquí'}
-                        </span>
-                      </>
-                    )}
+                      ) : (
+                        <div
+                          className={`rounded-md border-2 border-dashed px-3 py-2 text-sm text-center ${
+                            isDragOver
+                              ? 'border-blue-400 text-blue-600'
+                              : 'border-gray-300 text-gray-400'
+                          }`}
+                        >
+                          {isDragOver ? 'Suelta aquí' : 'Arrastra una ficha'}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Mostrar respuestas correctas si está en modo revisión */}
         {showCorrectAnswer && (
           <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm font-medium text-blue-900 mb-2">Respuestas correctas:</p>
             <div className="space-y-2">
-              {Object.entries(correctPairs).map(([leftId, rightId]) => {
-                const userAnswer = currentPairs[leftId]
-                const isCorrect = userAnswer === rightId
-                const leftText = getLeftItemText(leftId)
-                const rightText = getRightItemText(rightId)
-                const userAnswerText = userAnswer ? getRightItemText(userAnswer) : ''
-                return (
-                  <div key={`answer-${leftId}-${rightId}`} className="flex items-center gap-2 text-sm">
-                    {isCorrect ? (
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-red-500" />
+              {describeMatchingAnswer(question, currentPairs).map((row, index) => (
+                <div key={`answer-${index}`} className="flex items-start gap-2 text-sm">
+                  {row.isCorrect ? (
+                    <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  )}
+                  <span className={row.isCorrect ? 'text-green-700' : 'text-red-700'}>
+                    <strong>{index + 1}.</strong> {row.left} → {row.correct}
+                    {!row.isCorrect && (
+                      <span className="text-gray-600">
+                        {row.chosen
+                          ? ` (tu respuesta: ${row.chosen})`
+                          : ' (sin responder)'}
+                      </span>
                     )}
-                    <span className={isCorrect ? 'text-green-700' : 'text-red-700'}>
-                      <strong>{getLeftItemKey(leftId)}</strong> ({leftText}) → {rightText}
-                      {!isCorrect && userAnswerText && (
-                        <span className="text-gray-600"> (Tu respuesta: {userAnswerText})</span>
-                      )}
-                    </span>
-                  </div>
-                )
-              })}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -706,10 +741,12 @@ export function QuestionRenderer({
       {/* Texto de la pregunta + imagen asociada: mismo orden que el gestor (imagen antes del enunciado de la pregunta cuando el enunciado base va aparte en lessonUrl) */}
       <div className="space-y-3">
         {renderQuestionImage()}
-        <div 
-          className="text-lg font-medium leading-relaxed prose max-w-none"
-          dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(question.questionText) }}
-        />
+        {question.questionType !== 'fill_blank' && (
+          <div 
+            className="text-lg font-medium leading-relaxed prose max-w-none"
+            dangerouslySetInnerHTML={{ __html: decodeMaybeEscapedHtml(question.questionText) }}
+          />
+        )}
       </div>
 
       {/* Renderizar según el tipo de pregunta */}

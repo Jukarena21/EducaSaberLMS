@@ -1,3 +1,6 @@
+import { isMatchingAnswerComplete } from '@/lib/questions/matching'
+import { isFillBlankAnswerComplete } from '@/lib/questions/fillBlank'
+
 /**
  * Validación de respuestas de examen (cliente y servidor).
  */
@@ -5,6 +8,13 @@
 export type ExamAnswerPayload = {
   selectedOption?: string | null
   answerText?: string | null
+}
+
+type OptionSource = {
+  optionA?: string | null
+  optionB?: string | null
+  optionC?: string | null
+  optionD?: string | null
 }
 
 export type AnswerSaveInput = {
@@ -62,11 +72,19 @@ export function buildAnswerSavePayload(
 /** Respuesta en memoria del cliente (ExamInterface). */
 export function isClientExamAnswerComplete(
   questionType: string | undefined,
-  answer: unknown
+  answer: unknown,
+  question?: OptionSource
 ): boolean {
   if (answer == null) return false
 
   const type = questionType || 'multiple_choice'
+
+  if (type === 'matching' && question) {
+    return isMatchingAnswerComplete(question, answer)
+  }
+  if (type === 'fill_blank' && question) {
+    return isFillBlankAnswerComplete(question, answer)
+  }
 
   if (typeof answer === 'string') {
     return answer.trim().length > 0
@@ -77,7 +95,6 @@ export function isClientExamAnswerComplete(
     if (typeof obj.optionId === 'string' && obj.optionId.trim().length > 0) return true
     if (typeof obj.text === 'string' && obj.text.trim().length > 0) return true
     if (typeof obj.answer === 'string' && obj.answer.trim().length > 0) return true
-    // matching: al menos un par
     if (Object.keys(obj).length > 0 && !obj.optionId && !obj.text) return true
   }
 
@@ -91,7 +108,8 @@ export function isClientExamAnswerComplete(
 /** Respuesta persistida en ExamQuestionAnswer. */
 export function isStoredExamAnswerComplete(
   questionType: string | undefined,
-  answer: ExamAnswerPayload | undefined
+  answer: ExamAnswerPayload | undefined,
+  question?: OptionSource
 ): boolean {
   if (!answer) return false
 
@@ -102,9 +120,12 @@ export function isStoredExamAnswerComplete(
     case 'true_false':
       return !!(answer.selectedOption && answer.selectedOption.trim().length > 0)
     case 'fill_blank':
+      if (question) return isFillBlankAnswerComplete(question, answer.answerText)
+      return !!(answer.answerText && answer.answerText.trim().length > 0)
     case 'essay':
       return !!(answer.answerText && answer.answerText.trim().length > 0)
-    case 'matching': {
+    case 'matching':
+      if (question) return isMatchingAnswerComplete(question, answer.answerText)
       if (!answer.answerText || !answer.answerText.trim()) return false
       try {
         const parsed = JSON.parse(answer.answerText)
@@ -112,7 +133,6 @@ export function isStoredExamAnswerComplete(
       } catch {
         return false
       }
-    }
     default:
       return !!(
         (answer.selectedOption && answer.selectedOption.trim()) ||
@@ -133,6 +153,10 @@ export function findUnansweredExamQuestions<
     id: string
     orderIndex: number
     questionType?: string
+    optionA?: string | null
+    optionB?: string | null
+    optionC?: string | null
+    optionD?: string | null
     competency?: { displayName?: string | null; name?: string | null } | null
     competencyId?: string | null
   }
@@ -157,7 +181,7 @@ export function findUnansweredExamQuestions<
 
   for (const q of questions) {
     const stored = answersByQuestionId.get(q.id)
-    if (isStoredExamAnswerComplete(q.questionType, stored)) continue
+    if (isStoredExamAnswerComplete(q.questionType, stored, q)) continue
 
     const numbering = areaMaps.get(q.id)
     unanswered.push({

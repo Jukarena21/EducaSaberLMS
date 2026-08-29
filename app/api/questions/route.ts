@@ -17,10 +17,10 @@ const questionSchema = z.object({
   usage: z.enum(['lesson', 'exam', 'both']).default('lesson'),
   
   // Opciones de respuesta
-  optionA: z.string().min(1, 'La opción A es requerida'),
-  optionB: z.string().min(1, 'La opción B es requerida'),
-  optionC: z.string().min(1, 'La opción C es requerida'),
-  optionD: z.string().min(1, 'La opción D es requerida'),
+  optionA: z.string().default(''),
+  optionB: z.string().default(''),
+  optionC: z.string().default(''),
+  optionD: z.string().default(''),
   optionAImage: z.string().url().optional().or(z.literal('')),
   optionBImage: z.string().url().optional().or(z.literal('')),
   optionCImage: z.string().url().optional().or(z.literal('')),
