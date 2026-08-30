@@ -177,6 +177,7 @@ export default function LessonPage({
 
       // Recuperar las respuestas ya dadas para que al volver a la lección los
       // resultados muestren lo que el estudiante respondió y no un panel vacío
+      let recoveredAnswers = 0
       const answersResponse = await fetch(`/api/student/lessons/${lessonIdParam}/answers`)
       if (answersResponse.ok) {
         const savedAnswers: SavedAnswer[] = await answersResponse.json()
@@ -190,6 +191,7 @@ export default function LessonPage({
             hydrated[index] = saved.answer
           }
         }
+        recoveredAnswers = Object.keys(hydrated).length
         setUserAnswers(hydrated)
       }
 
@@ -201,8 +203,10 @@ export default function LessonPage({
         setTheoryViewed(progressData.theoryCompleted || false)
         const wasCompleted = progressData.exercisesCompleted || false
         setExercisesCompleted(wasCompleted)
-        // Si ya estaba completado, mostrar resultados pero permitir reiniciar
-        if (wasCompleted) {
+        // Solo se muestran los resultados si se recuperaron las respuestas. Quien
+        // completó los ejercicios antes de que se guardaran no tiene ninguna, y
+        // pintar el panel sin ellas marcaría todo como incorrecto.
+        if (wasCompleted && recoveredAnswers > 0) {
           setShowResults(true)
         }
         foundLesson.progressPercentage = progressData.progressPercentage || 0
@@ -595,6 +599,17 @@ export default function LessonPage({
                               <PlayCircle className="h-4 w-4 mr-2" />
                               Practicar Otra Vez
                             </Button>
+                          </div>
+                        ) : null}
+
+                        {exercisesCompleted && !showResults ? (
+                          <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+                            <p className="text-sm text-amber-900">
+                              Ya completaste estos ejercicios, pero no guardamos el detalle de tus
+                              respuestas en ese momento, así que no podemos mostrarte los
+                              resultados. Tu progreso se mantiene: puedes volver a responderlos
+                              si quieres revisar el detalle.
+                            </p>
                           </div>
                         ) : null}
                         
