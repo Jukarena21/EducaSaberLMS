@@ -62,7 +62,16 @@ export async function POST(
 
     const { lessonId } = await params
     const userId = session.user.id
-    const { videoViewed, theoryViewed, exercisesCompleted, correctAnswers, totalQuestions } = await request.json()
+    const {
+      videoViewed,
+      theoryViewed,
+      exercisesCompleted,
+      correctAnswers,
+      totalQuestions,
+      // Al reiniciar los ejercicios hay que poder volver atrás; el resto de las
+      // actualizaciones solo suman para no perder avance por una petición parcial
+      resetExercises = false,
+    } = await request.json()
 
     // Verificar que la lección existe
     const lesson = await prisma.lesson.findUnique({
@@ -109,13 +118,14 @@ export async function POST(
     // Una lección sin ejercicios no puede exigirlos para darse por terminada
     const hasExercises = totalQuestions > 0
     const accuracy = hasExercises ? correctAnswers / totalQuestions : 1
-    const exercisesPassed = hasExercises
-      ? exercisesCompleted && accuracy >= LESSON_PASSING_ACCURACY
-      : true
+    const exercisesPassed =
+      !resetExercises && (hasExercises
+        ? exercisesCompleted && accuracy >= LESSON_PASSING_ACCURACY
+        : true)
 
     if (exercisesPassed) {
       progressPercentage += 34
-    } else if (exercisesCompleted) {
+    } else if (exercisesCompleted && !resetExercises) {
       progressPercentage += Math.round(34 * accuracy)
     }
 
@@ -144,8 +154,10 @@ export async function POST(
           status,
           videoCompleted: videoViewed || existingProgress.videoCompleted,
           theoryCompleted: theoryViewed || existingProgress.theoryCompleted,
-          exercisesCompleted: exercisesCompleted || existingProgress.exercisesCompleted,
-          completedAt: status === 'completed' ? new Date() : existingProgress.completedAt
+          exercisesCompleted: resetExercises
+            ? false
+            : exercisesCompleted || existingProgress.exercisesCompleted,
+          completedAt: status === 'completed' ? new Date() : resetExercises ? null : existingProgress.completedAt
         }
       })
     } else {

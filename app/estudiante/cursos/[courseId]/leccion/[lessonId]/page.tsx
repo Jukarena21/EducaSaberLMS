@@ -60,6 +60,12 @@ interface Question {
   orderIndex: number
 }
 
+interface SavedAnswer {
+  questionId: string
+  answer: any
+  isCorrect: boolean
+}
+
 interface CourseData {
   course: {
     id: string
@@ -166,13 +172,25 @@ export default function LessonPage({
       const questionsResponse = await fetch(`/api/student/lessons/${lessonIdParam}/questions`)
       if (questionsResponse.ok) {
         const questionsData = await questionsResponse.json()
-        console.log('[Lesson Page] Preguntas cargadas:', questionsData.length)
-        const typeCounts = questionsData.reduce((acc: Record<string, number>, q: Question) => {
-          acc[q.questionType] = (acc[q.questionType] || 0) + 1
-          return acc
-        }, {})
-        console.log('[Lesson Page] Tipos de preguntas recibidas:', typeCounts)
         foundLesson.questions = questionsData
+      }
+
+      // Recuperar las respuestas ya dadas para que al volver a la lección los
+      // resultados muestren lo que el estudiante respondió y no un panel vacío
+      const answersResponse = await fetch(`/api/student/lessons/${lessonIdParam}/answers`)
+      if (answersResponse.ok) {
+        const savedAnswers: SavedAnswer[] = await answersResponse.json()
+        const indexByQuestionId = new Map(
+          (foundLesson.questions || []).map((question, index) => [question.id, index])
+        )
+        const hydrated: Record<number, any> = {}
+        for (const saved of savedAnswers) {
+          const index = indexByQuestionId.get(saved.questionId)
+          if (index !== undefined && saved.answer !== undefined && saved.answer !== null) {
+            hydrated[index] = saved.answer
+          }
+        }
+        setUserAnswers(hydrated)
       }
 
       // Cargar progreso existente de la lección
@@ -216,6 +234,19 @@ export default function LessonPage({
       ...prev,
       [exerciseId]: answer
     }))
+
+    const question = lesson?.questions?.[exerciseId]
+    if (!question || !lessonIdParam) return
+
+    // Se guarda sin bloquear la interacción: si falla, la respuesta sigue en
+    // pantalla y el siguiente cambio vuelve a intentarlo
+    fetch(`/api/student/lessons/${lessonIdParam}/answers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ questionId: question.id, answer })
+    }).catch(error => {
+      console.error('Error guardando la respuesta:', error)
+    })
   }
 
   const isQuestionAnswered = (questionIndex: number): boolean => {
@@ -264,6 +295,9 @@ export default function LessonPage({
     try {
       if (!lessonIdParam) return
 
+      // Borrar las respuestas guardadas, si no reaparecerían al recargar
+      await fetch(`/api/student/lessons/${lessonIdParam}/answers`, { method: 'DELETE' })
+
       const questionsResponse = await fetch(`/api/student/lessons/${lessonIdParam}/questions`)
       if (questionsResponse.ok) {
         const questionsData = await questionsResponse.json()
@@ -271,12 +305,15 @@ export default function LessonPage({
           setLesson({ ...lesson, questions: questionsData })
         }
       }
-      
+
       // Resetear estado
       setUserAnswers({})
       setCurrentExercise(0)
       setShowResults(false)
       setExercisesCompleted(false)
+
+      // Y el progreso en el servidor, que seguía marcando los ejercicios hechos
+      await updateProgress(videoViewed, theoryViewed, false, 0, 0, true)
     } catch (error) {
       console.error('Error al reiniciar ejercicios:', error)
     }
@@ -310,7 +347,14 @@ export default function LessonPage({
     updateProgress(videoViewed, theoryViewed, true, correctAnswers, lesson.questions.length)
   }
 
-  const updateProgress = async (video: boolean, theory: boolean, exercises: boolean, correctAnswers: number, totalQuestions: number) => {
+  const updateProgress = async (
+    video: boolean,
+    theory: boolean,
+    exercises: boolean,
+    correctAnswers: number,
+    totalQuestions: number,
+    resetExercises = false
+  ) => {
     try {
       if (!lessonIdParam) return
 
@@ -322,7 +366,8 @@ export default function LessonPage({
           theoryViewed: theory,
           exercisesCompleted: exercises,
           correctAnswers,
-          totalQuestions
+          totalQuestions,
+          resetExercises
         })
       })
       

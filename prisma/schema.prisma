@@ -77,6 +77,7 @@ model User {
   createdLiveClasses     LiveClass[]
   studentContentProgress StudentContentProgress[]
   studentLessonProgress  StudentLessonProgress[]
+  studentLessonAnswers   StudentLessonAnswer[]
   studentModuleProgress  StudentModuleProgress[]
   studentCourseProgress  StudentCourseProgress[]
   examResults            ExamResult[]
@@ -309,6 +310,7 @@ model Lesson {
   examQuestions          ExamQuestion[]
   studentContentProgress StudentContentProgress[]
   studentLessonProgress  StudentLessonProgress[]
+  studentLessonAnswers   StudentLessonAnswer[]
   liveClasses            LiveClass[]
 
   createdAt DateTime @default(now())
@@ -370,8 +372,32 @@ model LessonQuestion {
   // Año escolar (opcional, solo para preguntas ICFES)
   academicGrade String? // 'sexto', 'septimo', etc. (opcional, solo para preguntas ICFES)
 
+  studentAnswers StudentLessonAnswer[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Respuestas que el estudiante da a los ejercicios de una lección.
+// Se guardan para poder reconstruir los resultados al volver a entrar.
+model StudentLessonAnswer {
+  id         String         @id @default(cuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId   String
+  lesson     Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questionId String
+  question   LessonQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  // Respuesta serializada: la letra en opción múltiple, JSON en rellenar/emparejar
+  answer    String
+  isCorrect Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, questionId])
+  @@index([userId, lessonId])
 }
 
 model Exam {

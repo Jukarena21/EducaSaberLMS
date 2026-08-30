@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { seededShuffle } from '@/lib/questions/shuffle'
 
 export async function GET(
   request: NextRequest,
@@ -55,25 +56,14 @@ export async function GET(
         questionType: {
           not: 'essay' // Excluir preguntas de ensayo
         }
-      } as any
+      } as any,
+      orderBy: { orderIndex: 'asc' }
     })
 
-    // Log para debugging
-    console.log(`[Questions API] Lección ${lessonId}: ${questions.length} preguntas encontradas`)
-    const typeCounts = questions.reduce((acc, q) => {
-      acc[q.questionType] = (acc[q.questionType] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-    console.log(`[Questions API] Tipos de preguntas:`, typeCounts)
-
-    // Aleatorizar el orden de las preguntas usando Fisher-Yates shuffle
-    const shuffledQuestions = [...questions]
-    for (let i = shuffledQuestions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledQuestions[i], shuffledQuestions[j]] = [shuffledQuestions[j], shuffledQuestions[i]]
-    }
-
-    console.log(`[Questions API] Preguntas aleatorizadas. Primeras 5 tipos:`, shuffledQuestions.slice(0, 5).map(q => q.questionType))
+    // El orden se baraja por estudiante, pero de forma determinista: si cambiara
+    // en cada carga, al volver a la lección las respuestas guardadas aparecerían
+    // en preguntas distintas de las que el estudiante vio.
+    const shuffledQuestions = seededShuffle(questions, `${userId}:${lessonId}`)
 
     return NextResponse.json(shuffledQuestions)
 
