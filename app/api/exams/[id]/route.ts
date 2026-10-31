@@ -36,6 +36,12 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
+    // Esta ruta devuelve respuestas correctas y resultados de todos.
+    // El estudiante tiene /api/student/exams/*; no debe usar esta.
+    if (session.user.role !== 'teacher_admin' && session.user.role !== 'school_admin') {
+      return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
+    }
+
     const { id } = await params
 
     const exam = await prisma.exam.findUnique({

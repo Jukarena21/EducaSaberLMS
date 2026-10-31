@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isExamFeedbackReleased } from '@/lib/examFeedbackPolicy'
+import { regularExamVisibilityWhere, studentEnrolledCourseIds } from '@/lib/exams/studentAccess'
 
 export async function GET(request: NextRequest) {
   try {
@@ -84,12 +85,15 @@ export async function GET(request: NextRequest) {
       }
     }) : []
 
-    // Obtener todos los exámenes publicados normales (incluyendo cerrados y futuros)
+    const enrolledCourseIds = await studentEnrolledCourseIds(userId)
+
+    // Exámenes normales del estudiante: su curso o, si no tiene curso, asignados / globales
     const availableExams = await prisma.exam.findMany({
-      where: {
-        isPublished: true,
-        isManualSimulacro: false // Excluir simulacros manuales (se agregan después)
-      },
+      where: regularExamVisibilityWhere(
+        userId,
+        studentWithGrade?.schoolId ?? null,
+        enrolledCourseIds
+      ),
       include: {
         competency: true,
         course: true,
@@ -193,7 +197,7 @@ export async function GET(request: NextRequest) {
         examType: exam.examType,
         isManualSimulacro: exam.isManualSimulacro || false,
         competency: exam.competency?.name || 'General',
-        course: exam.course?.title || 'General',
+        course: (exam as { course?: { title?: string } | null }).course?.title || 'General',
         timeLimitMinutes: exam.timeLimitMinutes,
         totalQuestions: exam.examQuestions.length,
         passingScore: exam.passingScore,

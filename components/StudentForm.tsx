@@ -40,7 +40,7 @@ interface StudentFormData {
   medicalConditions?: string;
   homeTechnologyAccess?: boolean;
   homeInternetAccess?: boolean;
-  contactPhone?: string;
+  schoolId?: string;
 }
 
 interface StudentFormProps {
@@ -48,6 +48,7 @@ interface StudentFormProps {
   onSubmit: (data: StudentFormData) => Promise<void>;
   onCancel: () => void;
   loading?: boolean;
+  schools?: Array<{ id?: string; name: string }>;
 }
 
 const competencyAreas = [
@@ -67,7 +68,7 @@ const disabilityTypes = [
   'Múltiple'
 ];
 
-export function StudentForm({ student, onSubmit, onCancel, loading = false }: StudentFormProps) {
+export function StudentForm({ student, onSubmit, onCancel, loading = false, schools = [] }: StudentFormProps) {
   const { data: session } = useSession();
   const { toast } = useToast();
   
@@ -98,7 +99,7 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
     medicalConditions: '',
     homeTechnologyAccess: false,
     homeInternetAccess: false,
-    contactPhone: '',
+    schoolId: '',
   });
 
   const isEditing = !!student;
@@ -123,6 +124,7 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
         // Normalizar documentType a minúsculas para que coincida con los valores del Select
         documentType: student.documentType ? student.documentType.toLowerCase() : '',
         documentNumber: student.documentNumber || '',
+        schoolId: student.schoolId || '',
       });
     }
   }, [student]);
@@ -157,6 +159,15 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
       toast({
         title: "Error",
         description: "La contraseña es requerida para nuevos estudiantes",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.schoolId) {
+      toast({
+        title: "Error",
+        description: "Selecciona el colegio del estudiante",
         variant: "destructive",
       });
       return;
@@ -258,6 +269,21 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false }: St
                       value={formData.contactPhone}
                       onChange={(e) => handleInputChange('contactPhone', e.target.value)}
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="schoolId">Colegio *</Label>
+                    <Select value={formData.schoolId || ''} onValueChange={(value) => handleInputChange('schoolId', value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar colegio" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {schools.filter((school) => school.id).map((school) => (
+                          <SelectItem key={school.id} value={school.id!}>
+                            {school.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label htmlFor="academicGrade">Grado Académico</Label>

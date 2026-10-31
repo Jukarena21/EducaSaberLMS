@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { regularExamVisibilityWhere, studentEnrolledCourseIds } from '@/lib/exams/studentAccess'
 
 /**
  * Calcula el puntaje ICFES basado en respuestas individuales a preguntas
@@ -230,11 +231,12 @@ export async function GET(req: NextRequest) {
           select: { schoolId: true }
         })
 
+        const enrolledCourseIds = await studentEnrolledCourseIds(userId)
+
         // Exámenes normales
         const normalExams = await prisma.exam.findMany({
           where: {
-            isPublished: true,
-            isManualSimulacro: false,
+            ...regularExamVisibilityWhere(userId, student?.schoolId ?? null, enrolledCourseIds),
             openDate: { lte: now },
             closeDate: { gte: now },
             examResults: {
@@ -368,13 +370,7 @@ export async function GET(req: NextRequest) {
     )
     // Calcular promedio de puntajes (0-100%) solo de exámenes completados
     const averageScore = examResults.length > 0 
-      ? examResults.reduce((sum, result) => {
-          // Calcular porcentaje: (score / totalQuestions) * 100
-          const percentage = result.totalQuestions > 0 
-            ? (result.score / result.totalQuestions) * 100 
-            : 0
-          return sum + percentage
-        }, 0) / examResults.length
+      ? examResults.reduce((sum, result) => sum + result.score, 0) / examResults.length
       : 0
     
     // Calcular puntaje ICFES (0-500)

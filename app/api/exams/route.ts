@@ -33,6 +33,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
+    if (session.user.role !== 'teacher_admin' && session.user.role !== 'school_admin') {
+      return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
     const examType = searchParams.get('examType')

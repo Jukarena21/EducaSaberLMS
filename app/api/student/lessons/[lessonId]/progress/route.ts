@@ -219,7 +219,7 @@ export async function POST(
             lessonId: {
               in: module.moduleLessons.map(ml => ml.lessonId)
             },
-            status: 'completed'
+            status: { in: ['completed', 'completado'] }
           }
         })
 

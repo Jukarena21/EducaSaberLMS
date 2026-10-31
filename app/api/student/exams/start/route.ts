@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getQuestionAreaLabel } from '@/lib/icfesAreas'
+import { studentCanStartRegularExam } from '@/lib/exams/studentAccess'
 
 const sortQuestionsByArea = (questions: any[]) => {
   return [...questions].sort((a, b) => {
@@ -107,6 +108,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Examen ya cerró' }, { status: 400 })
       }
     } else {
+      const student = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { schoolId: true },
+      })
+      const allowed = await studentCanStartRegularExam(userId, student?.schoolId ?? null, exam)
+      if (!allowed) {
+        return NextResponse.json(
+          { error: 'Este examen no está disponible para ti' },
+          { status: 403 }
+        )
+      }
+
       // Para exámenes normales, verificar fechas del examen
       const now = new Date()
       if (exam.openDate && exam.openDate > now) {

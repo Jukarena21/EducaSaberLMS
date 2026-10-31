@@ -1348,16 +1348,16 @@ export function StudentsManagement() {
 
       {/* Student Form Modal - Only for Teacher Admins */}
       {session?.user?.role === 'teacher_admin' && showAddUser && (
-        <StudentForm 
+        <StudentForm
+          schools={schools}
           onSubmit={async (data) => {
-            // Crear estudiante con colegio asignado automáticamente
             const response = await fetch('/api/users', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 ...data, 
                 role: 'student',
-                schoolId: session?.user?.schoolId // Asignar automáticamente el colegio del admin
+                schoolId: data.schoolId
               })
             });
             
@@ -1375,16 +1375,16 @@ export function StudentsManagement() {
       {session?.user?.role === 'teacher_admin' && editingUser && (
         <>
           {console.log('🔧 Renderizando modal de edición para:', editingUser)}
-          <StudentForm 
+          <StudentForm
             student={editingUser}
+            schools={schools}
           onSubmit={async (data) => {
-            // Actualizar estudiante (mantener el colegio asignado)
             const response = await fetch(`/api/users/${editingUser.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 ...data,
-                schoolId: session?.user?.schoolId // Mantener el colegio del admin
+                schoolId: data.schoolId || editingUser.schoolId
               })
             });
             

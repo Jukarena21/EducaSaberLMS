@@ -114,6 +114,13 @@ export async function POST(req: NextRequest) {
     const file = form.get('file') as File | null
     if (!file || !type) return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 })
 
+    if (session.user.role === 'school_admin' && type !== 'students') {
+      return NextResponse.json(
+        { error: 'Desde un colegio solo puedes importar estudiantes' },
+        { status: 403 }
+      )
+    }
+
     // Detectar tipo de archivo
     const fileName = file.name.toLowerCase()
     const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls')

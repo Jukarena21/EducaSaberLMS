@@ -205,6 +205,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (role === 'student' && !schoolId) {
+      return NextResponse.json(
+        { error: 'El estudiante debe pertenecer a un colegio' },
+        { status: 400 }
+      )
+    }
+
     // School admins can only create students and school_admin users for their school
     if (session.user?.role === 'school_admin') {
       if (role === 'teacher_admin') {

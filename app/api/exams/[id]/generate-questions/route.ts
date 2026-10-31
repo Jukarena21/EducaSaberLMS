@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { requireRole } from '@/lib/rbac'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(
@@ -8,7 +9,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
+    const gate = await requireRole(['teacher_admin', 'school_admin'])
+    if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
+
+    const session = gate.session
     if (!session?.user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
@@ -45,6 +49,19 @@ export async function POST(
 
     if (!exam) {
       return NextResponse.json({ error: 'Examen no encontrado' }, { status: 404 })
+    }
+
+    if (session.user.role === 'school_admin' && session.user.schoolId) {
+      if (!exam.courseId) {
+        return NextResponse.json({ error: 'No tienes permisos para modificar este examen' }, { status: 403 })
+      }
+      const courseSchool = await prisma.courseSchool.findFirst({
+        where: { courseId: exam.courseId, schoolId: session.user.schoolId },
+        select: { id: true },
+      })
+      if (!courseSchool) {
+        return NextResponse.json({ error: 'No tienes permisos para modificar este examen' }, { status: 403 })
+      }
     }
 
     // Eliminar preguntas existentes del examen
