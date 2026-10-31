@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { StudentDetailModal } from "@/components/StudentDetailModal"
 import { useAnalytics } from "@/hooks/useAnalytics"
 import { useCoursesBySchool } from "@/hooks/useCoursesBySchool"
+import { academicGradesEqual } from "@/lib/academicGrades"
 import {
   Users,
   FileText,
@@ -286,7 +287,7 @@ export function AnalyticsTab({
       const emailMatch = student.studentEmail?.toLowerCase().includes(searchLower) || false
       if (!nameMatch && !emailMatch) return false
     }
-    if (filterGrade !== 'all' && student.academicGrade !== filterGrade) return false
+    if (filterGrade !== 'all' && !academicGradesEqual(student.academicGrade, filterGrade)) return false
     return true
   }
 

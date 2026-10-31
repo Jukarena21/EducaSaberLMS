@@ -20,6 +20,7 @@ import { StudentForm } from './StudentForm';
 import { useSession } from 'next-auth/react';
 import { UserFilters } from '@/types/user';
 import { formatDate } from '@/lib/utils';
+import { SECONDARY_GRADES, academicGradesEqual, getAcademicGradeDisplayName, normalizeAcademicGrade } from '@/lib/academicGrades';
 import { 
   Plus, 
   Search, 
@@ -139,15 +140,11 @@ export function StudentsManagement() {
     // Filtro por grado
     if (filters.academicGrade) {
       if (filters.academicGrade === 'none') {
-        // Sin grado asignado
-        if ((student as any).academicGrade) {
+        if (normalizeAcademicGrade((student as any).academicGrade)) {
           return false;
         }
-      } else {
-        // Grado específico
-        if ((student as any).academicGrade !== filters.academicGrade) {
-          return false;
-        }
+      } else if (!academicGradesEqual((student as any).academicGrade, filters.academicGrade)) {
+        return false;
       }
     }
     
@@ -264,26 +261,11 @@ export function StudentsManagement() {
   };
 
   const getGradeBadge = (grade?: string) => {
-    if (!grade) return <Badge className="bg-gray-100 text-gray-800">Sin grado</Badge>;
-    const normalized = grade.toString();
-    const gradeColors: { [key: string]: string } = {
-      '6': 'bg-blue-100 text-blue-800',
-      '7': 'bg-indigo-100 text-indigo-800',
-      '8': 'bg-purple-100 text-purple-800',
-      '9': 'bg-pink-100 text-pink-800',
-      '10': 'bg-red-100 text-red-800',
-      '11': 'bg-orange-100 text-orange-800',
-      'sexto': 'bg-blue-100 text-blue-800',
-      'septimo': 'bg-indigo-100 text-indigo-800',
-      'octavo': 'bg-purple-100 text-purple-800',
-      'noveno': 'bg-pink-100 text-pink-800',
-      'decimo': 'bg-red-100 text-red-800',
-      'once': 'bg-orange-100 text-orange-800',
-    };
-    
+    const canonical = normalizeAcademicGrade(grade)
+    if (!canonical) return <Badge className="bg-gray-100 text-gray-800">Sin grado</Badge>;
     return (
-      <Badge className={gradeColors[normalized] || 'bg-gray-100 text-gray-800'}>
-        Grado {normalized}
+      <Badge className="bg-blue-100 text-blue-800">
+        {getAcademicGradeDisplayName(canonical)}
       </Badge>
     );
   };
@@ -362,9 +344,9 @@ export function StudentsManagement() {
         // Filtro por grado
         if (filters.academicGrade) {
           if (filters.academicGrade === 'none') {
-            if (student.academicGrade) return false;
-          } else {
-            if (student.academicGrade !== filters.academicGrade) return false;
+            if (normalizeAcademicGrade(student.academicGrade)) return false;
+          } else if (!academicGradesEqual(student.academicGrade, filters.academicGrade)) {
+            return false;
           }
         }
         
@@ -901,12 +883,11 @@ export function StudentsManagement() {
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="none">Sin grado</SelectItem>
-                  <SelectItem value="6">Grado 6</SelectItem>
-                  <SelectItem value="7">Grado 7</SelectItem>
-                  <SelectItem value="8">Grado 8</SelectItem>
-                  <SelectItem value="9">Grado 9</SelectItem>
-                  <SelectItem value="10">Grado 10</SelectItem>
-                  <SelectItem value="11">Grado 11</SelectItem>
+                  {SECONDARY_GRADES.map((grade) => (
+                    <SelectItem key={grade} value={grade}>
+                      {getAcademicGradeDisplayName(grade)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -1580,12 +1561,11 @@ export function StudentsManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sin grado</SelectItem>
-                    <SelectItem value="6">Grado 6</SelectItem>
-                    <SelectItem value="7">Grado 7</SelectItem>
-                    <SelectItem value="8">Grado 8</SelectItem>
-                    <SelectItem value="9">Grado 9</SelectItem>
-                    <SelectItem value="10">Grado 10</SelectItem>
-                    <SelectItem value="11">Grado 11</SelectItem>
+                    {SECONDARY_GRADES.map((grade) => (
+                      <SelectItem key={grade} value={grade}>
+                        {getAcademicGradeDisplayName(grade)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

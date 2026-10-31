@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { academicGradeAliases } from '@/lib/academicGrades'
 
 /** Grado del estudiante: query > perfil (User.academicGrade) > último curso inscrito */
 function resolveStudentTargetGrade(
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
         AND: [
           {
             OR: [
-              { academicGrade: targetGrade },
+              { academicGrade: { in: academicGradeAliases(targetGrade) } },
               { academicGrade: null }
             ]
           },

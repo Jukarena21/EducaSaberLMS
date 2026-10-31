@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useSession } from 'next-auth/react';
 import { X, Save, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { SECONDARY_GRADES, getAcademicGradeDisplayName, normalizeAcademicGrade } from '@/lib/academicGrades';
 
 interface StudentFormData {
   email: string;
@@ -113,7 +114,7 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false, scho
         areasOfStrength: student.areasOfStrength || [],
         disabilities: student.disabilities || [],
         contactPhone: student.contactPhone || student.phone || '',
-        academicGrade: student.academicGrade ?? '',
+        academicGrade: normalizeAcademicGrade(student.academicGrade) ?? '',
         specialEducationalNeeds: student.specialEducationalNeeds ?? '',
         medicalConditions: student.medicalConditions ?? '',
         schoolSchedule: student.schoolSchedule ?? '',
@@ -292,12 +293,11 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false, scho
                         <SelectValue placeholder="Seleccionar grado" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="6">Grado 6</SelectItem>
-                        <SelectItem value="7">Grado 7</SelectItem>
-                        <SelectItem value="8">Grado 8</SelectItem>
-                        <SelectItem value="9">Grado 9</SelectItem>
-                        <SelectItem value="10">Grado 10</SelectItem>
-                        <SelectItem value="11">Grado 11</SelectItem>
+                        {SECONDARY_GRADES.map((grade) => (
+                          <SelectItem key={grade} value={grade}>
+                            {getAcademicGradeDisplayName(grade)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

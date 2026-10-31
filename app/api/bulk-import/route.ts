@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import * as XLSX from 'xlsx'
 import bcrypt from 'bcryptjs'
+import { normalizeAcademicGrade } from '@/lib/academicGrades'
 
 type ImportType = 'students' | 'schools' | 'lessons' | 'questions'
 
@@ -256,7 +257,7 @@ export async function POST(req: NextRequest) {
               housingType: r.housingtype || undefined,
               // Educativa
               schoolId: finalSchoolId,
-              academicGrade: r.academicgrade || undefined,
+              academicGrade: normalizeAcademicGrade(r.academicgrade) || undefined,
               schoolEntryYear: parseIntOrU(r.schoolentryyear) as any,
               academicAverage: parseFloatOrU(r.academicaverage) as any,
               areasOfDifficulty: r.areasofdifficulty || undefined,
@@ -287,7 +288,7 @@ export async function POST(req: NextRequest) {
               socioeconomicStratum: parseIntOrU(r.socioeconomicstratum) as any,
               housingType: r.housingtype || undefined,
               schoolId: finalSchoolId,
-              academicGrade: r.academicgrade || undefined,
+              academicGrade: normalizeAcademicGrade(r.academicgrade) || undefined,
               schoolEntryYear: parseIntOrU(r.schoolentryyear) as any,
               academicAverage: parseFloatOrU(r.academicaverage) as any,
               areasOfDifficulty: r.areasofdifficulty || undefined,

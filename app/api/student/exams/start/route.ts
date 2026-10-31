@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getQuestionAreaLabel } from '@/lib/icfesAreas'
 import { studentCanStartRegularExam } from '@/lib/exams/studentAccess'
+import { academicGradeAliases } from '@/lib/academicGrades'
 
 const sortQuestionsByArea = (questions: any[]) => {
   return [...questions].sort((a, b) => {
@@ -83,7 +84,9 @@ export async function POST(request: NextRequest) {
         where: {
           examId,
           schoolId: student.schoolId,
-          academicGrade: student.academicGrade || undefined, // Filtrar por año escolar del estudiante
+          academicGrade: student.academicGrade
+            ? { in: academicGradeAliases(student.academicGrade) }
+            : undefined,
           isActive: true
         }
       }) : null

@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { academicGradeAliases, academicGradesEqual, normalizeAcademicGrade } from '@/lib/academicGrades'
 
 // GET /api/users/[id] - Get specific user
 export async function GET(
@@ -195,7 +196,7 @@ export async function PUT(
       lastName: lastName || existingUser.lastName,
       role: role || existingUser.role,
       schoolId: schoolId || existingUser.schoolId,
-      academicGrade: academicGrade !== undefined ? academicGrade : existingUser.academicGrade,
+      academicGrade: academicGrade !== undefined ? normalizeAcademicGrade(academicGrade) : existingUser.academicGrade,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : existingUser.dateOfBirth,
       gender: gender !== undefined ? gender : existingUser.gender,
       documentType: documentType !== undefined ? documentType : existingUser.documentType,
@@ -305,7 +306,7 @@ export async function PUT(
           .sort((a, b) => b[1] - a[1])[0]?.[0] // Grado más común
 
         // Si el grado cambió o es la primera vez que se asigna
-        if (currentGrade !== academicGrade) {
+        if (!academicGradesEqual(currentGrade, academicGrade)) {
           // 1. DESACTIVAR cursos ICFES del grado anterior (si existe)
           if (currentGrade) {
             const coursesToDeactivate = icfesEnrollments
@@ -332,7 +333,7 @@ export async function PUT(
             where: {
               isIcfesCourse: true,
               isPublished: true,
-              academicGrade: academicGrade,
+              academicGrade: { in: academicGradeAliases(academicGrade) },
             },
             select: {
               id: true,

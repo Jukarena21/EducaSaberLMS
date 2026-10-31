@@ -123,6 +123,7 @@ export async function GET(request: NextRequest) {
         if (examWhere.courseId && result.exam.courseId !== examWhere.courseId) return
         if (examWhere.competencyId && result.exam.competencyId !== examWhere.competencyId) return
         if (examWhere.title && !result.exam.title.toLowerCase().includes(search.toLowerCase())) return
+        if (examWhere.isIcfesExam !== undefined && result.exam.isIcfesExam !== examWhere.isIcfesExam) return
       }
 
       const examId = result.examId

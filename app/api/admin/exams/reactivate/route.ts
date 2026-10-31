@@ -27,7 +27,6 @@ export async function POST(request: NextRequest) {
       const allResults = await prisma.examResult.findMany({
         where: {
           examId: examId,
-          score: { gt: 0 },
           completedAt: { not: null }
         },
         select: { id: true }

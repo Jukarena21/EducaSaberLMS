@@ -11,6 +11,7 @@
 
 import type { Prisma } from '@prisma/client'
 import { colombiaDay } from '@/lib/studyTime'
+import { academicGradeAliases } from '@/lib/academicGrades'
 
 export type AnalyticsFilters = {
   from: Date
@@ -133,18 +134,20 @@ export function examResultWhere(filters: AnalyticsFilters): Prisma.ExamResultWhe
   if (Object.keys(examWhere).length > 0) where.exam = examWhere
 
   if (filters.academicGrade) {
-    const grade = filters.academicGrade
-    where.AND = [
-      {
-        OR: [
-          { user: { academicGrade: grade } },
-          {
-            user: { academicGrade: null },
-            exam: { OR: [{ academicGrade: grade }, { course: { academicGrade: grade } }] },
-          },
-        ],
-      },
-    ]
+    const grades = academicGradeAliases(filters.academicGrade)
+    if (grades.length > 0) {
+      where.AND = [
+        {
+          OR: [
+            { user: { academicGrade: { in: grades } } },
+            {
+              user: { academicGrade: null },
+              exam: { OR: [{ academicGrade: { in: grades } }, { course: { academicGrade: { in: grades } } }] },
+            },
+          ],
+        },
+      ]
+    }
   }
 
   return where
@@ -169,24 +172,26 @@ export function lessonProgressWhere(
   if (Object.keys(lessonWhere).length > 0) where.lesson = lessonWhere
 
   if (filters.academicGrade) {
-    const grade = filters.academicGrade
-    where.AND = [
-      {
-        OR: [
-          { user: { academicGrade: grade } },
-          {
-            user: { academicGrade: null },
-            lesson: {
-              moduleLessons: {
-                some: {
-                  module: { courseModules: { some: { course: { academicGrade: grade } } } },
+    const grades = academicGradeAliases(filters.academicGrade)
+    if (grades.length > 0) {
+      where.AND = [
+        {
+          OR: [
+            { user: { academicGrade: { in: grades } } },
+            {
+              user: { academicGrade: null },
+              lesson: {
+                moduleLessons: {
+                  some: {
+                    module: { courseModules: { some: { course: { academicGrade: { in: grades } } } } },
+                  },
                 },
               },
             },
-          },
-        ],
-      },
-    ]
+          ],
+        },
+      ]
+    }
   }
 
   return where
@@ -211,24 +216,26 @@ export function lessonStudyTimeWhere(
   if (Object.keys(lessonWhere).length > 0) where.lesson = lessonWhere
 
   if (filters.academicGrade) {
-    const grade = filters.academicGrade
-    where.AND = [
-      {
-        OR: [
-          { user: { academicGrade: grade } },
-          {
-            user: { academicGrade: null },
-            lesson: {
-              moduleLessons: {
-                some: {
-                  module: { courseModules: { some: { course: { academicGrade: grade } } } },
+    const grades = academicGradeAliases(filters.academicGrade)
+    if (grades.length > 0) {
+      where.AND = [
+        {
+          OR: [
+            { user: { academicGrade: { in: grades } } },
+            {
+              user: { academicGrade: null },
+              lesson: {
+                moduleLessons: {
+                  some: {
+                    module: { courseModules: { some: { course: { academicGrade: { in: grades } } } } },
+                  },
                 },
               },
             },
-          },
-        ],
-      },
-    ]
+          ],
+        },
+      ]
+    }
   }
 
   return where

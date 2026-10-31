@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { academicGradeAliases, normalizeAcademicGrade } from '@/lib/academicGrades'
 
 // GET /api/users - List users with filtering and pagination
 export async function GET(request: NextRequest) {
@@ -252,7 +253,7 @@ export async function POST(request: NextRequest) {
         lastName,
         role,
         schoolId: schoolId || null,
-        academicGrade: academicGrade || null,
+        academicGrade: normalizeAcademicGrade(academicGrade),
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         gender,
         documentType,
@@ -317,14 +318,15 @@ export async function POST(request: NextRequest) {
     })
 
     // Si es un estudiante y tiene academicGrade, asignar automáticamente todos los cursos ICFES de ese grado
-    if (role === 'student' && academicGrade) {
+    const studentGrade = normalizeAcademicGrade(academicGrade)
+    if (role === 'student' && studentGrade) {
       try {
         // Buscar todos los cursos ICFES activos del grado especificado
         const coursesToEnroll = await prisma.course.findMany({
           where: {
             isIcfesCourse: true,
             isPublished: true,
-            academicGrade: academicGrade,
+            academicGrade: { in: academicGradeAliases(studentGrade) },
             // Si el estudiante tiene schoolId, solo asignar cursos de ese colegio (si aplica)
             // Nota: Los cursos pueden estar asociados a múltiples colegios o ser globales
           },

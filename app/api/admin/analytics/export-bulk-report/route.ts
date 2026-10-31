@@ -7,6 +7,7 @@ import path from 'path'
 import Handlebars from 'handlebars'
 import type { Prisma } from '@prisma/client'
 import { resolveAnalyticsFilters, studentWhere } from '@/lib/analytics/filters'
+import { academicGradeAliases } from '@/lib/academicGrades'
 import { buildStudentDetail } from '@/lib/analytics/studentDetail'
 
 
@@ -301,13 +302,15 @@ export async function POST(request: NextRequest) {
     // de colegios, así que deja por fuera a quien no pertenece a uno.
     const and: Prisma.UserWhereInput[] = [studentWhere(filters), { school: { type: 'school' } }]
     if (filters.academicGrade) {
-      const grade = filters.academicGrade
-      and.push({
-        OR: [
-          { academicGrade: grade },
-          { academicGrade: null, courseEnrollments: { some: { course: { academicGrade: grade } } } },
-        ],
-      })
+      const grades = academicGradeAliases(filters.academicGrade)
+      if (grades.length > 0) {
+        and.push({
+          OR: [
+            { academicGrade: { in: grades } },
+            { academicGrade: null, courseEnrollments: { some: { course: { academicGrade: { in: grades } } } } },
+          ],
+        })
+      }
     }
     if (filters.courseId) {
       and.push({ courseEnrollments: { some: { courseId: filters.courseId } } })

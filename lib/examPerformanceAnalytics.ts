@@ -89,9 +89,7 @@ function averageScoresByArea(
   areaIds: string[]
 ): ScoreByArea[] {
   return areaIds.map((areaId) => {
-    const exams = examResults.filter(
-      (r) => r.exam.competencyId === areaId && r.score > 0
-    )
+    const exams = examResults.filter((r) => r.exam.competencyId === areaId)
     const avgScore =
       exams.length > 0
         ? exams.reduce((sum, e) => sum + e.score, 0) / exams.length
@@ -303,7 +301,7 @@ export async function getAreaRadarComparison(
   const [studentExamResults, schoolExamResults, platformExamResults] =
     await Promise.all([
       prisma.examResult.findMany({
-        where: { userId, completedAt: { not: null }, score: { gt: 0 } },
+        where: { userId, completedAt: { not: null } },
         select: { score: true, exam: { select: { competencyId: true } } },
       }),
       schoolId
@@ -311,13 +309,12 @@ export async function getAreaRadarComparison(
             where: {
               user: { schoolId },
               completedAt: { not: null },
-              score: { gt: 0 },
             },
             select: { score: true, exam: { select: { competencyId: true } } },
           })
         : Promise.resolve([]),
       prisma.examResult.findMany({
-        where: { completedAt: { not: null }, score: { gt: 0 } },
+        where: { completedAt: { not: null } },
         select: { score: true, exam: { select: { competencyId: true } } },
         take: 10000,
       }),

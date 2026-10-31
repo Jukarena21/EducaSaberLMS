@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isExamFeedbackReleased } from '@/lib/examFeedbackPolicy'
 import { regularExamVisibilityWhere, studentEnrolledCourseIds } from '@/lib/exams/studentAccess'
+import { academicGradeAliases } from '@/lib/academicGrades'
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,7 +62,9 @@ export async function GET(request: NextRequest) {
     const schoolManualSimulacros = studentWithGrade?.schoolId ? await prisma.examSchool.findMany({
       where: {
         schoolId: studentWithGrade.schoolId,
-        academicGrade: studentWithGrade.academicGrade || undefined, // Filtrar por año escolar del estudiante
+        academicGrade: studentWithGrade.academicGrade
+          ? { in: academicGradeAliases(studentWithGrade.academicGrade) }
+          : undefined,
         isActive: true,
         exam: {
           isManualSimulacro: true,

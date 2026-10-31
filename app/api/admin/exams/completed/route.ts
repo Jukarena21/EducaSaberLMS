@@ -42,7 +42,6 @@ export async function GET(request: NextRequest) {
 
     // Construir filtros
     let whereClause: any = {
-      score: { gt: 0 }, // Solo exámenes completados
       completedAt: { not: null }
     }
 
@@ -148,7 +147,6 @@ export async function GET(request: NextRequest) {
       // Consulta mínima que sabemos que funciona
       examResults = await prisma.examResult.findMany({
         where: {
-          score: { gt: 0 },
           completedAt: { not: null }
         },
         include: {
@@ -180,7 +178,6 @@ export async function GET(request: NextRequest) {
 
       total = await prisma.examResult.count({
         where: {
-          score: { gt: 0 },
           completedAt: { not: null }
         }
       })

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { regularExamVisibilityWhere, studentEnrolledCourseIds } from '@/lib/exams/studentAccess'
+import { academicGradeAliases } from '@/lib/academicGrades'
 
 /**
  * Calcula el puntaje ICFES basado en respuestas individuales a preguntas
@@ -228,7 +229,7 @@ export async function GET(req: NextRequest) {
         // Obtener información del estudiante
         const student = await prisma.user.findUnique({
           where: { id: userId },
-          select: { schoolId: true }
+          select: { schoolId: true, academicGrade: true }
         })
 
         const enrolledCourseIds = await studentEnrolledCourseIds(userId)
@@ -285,6 +286,9 @@ export async function GET(req: NextRequest) {
           where: {
             schoolId: student.schoolId,
             isActive: true,
+            academicGrade: student.academicGrade
+              ? { in: academicGradeAliases(student.academicGrade) }
+              : undefined,
             exam: {
               isManualSimulacro: true,
               isPublished: true
