@@ -164,12 +164,14 @@ export function StudentDetailModal({ studentId, isOpen, onClose }: StudentDetail
                   studentMetrics.status === 'excelente' ? 'bg-green-500 text-white' :
                   studentMetrics.status === 'bueno' ? 'bg-blue-500 text-white' :
                   studentMetrics.status === 'mejorable' ? 'bg-yellow-500 text-white' :
-                  'bg-red-500 text-white'
+                  studentMetrics.status === 'requiere_atencion' ? 'bg-red-500 text-white' :
+                  'bg-gray-500 text-white'
                 }>
                   {studentMetrics.status === 'excelente' ? 'Excelente' :
                    studentMetrics.status === 'bueno' ? 'Bueno' :
                    studentMetrics.status === 'mejorable' ? 'Mejorable' :
-                   'Requiere Atención'}
+                   studentMetrics.status === 'requiere_atencion' ? 'Requiere Atención' :
+                   'Sin exámenes'}
                 </Badge>
               )}
               <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
