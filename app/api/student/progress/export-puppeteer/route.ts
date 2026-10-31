@@ -796,7 +796,8 @@ export async function POST(request: NextRequest) {
     const totalLessonsCompleted = finalCoursesData?.reduce((acc: number, c: any) => acc + (c.completedLessons || 0), 0) || 0
     const totalTimeSpentMinutes = finalCoursesData?.reduce((acc: number, c: any) => acc + (c.timeSpentMinutes || 0), 0) || 0
     const totalTimeSpent = Math.round(totalTimeSpentMinutes / 60)
-    const totalTimeHours = Math.round(totalTimeSpentMinutes / 60 * 10) / 10
+    const examTimeMinutes = examResults.reduce((acc, er) => acc + (er.timeTakenMinutes || 0), 0)
+    const totalTimeHours = Math.round((totalTimeSpentMinutes + examTimeMinutes) / 60 * 10) / 10
     const averageProgress = finalCoursesData?.length > 0 
       ? Math.round(finalCoursesData.reduce((acc: number, c: any) => acc + (c.progressPercentage || 0), 0) / finalCoursesData.length)
       : 0

@@ -22,6 +22,7 @@ import {
 import { QuestionRenderer } from "@/components/QuestionRenderer"
 import { StudentHeader } from "@/components/StudentHeader"
 import { LessonContentViewer } from "@/components/LessonContentViewer"
+import { useLessonStudyTime } from "@/hooks/useLessonStudyTime"
 import { isMatchingAnswerCorrect, isMatchingAnswerComplete } from "@/lib/questions/matching"
 import { isFillBlankAnswerCorrect, isFillBlankAnswerComplete } from "@/lib/questions/fillBlank"
 
@@ -108,6 +109,8 @@ export default function LessonPage({
   const [videoViewed, setVideoViewed] = useState(false)
   const [theoryViewed, setTheoryViewed] = useState(false)
   const [exercisesCompleted, setExercisesCompleted] = useState(false)
+
+  useLessonStudyTime(lesson?.id, activeTab, !!lesson)
 
   // Efecto para detectar cuando se ve el video
   useEffect(() => {

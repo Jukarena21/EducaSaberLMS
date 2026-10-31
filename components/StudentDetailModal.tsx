@@ -247,7 +247,9 @@ export function StudentDetailModal({ studentId, isOpen, onClose }: StudentDetail
                       {(studentMetrics.totalStudyTimeHours || 0).toFixed(1)}h
                     </div>
                     <div className="text-sm font-medium text-purple-600">Tiempo de Estudio</div>
-                    <div className="text-xs text-purple-500 mt-1">Horas totales</div>
+                    <div className="text-xs text-purple-500 mt-1">
+                      Lecciones {(studentMetrics.lessonStudyTimeHours || 0).toFixed(1)}h · Exámenes {(studentMetrics.examStudyTimeHours || 0).toFixed(1)}h
+                    </div>
                   </CardContent>
                 </Card>
 

@@ -78,6 +78,7 @@ model User {
   studentContentProgress StudentContentProgress[]
   studentLessonProgress  StudentLessonProgress[]
   studentLessonAnswers   StudentLessonAnswer[]
+  lessonStudyTimes       LessonStudyTime[]
   studentModuleProgress  StudentModuleProgress[]
   studentCourseProgress  StudentCourseProgress[]
   examResults            ExamResult[]
@@ -311,6 +312,7 @@ model Lesson {
   studentContentProgress StudentContentProgress[]
   studentLessonProgress  StudentLessonProgress[]
   studentLessonAnswers   StudentLessonAnswer[]
+  lessonStudyTimes       LessonStudyTime[]
   liveClasses            LiveClass[]
 
   createdAt DateTime @default(now())
@@ -398,6 +400,25 @@ model StudentLessonAnswer {
 
   @@unique([userId, questionId])
   @@index([userId, lessonId])
+}
+
+// Tiempo activo de estudio en una lección, acumulado por día (hora Colombia)
+// y por sección. Permite filtrar el tiempo de estudio por período.
+model LessonStudyTime {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId String
+  lesson   Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  section  String // 'video', 'theory', 'exercises'
+  day      DateTime @db.Date
+  seconds  Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, lessonId, section, day])
+  @@index([day])
 }
 
 model Exam {

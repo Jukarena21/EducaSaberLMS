@@ -10,6 +10,7 @@ import {
 } from '@/lib/examAnswerValidation'
 import { isMatchingAnswerCorrect } from '@/lib/questions/matching'
 import { isFillBlankAnswerCorrect } from '@/lib/questions/fillBlank'
+import { activeExamMinutes } from '@/lib/studyTime'
 
 export async function POST(
   request: NextRequest,
@@ -217,13 +218,13 @@ export async function POST(
     const score = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0
     const isPassed = score >= (result.exam.passingScore || 70) // Usar passingScore del examen
 
-    // Calcular tiempo transcurrido (en minutos)
+    // Tiempo dedicado: suma del tiempo activo por pregunta. Si no hay registro
+    // (intentos antiguos), se usa el tiempo de reloj limitado al del examen.
     const elapsedMinutes = Math.floor((Date.now() - result.startedAt.getTime()) / 60000)
-    
-    // Limitar el tiempo registrado al tiempo límite del examen
-    // Si el estudiante sale y vuelve, el tiempo máximo será el tiempo estimado del examen
     const timeLimitMinutes = result.exam.timeLimitMinutes || 60 // Default 60 minutos si no está definido
-    const timeTakenMinutes = Math.min(elapsedMinutes, timeLimitMinutes)
+    const timeTakenMinutes =
+      activeExamMinutes(answers.map((a) => a.timeSpentSeconds)) ??
+      Math.min(elapsedMinutes, timeLimitMinutes)
 
     // Preparar datos de actualización
     const updateData: any = {

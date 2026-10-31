@@ -111,6 +111,7 @@ async function computeDetail(student: {
         completedAt: true,
         totalQuestions: true,
         correctAnswers: true,
+        timeTakenMinutes: true,
         exam: {
           select: {
             title: true,
@@ -139,8 +140,13 @@ async function computeDetail(student: {
   const completedLessons = new Set(
     lessonProgress.filter((lp) => COMPLETED_LESSON_STATUSES.includes(lp.status)).map((lp) => lp.lessonId)
   )
+  const lessonMinutes = new Map(lessonProgress.map((lp) => [lp.lessonId, lp.totalTimeMinutes || 0]))
   const coursesDetail = enrollments.map((enrollment) => {
     const progress = courseProgress(enrollment, completedLessons)
+    const courseLessonIds = new Set(
+      enrollment.course.courseModules.flatMap((cm) => cm.module.moduleLessons.map((ml) => ml.lessonId))
+    )
+    const courseMinutes = Array.from(courseLessonIds).reduce((sum, id) => sum + (lessonMinutes.get(id) || 0), 0)
     return {
       courseId: enrollment.course.id,
       courseTitle: enrollment.course.title,
@@ -150,7 +156,7 @@ async function computeDetail(student: {
       progressPercentage: progress.progressPercentage,
       completedLessons: progress.completedLessons,
       totalLessons: progress.totalLessons,
-      timeSpentHours: 0,
+      timeSpentHours: round1(courseMinutes / 60),
       isActive: true,
     }
   })
@@ -203,7 +209,9 @@ async function computeDetail(student: {
     correctAnswers: er.correctAnswers || 0,
   }))
 
-  const totalStudyTimeMinutes = lessonProgress.reduce((sum, lp) => sum + (lp.totalTimeMinutes || 0), 0)
+  const lessonStudyMinutes = lessonProgress.reduce((sum, lp) => sum + (lp.totalTimeMinutes || 0), 0)
+  const examStudyMinutes = examResults.reduce((sum, er) => sum + (er.timeTakenMinutes || 0), 0)
+  const totalStudyTimeMinutes = lessonStudyMinutes + examStudyMinutes
 
   return {
     studentId: student.id,
@@ -216,6 +224,8 @@ async function computeDetail(student: {
     lastActivity: lastActivity?.toISOString() ?? null,
 
     totalStudyTimeHours: round1(totalStudyTimeMinutes / 60),
+    lessonStudyTimeHours: round1(lessonStudyMinutes / 60),
+    examStudyTimeHours: round1(examStudyMinutes / 60),
     averageCourseProgress: coursesDetail.length > 0
       ? round1(coursesDetail.reduce((sum, c) => sum + c.progressPercentage, 0) / coursesDetail.length)
       : 0,

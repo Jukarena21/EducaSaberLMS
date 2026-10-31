@@ -4,9 +4,11 @@ import { prisma } from '@/lib/prisma'
 import {
   examResultWhere,
   lessonProgressWhere,
+  lessonStudyTimeWhere,
   resolveAnalyticsFilters,
   studentWhere,
 } from '@/lib/analytics/filters'
+import { lessonStudySecondsByUser } from '@/lib/studyTime'
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,7 +26,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const filters = resolveAnalyticsFilters(searchParams, gate.session.user)
 
-    const [lessonProgress, examTime, examStudents] = await Promise.all([
+    const [lessonProgress, examTime, examStudents, lessonSecondsByUser, examMinutesByUser] = await Promise.all([
       prisma.studentLessonProgress.findMany({
         where: lessonProgressWhere(filters),
         select: { userId: true, lessonId: true, status: true, progressPercentage: true, updatedAt: true },
@@ -39,7 +41,26 @@ export async function GET(request: NextRequest) {
         select: { userId: true },
         distinct: ['userId'],
       }),
+      lessonStudySecondsByUser(lessonStudyTimeWhere(filters)),
+      prisma.examResult.groupBy({
+        by: ['userId'],
+        where: examResultWhere(filters),
+        _sum: { timeTakenMinutes: true },
+      }),
     ])
+
+    // Tiempo de estudio = lecciones + exámenes, en minutos por estudiante
+    const studyMinutesByUser = new Map<string, number>()
+    lessonSecondsByUser.forEach((seconds, userId) => {
+      studyMinutesByUser.set(userId, seconds / 60)
+    })
+    examMinutesByUser.forEach((row) => {
+      const minutes = row._sum.timeTakenMinutes || 0
+      studyMinutesByUser.set(row.userId, (studyMinutesByUser.get(row.userId) || 0) + minutes)
+    })
+    const lessonStudyMinutes = Array.from(lessonSecondsByUser.values()).reduce((a, b) => a + b, 0) / 60
+    const totalStudyMinutes = Array.from(studyMinutesByUser.values()).reduce((a, b) => a + b, 0)
+    const studentsWithStudyTime = Array.from(studyMinutesByUser.values()).filter((m) => m > 0).length
 
     const completedProgress = lessonProgress.filter((lp) => lp.status === 'completed')
     const totalLessonsCompleted = completedProgress.length
@@ -62,6 +83,10 @@ export async function GET(request: NextRequest) {
       totalLessonsCompleted,
       examTimeHours: Math.round(((examTime._sum.timeTakenMinutes || 0) / 60) * 10) / 10,
       averageExamDurationMinutes: Math.round((examTime._avg.timeTakenMinutes || 0) * 10) / 10,
+      lessonStudyHours: Math.round((lessonStudyMinutes / 60) * 10) / 10,
+      totalStudyHours: Math.round((totalStudyMinutes / 60) * 10) / 10,
+      averageStudyMinutesPerStudent:
+        studentsWithStudyTime > 0 ? Math.round(totalStudyMinutes / studentsWithStudyTime) : 0,
       activeUsers: activeUserIds.size,
       courseCompletions,
       averageProgress: Math.round(averageProgress * 10) / 10,

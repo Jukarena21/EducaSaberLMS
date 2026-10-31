@@ -12,6 +12,9 @@ interface EngagementMetrics {
   totalLessonsCompleted: number
   examTimeHours: number
   averageExamDurationMinutes: number
+  lessonStudyHours?: number
+  totalStudyHours?: number
+  averageStudyMinutesPerStudent?: number
   activeUsers: number
   courseCompletions: number
   averageProgress: number

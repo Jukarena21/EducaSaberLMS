@@ -10,6 +10,7 @@
  */
 
 import type { Prisma } from '@prisma/client'
+import { colombiaDay } from '@/lib/studyTime'
 
 export type AnalyticsFilters = {
   from: Date
@@ -155,6 +156,48 @@ export function lessonProgressWhere(
 ): Prisma.StudentLessonProgressWhereInput {
   const where: Prisma.StudentLessonProgressWhereInput = {
     updatedAt: { gte: filters.from, lte: filters.to },
+    user: studentWhere(filters),
+  }
+
+  const lessonWhere: Prisma.LessonWhereInput = {}
+  if (filters.competencyId) lessonWhere.competencyId = filters.competencyId
+  if (filters.courseId) {
+    lessonWhere.moduleLessons = {
+      some: { module: { courseModules: { some: { courseId: filters.courseId } } } },
+    }
+  }
+  if (Object.keys(lessonWhere).length > 0) where.lesson = lessonWhere
+
+  if (filters.academicGrade) {
+    const grade = filters.academicGrade
+    where.AND = [
+      {
+        OR: [
+          { user: { academicGrade: grade } },
+          {
+            user: { academicGrade: null },
+            lesson: {
+              moduleLessons: {
+                some: {
+                  module: { courseModules: { some: { course: { academicGrade: grade } } } },
+                },
+              },
+            },
+          },
+        ],
+      },
+    ]
+  }
+
+  return where
+}
+
+/** Tiempo de estudio en lecciones dentro del período, con los mismos filtros. */
+export function lessonStudyTimeWhere(
+  filters: AnalyticsFilters
+): Prisma.LessonStudyTimeWhereInput {
+  const where: Prisma.LessonStudyTimeWhereInput = {
+    day: { gte: colombiaDay(filters.from), lte: colombiaDay(filters.to) },
     user: studentWhere(filters),
   }
 

@@ -69,6 +69,13 @@ interface AnalyticsTabProps {
 
 const DEFAULT_SCHOOL_COLOR = "262 83% 58%"
 
+function formatStudyMinutes(minutes: number): string {
+  if (minutes < 60) return `${Math.round(minutes)} min`
+  const hours = Math.floor(minutes / 60)
+  const rest = Math.round(minutes % 60)
+  return rest > 0 ? `${hours}h ${rest}min` : `${hours}h`
+}
+
 function hexToHsl(hex: string): string {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex || "")) return DEFAULT_SCHOOL_COLOR
   const r = parseInt(hex.slice(1, 3), 16) / 255
@@ -357,6 +364,9 @@ export function AnalyticsTab({
 
     const headers = ["Métrica", "Valor", "Unidad"]
     const rows: (string | number)[][] = [
+      ["Tiempo de Estudio Total (lecciones + exámenes)", engagementMetrics.totalStudyHours ?? 0, "horas"],
+      ["Tiempo de Estudio en Lecciones", engagementMetrics.lessonStudyHours ?? 0, "horas"],
+      ["Tiempo Promedio por Estudiante", engagementMetrics.averageStudyMinutesPerStudent ?? 0, "minutos"],
       ["Lecciones Completadas", engagementMetrics.totalLessonsCompleted, "unidades"],
       ["Tiempo Total en Exámenes", engagementMetrics.examTimeHours, "horas"],
       ["Duración Promedio por Examen", engagementMetrics.averageExamDurationMinutes, "minutos"],
@@ -1921,14 +1931,17 @@ export function AnalyticsTab({
                     <AccordionContent>
                       <div className="pt-4 space-y-6">
                         {engagementMetrics ? (
-                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                             {[
+                              { label: 'Tiempo de estudio total (lecciones + exámenes)', value: `${engagementMetrics.totalStudyHours?.toLocaleString('es-CO') ?? '0'}h`, icon: Clock, color: 'text-[#0ea5e9]' },
+                              { label: 'Tiempo de estudio en lecciones', value: `${engagementMetrics.lessonStudyHours?.toLocaleString('es-CO') ?? '0'}h`, icon: BookOpen, color: 'text-[#0ea5e9]' },
+                              { label: 'Tiempo promedio por estudiante', value: formatStudyMinutes(engagementMetrics.averageStudyMinutesPerStudent ?? 0), icon: Users, color: 'text-[#0ea5e9]' },
                               { label: 'Lecciones terminadas', value: engagementMetrics.totalLessonsCompleted?.toLocaleString('es-CO') ?? '0', icon: BookOpen, color: 'text-[#22c55e]' },
                               { label: '% de lecciones trabajadas que se terminaron', value: `${engagementMetrics.completionRate?.toFixed(1) ?? '0.0'}%`, icon: CheckCircle2, color: 'text-[#8b5cf6]' },
                               { label: 'Avance promedio en lecciones', value: `${engagementMetrics.averageProgress?.toFixed(1) ?? '0.0'}%`, icon: TrendingUp, color: 'text-[#73A2D3]' },
                               { label: 'Cursos completados', value: engagementMetrics.courseCompletions?.toLocaleString('es-CO') ?? '0', icon: Award, color: 'text-[#06b6d4]' },
                               { label: 'Tiempo total en exámenes', value: `${engagementMetrics.examTimeHours?.toLocaleString('es-CO') ?? '0'}h`, icon: Clock, color: 'text-[#f97316]' },
-                              { label: 'Duración promedio por examen', value: `${engagementMetrics.averageExamDurationMinutes?.toFixed(0) ?? '0'} min`, icon: Clock, color: 'text-[#8b5cf6]' },
+                              { label: 'Tiempo activo promedio por examen', value: `${engagementMetrics.averageExamDurationMinutes?.toFixed(0) ?? '0'} min`, icon: Clock, color: 'text-[#8b5cf6]' },
                             ].map((metric) => (
                               <Card key={metric.label}>
                                 <CardContent className="p-4">
