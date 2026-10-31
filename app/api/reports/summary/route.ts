@@ -1,136 +1,117 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/rbac'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import {
+  colombiaMonthKey,
+  examResultWhere,
+  resolveAnalyticsFilters,
+  resultPassed,
+} from '@/lib/analytics/filters'
 
 export async function GET(request: NextRequest) {
   try {
     const gate = await requireRole(['teacher_admin','school_admin'])
     if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
 
-    // Restricciones de rol
+    if (!gate.session) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
     if (gate.session.user.role === 'school_admin' && !gate.session.user.schoolId) {
       return NextResponse.json({ error: 'Usuario sin colegio asignado' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
-    const from = searchParams.get('from') ? new Date(searchParams.get('from')!) : new Date(Date.now() - 365*24*60*60*1000)
-    const to = searchParams.get('to') ? new Date(searchParams.get('to')!) : new Date()
-    // Para school_admin, forzar el filtro por su schoolId
-    const schoolId = gate.session.user.role === 'school_admin' 
-      ? gate.session.user.schoolId 
-      : (searchParams.get('schoolId') || undefined)
-    const courseId = searchParams.get('courseId') || undefined
-    const competencyId = searchParams.get('competencyId') || undefined
-    const academicGrade = searchParams.get('academicGrade') || undefined
-
-    const whereER: any = { createdAt: { gte: from, lte: to } }
-    const whereExam: any = {}
-    const whereCourse: any = {}
-    if (competencyId) whereExam.competencyId = competencyId
-    if (courseId) whereExam.id = courseId // not ideal, but allows direct exam selection if needed
-    if (academicGrade) whereCourse.academicGrade = academicGrade
-    if (schoolId) {
-      whereCourse.courseSchools = {
-        some: {
-          schoolId: schoolId
-        }
-      }
-    }
+    const filters = resolveAnalyticsFilters(searchParams, gate.session.user)
 
     const results = await prisma.examResult.findMany({
-      where: whereER,
-      include: {
-        exam: { 
-          include: { 
-            competency: true, 
-            course: { 
-              where: Object.keys(whereCourse).length ? whereCourse : undefined, 
-              select: { 
-                id: true, 
-                title: true, 
-                academicGrade: true,
-                courseSchools: {
-                  select: {
-                    schoolId: true
-                  }
-                }
-              } 
-            } 
-          } 
+      where: examResultWhere(filters),
+      select: {
+        score: true,
+        isPassed: true,
+        completedAt: true,
+        user: { select: { school: { select: { id: true, name: true } } } },
+        exam: {
+          select: {
+            passingScore: true,
+            course: { select: { id: true, title: true } },
+            competency: { select: { id: true, displayName: true, name: true } },
+          },
         },
-        user: { select: { id: true } }
-      }
+      },
     })
 
-    const filtered = results.filter(r => {
-      if (competencyId && r.exam?.competencyId !== competencyId) return false
-      if (courseId && r.exam?.courseId !== courseId) return false
-      if (academicGrade && r.exam?.course?.academicGrade !== academicGrade) return false
-      if (schoolId) {
-        const courseSchoolIds = r.exam?.course?.courseSchools?.map(cs => cs.schoolId) || []
-        if (!courseSchoolIds.includes(schoolId)) return false
-      }
-      return true
-    })
-
-    // Aggregates by school/course/competency
-    type Agg = { sum: number; count: number; pass: number }
-    const passThreshold = 70
-    const byKey = new Map<string, Agg>()
-    const keyOf = (r: typeof filtered[number]) => {
-      const courseSchoolIds = r.exam?.course?.courseSchools?.map(cs => cs.schoolId) || []
-      const primarySchoolId = courseSchoolIds.length > 0 ? courseSchoolIds[0] : 'NA'
-      return `${primarySchoolId}|${r.exam?.course?.id||'NA'}|${r.exam?.competency?.id||'NA'}`
+    // Agregado por colegio del estudiante, curso del examen y área
+    type Agg = {
+      schoolId: string | null
+      schoolName: string
+      courseId: string | null
+      courseName: string
+      competencyId: string | null
+      competencyName: string
+      sum: number
+      count: number
+      pass: number
     }
-    filtered.forEach(r => {
-      const k = keyOf(r)
-      if (!byKey.has(k)) byKey.set(k, { sum: 0, count: 0, pass: 0 })
-      const a = byKey.get(k)!
-      a.sum += r.score
-      a.count += 1
-      if (r.score >= passThreshold) a.pass += 1
-    })
-    const rows = Array.from(byKey.entries()).map(([k, a]) => {
-      const [sId, cId, compId] = k.split('|')
-      return {
-        schoolId: sId,
-        courseId: cId,
-        competencyId: compId,
-        attempts: a.count,
-        avgScore: a.count ? Number((a.sum / a.count).toFixed(1)) : 0,
-        passRate: a.count ? Number(((a.pass / a.count) * 100).toFixed(1)) : 0,
+    const byKey = new Map<string, Agg>()
+    results.forEach((r) => {
+      const school = r.user?.school
+      const course = r.exam?.course
+      const competency = r.exam?.competency
+      const key = `${school?.id || '-'}|${course?.id || '-'}|${competency?.id || '-'}`
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          schoolId: school?.id || null,
+          schoolName: school?.name || 'Sin colegio',
+          courseId: course?.id || null,
+          courseName: course?.title || 'Sin curso',
+          competencyId: competency?.id || null,
+          competencyName: competency?.displayName || competency?.name || 'General',
+          sum: 0,
+          count: 0,
+          pass: 0,
+        })
       }
+      const agg = byKey.get(key)!
+      agg.sum += r.score
+      agg.count += 1
+      if (resultPassed(r)) agg.pass += 1
     })
 
-    // Monthly series (overall)
-    const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
-    const seriesMap = new Map<string, Agg>()
-    filtered.forEach(r => {
-      const k = monthKey(new Date(r.createdAt))
-      if (!seriesMap.has(k)) seriesMap.set(k, { sum: 0, count: 0, pass: 0 })
-      const a = seriesMap.get(k)!
-      a.sum += r.score
-      a.count += 1
-      if (r.score >= passThreshold) a.pass += 1
+    const rows = Array.from(byKey.values())
+      .map(({ sum, count, pass, ...rest }) => ({
+        ...rest,
+        attempts: count,
+        avgScore: Number((sum / count).toFixed(1)),
+        passRate: Number(((pass / count) * 100).toFixed(1)),
+      }))
+      .sort((a, b) => b.attempts - a.attempts)
+
+    const seriesMap = new Map<string, { sum: number; count: number; pass: number }>()
+    results.forEach((r) => {
+      const key = colombiaMonthKey(r.completedAt!)
+      const agg = seriesMap.get(key) || { sum: 0, count: 0, pass: 0 }
+      agg.sum += r.score
+      agg.count += 1
+      if (resultPassed(r)) agg.pass += 1
+      seriesMap.set(key, agg)
     })
-    const series = Array.from(seriesMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(([period, a]) => ({
-      period,
-      avgScore: a.count ? Number((a.sum/a.count).toFixed(1)) : 0,
-      attempts: a.count,
-      passRate: a.count ? Number(((a.pass/a.count)*100).toFixed(1)) : 0,
-    }))
+    const series = Array.from(seriesMap.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([period, a]) => ({
+        period,
+        avgScore: Number((a.sum / a.count).toFixed(1)),
+        attempts: a.count,
+        passRate: Number(((a.pass / a.count) * 100).toFixed(1)),
+      }))
 
-    // Distribution buckets
-    const buckets = [ {min:0,max:59,label:'0-59'}, {min:60,max:69,label:'60-69'}, {min:70,max:79,label:'70-79'}, {min:80,max:100,label:'80-100'} ]
-    const distribution = buckets.map(b=>({ rango:b.label, estudiantes: filtered.filter(r=>r.score>=b.min && r.score<=b.max).length }))
-
-    return NextResponse.json({ rows, series, distribution, range: { from: from.toISOString(), to: to.toISOString() } })
+    return NextResponse.json({
+      rows,
+      series,
+      range: { from: filters.from.toISOString(), to: filters.to.toISOString() },
+    })
   } catch (e) {
     console.error('reports/summary', e)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
   }
 }
-
-

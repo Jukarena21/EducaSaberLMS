@@ -10,8 +10,8 @@ interface KPIData {
 
 interface EngagementMetrics {
   totalLessonsCompleted: number
-  totalStudyTimeHours: number
-  averageSessionDurationMinutes: number
+  examTimeHours: number
+  averageExamDurationMinutes: number
   activeUsers: number
   courseCompletions: number
   averageProgress: number
@@ -34,6 +34,7 @@ interface AnalyticsData {
 }
 
 interface AnalyticsFilters {
+  period?: string
   schoolId?: string
   courseId?: string
   grade?: string
@@ -114,6 +115,7 @@ export function useAnalytics() {
     try {
       // Construir parámetros de consulta
       const params = new URLSearchParams()
+      if (filters.period) params.set('period', filters.period)
       if (filters.schoolId && filters.schoolId !== 'all') params.set('schoolId', filters.schoolId)
       if (filters.courseId && filters.courseId !== 'all') params.set('courseId', filters.courseId)
       if (filters.grade && filters.grade !== 'all') params.set('academicGrade', filters.grade)
@@ -128,21 +130,20 @@ export function useAnalytics() {
         params.set('schoolId', session.user.schoolId)
       }
 
-      // Fetch KPIs
-      const kpisResponse = await fetch(`/api/reports/summary?${params.toString()}`)
-      const kpisData = kpisResponse.ok ? await kpisResponse.json() : null
+      const query = params.toString()
+      const readJson = async (url: string) => {
+        const response = await fetch(url)
+        return response.ok ? response.json() : null
+      }
 
-      // Fetch Engagement Metrics
-      const engagementResponse = await fetch(`/api/analytics/engagement?${params.toString()}`)
-      const engagementData = engagementResponse.ok ? await engagementResponse.json() : null
-
-      // Fetch Grade Analytics
-      const gradesResponse = await fetch(`/api/analytics/grades?${params.toString()}`)
-      const gradesData = gradesResponse.ok ? await gradesResponse.json() : null
-
-      // Fetch Competency Reports
-      const competencyResponse = await fetch(`/api/reports/competencies?${params.toString()}`)
-      const competencyData = competencyResponse.ok ? await competencyResponse.json() : null
+      // grades trae las tarjetas y las gráficas; summary el informe por colegio,
+      // curso y área; competencies el informe por área y dificultad
+      const [summaryData, engagementData, gradesData, competencyData] = await Promise.all([
+        readJson(`/api/reports/summary?${query}`),
+        readJson(`/api/analytics/engagement?${query}`),
+        readJson(`/api/analytics/grades?${query}`),
+        readJson(`/api/reports/competencies?${query}`),
+      ])
 
       // Transformar hourly para que coincida con el formato esperado por el componente
       const transformedHourly = (gradesData?.hourly || []).map((h: any) => ({
@@ -151,14 +152,14 @@ export function useAnalytics() {
       }))
 
       const newData: AnalyticsData = {
-        kpis: kpisData || null,
+        kpis: gradesData?.kpis || null,
         engagementMetrics: engagementData || null,
         gradeSeries: gradesData?.series || [],
         gradeDistribution: gradesData?.distribution || [],
         hourlyActivity: transformedHourly,
         schoolRanking: gradesData?.ranking || [],
-        reportRows: competencyData?.rows || [],
-        compReportRows: competencyData?.compRows || [],
+        reportRows: summaryData?.rows || [],
+        compReportRows: competencyData?.rows || [],
         reportSeries: gradesData?.series || [],
         reportDistribution: gradesData?.distribution || [],
         loading: false,

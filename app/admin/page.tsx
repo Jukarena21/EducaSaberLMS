@@ -174,7 +174,6 @@ export default function AdminDashboard() {
   const [filterMaxAge, setFilterMaxAge] = useState<string>('')
   const [filterGender, setFilterGender] = useState<string>('all')
   const [filterSocioeconomicStratum, setFilterSocioeconomicStratum] = useState<string>('all')
-  const [comparePeriod, setComparePeriod] = useState<string>('none')
   const [searchTriggered, setSearchTriggered] = useState<boolean>(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddQuestion, setShowAddQuestion] = useState(false)
@@ -240,6 +239,7 @@ export default function AdminDashboard() {
     if (activeTab !== 'analytics' || !searchTriggered) return
     
     const filters = {
+      period: selectedPeriod,
       schoolId: filterSchoolId !== 'all' ? filterSchoolId : undefined,
       courseId: filterCourseId !== 'all' ? filterCourseId : undefined,
       grade: filterGrade !== 'all' ? filterGrade : undefined,
@@ -252,7 +252,7 @@ export default function AdminDashboard() {
     
     refetchAnalytics(filters)
     setSearchTriggered(false) // Reset the trigger
-  }, [activeTab, searchTriggered, filterSchoolId, filterCourseId, filterGrade, filterCompetencyId, filterMinAge, filterMaxAge, filterGender, filterSocioeconomicStratum, refetchAnalytics])
+  }, [activeTab, searchTriggered, selectedPeriod, filterSchoolId, filterCourseId, filterGrade, filterCompetencyId, filterMinAge, filterMaxAge, filterGender, filterSocioeconomicStratum, refetchAnalytics])
 
   // Función para manejar la búsqueda
   const handleSearch = () => {
@@ -458,7 +458,7 @@ export default function AdminDashboard() {
   const exportCompCSV = () => {
     const headers = ["Competencia", "Dificultad", "Intentos", "Promedio", "Aprobación %"]
     const rows = safeCompReportRows.map((r: any) => [
-      safeCompetencies.find((c) => c.id === r.competencyId)?.displayName || "N/A",
+      r.competencyName || "N/A",
       r.difficultyLevel || "N/A",
       r.attempts || 0,
       Number((r.avgScore || 0).toFixed(1)),
@@ -470,9 +470,9 @@ export default function AdminDashboard() {
   const exportRowsToCSV = () => {
     const headers = ["Colegio", "Curso", "Competencia", "Intentos", "Promedio", "Aprobación %"]
     const rows = safeReportRows.map((r) => [
-      safeSchools.find((s) => s.id === r.schoolId)?.name || "N/A",
-      safeCourses.find((c) => c.id === r.courseId)?.title || "N/A",
-      safeCompetencies.find((c) => c.id === r.competencyId)?.displayName || "N/A",
+      r.schoolName || "N/A",
+      r.courseName || "N/A",
+      r.competencyName || "N/A",
       r.attempts || 0,
       Number((r.avgScore || 0).toFixed(1)),
       Number((r.passRate || 0).toFixed(1)),
@@ -486,16 +486,16 @@ export default function AdminDashboard() {
     const headers = ["Métrica", "Valor", "Unidad"]
     const rows: (string | number)[][] = [
       ["Lecciones Completadas", engagementMetrics.totalLessonsCompleted, "unidades"],
-      ["Tiempo Total de Estudio", engagementMetrics.totalStudyTimeHours, "horas"],
+      ["Tiempo Total en Exámenes", engagementMetrics.examTimeHours, "horas"],
       [
-        "Duración Promedio de Sesión",
-        engagementMetrics.averageSessionDurationMinutes,
+        "Duración Promedio por Examen",
+        engagementMetrics.averageExamDurationMinutes,
         "minutos",
       ],
-      ["Usuarios Activos", engagementMetrics.activeUsers, "usuarios"],
+      ["Estudiantes Activos", engagementMetrics.activeUsers, "estudiantes"],
       ["Cursos Completados", engagementMetrics.courseCompletions, "cursos"],
-      ["Progreso Promedio", engagementMetrics.averageProgress, "porcentaje"],
-      ["Tasa de Finalización", engagementMetrics.completionRate, "porcentaje"],
+      ["Avance Promedio en Lecciones", engagementMetrics.averageProgress, "porcentaje"],
+      ["Lecciones Terminadas", engagementMetrics.completionRate, "porcentaje"],
     ]
 
     const dateStr = new Date().toISOString().split("T")[0]
@@ -1075,12 +1075,12 @@ export default function AdminDashboard() {
                            </AccordionContent>
                          </AccordionItem>
 
-                         {/* Comparación y Períodos */}
+                         {/* Período */}
                          <AccordionItem value="comparison">
                            <AccordionTrigger className="hover:no-underline">
                              <div className="flex items-center gap-2">
                                <TrendingUp className="h-4 w-4 text-purple-600" />
-                               <span className="font-semibold">Comparación y Períodos</span>
+                               <span className="font-semibold">Período</span>
                              </div>
                            </AccordionTrigger>
                            <AccordionContent>
@@ -1099,20 +1099,10 @@ export default function AdminDashboard() {
                                    </SelectContent>
                                  </Select>
                                </div>
-                               <div>
-                                 <Label className="text-sm font-medium">Comparar con</Label>
-                                 <Select value={comparePeriod} onValueChange={setComparePeriod}>
-                                   <SelectTrigger>
-                                     <SelectValue placeholder="Sin comparación" />
-                                   </SelectTrigger>
-                                   <SelectContent>
-                                     <SelectItem value="none">Sin comparación</SelectItem>
-                                     <SelectItem value="previous">Período anterior</SelectItem>
-                                     <SelectItem value="last_year">Mismo período año pasado</SelectItem>
-                                     <SelectItem value="custom">Período personalizado</SelectItem>
-                                   </SelectContent>
-                                 </Select>
-                               </div>
+                               <p className="text-xs text-gray-500 self-end">
+                                 Tarjetas, gráficas, informes y engagement usan este período. La lista de
+                                 estudiantes muestra el historial completo de cada uno.
+                               </p>
                              </div>
                            </AccordionContent>
                          </AccordionItem>
@@ -1139,7 +1129,7 @@ export default function AdminDashboard() {
                                setFilterMaxAge('')
                                setFilterGender('all')
                                setFilterSocioeconomicStratum('all')
-                               setComparePeriod('none')
+                               setSelectedPeriod('6m')
                              }}
                              variant="outline"
                              size="lg"
@@ -1648,7 +1638,7 @@ export default function AdminDashboard() {
                           {safeReportSeries.length >= 2 && (
                             <Card className="lg:col-span-2">
                               <CardHeader>
-                                <CardTitle className="text-base">Comparación Período Actual vs Anterior</CardTitle>
+                                <CardTitle className="text-base">Último Mes vs Mes Anterior</CardTitle>
                               </CardHeader>
                               <CardContent>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1679,7 +1669,7 @@ export default function AdminDashboard() {
                                           <div className={`text-xs mt-1 ${
                                             avgScoreChange >= 0 ? 'text-green-600' : 'text-red-600'
                                           }`}>
-                                            {avgScoreChange >= 0 ? '+' : ''}{avgScoreChange.toFixed(1)}% vs período anterior
+                                            {avgScoreChange >= 0 ? '+' : ''}{avgScoreChange.toFixed(1)} puntos vs mes anterior
                                           </div>
                                         </div>
 
@@ -1698,7 +1688,7 @@ export default function AdminDashboard() {
                                           <div className={`text-xs mt-1 ${
                                             passRateChange >= 0 ? 'text-green-600' : 'text-red-600'
                                           }`}>
-                                            {passRateChange >= 0 ? '+' : ''}{passRateChange.toFixed(1)}% vs período anterior
+                                            {passRateChange >= 0 ? '+' : ''}{passRateChange.toFixed(1)} puntos vs mes anterior
                                           </div>
                                         </div>
 
@@ -1717,7 +1707,7 @@ export default function AdminDashboard() {
                                           <div className={`text-xs mt-1 ${
                                             attemptsChange >= 0 ? 'text-green-600' : 'text-red-600'
                                           }`}>
-                                            {attemptsChange >= 0 ? '+' : ''}{attemptsChange} vs período anterior
+                                            {attemptsChange >= 0 ? '+' : ''}{attemptsChange} vs mes anterior
                                           </div>
                                         </div>
                                       </>
@@ -2155,9 +2145,9 @@ export default function AdminDashboard() {
                               <TableBody>
                                 {safeReportRows.map((r, idx) => (
                                   <TableRow key={idx}>
-                                    <TableCell>{(safeSchools.find(s=>s.id===r.schoolId)?.name)||'NA'}</TableCell>
-                                    <TableCell>{(safeCourses.find(c=>c.id===r.courseId)?.title)||'NA'}</TableCell>
-                                    <TableCell>{(safeCompetencies.find(c=>c.id===r.competencyId)?.displayName)||'NA'}</TableCell>
+                                    <TableCell>{r.schoolName}</TableCell>
+                                    <TableCell>{r.courseName}</TableCell>
+                                    <TableCell>{r.competencyName}</TableCell>
                                     <TableCell>{r.attempts || 0}</TableCell>
                                     <TableCell>{(r.avgScore || 0).toFixed(1)}%</TableCell>
                                     <TableCell>{(r.passRate || 0).toFixed(1)}%</TableCell>
@@ -2210,7 +2200,7 @@ export default function AdminDashboard() {
                           <TableBody>
                             {safeCompReportRows.map((r:any, idx:number) => (
                               <TableRow key={idx}>
-                                <TableCell>{(safeCompetencies.find(c=>c.id===r.competencyId)?.displayName)||'NA'}</TableCell>
+                                <TableCell>{r.competencyName}</TableCell>
                                 <TableCell>{r.difficultyLevel || 'N/A'}</TableCell>
                                 <TableCell>{r.attempts || 0}</TableCell>
                                 <TableCell>{(r.avgScore || 0).toFixed(1)}%</TableCell>
@@ -2265,8 +2255,8 @@ export default function AdminDashboard() {
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-2xl font-bold text-[#f97316]">{engagementMetrics?.totalStudyTimeHours?.toLocaleString('es-CO') || '0'}h</div>
-                            <div className="text-sm text-gray-600">Tiempo de Estudio</div>
+                            <div className="text-2xl font-bold text-[#f97316]">{engagementMetrics?.examTimeHours?.toLocaleString('es-CO') || '0'}h</div>
+                            <div className="text-sm text-gray-600">Tiempo en Exámenes</div>
                           </div>
                           <Clock className="h-8 w-8 text-[#f97316]" />
                         </div>
@@ -2278,7 +2268,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-2xl font-bold text-[#8b5cf6]">{engagementMetrics?.completionRate?.toFixed(1) || '0.0'}%</div>
-                            <div className="text-sm text-gray-600">Tasa de Finalización</div>
+                            <div className="text-sm text-gray-600">Lecciones Terminadas</div>
                           </div>
                           <TrendingUp className="h-8 w-8 text-[#8b5cf6]" />
                         </div>
@@ -2310,7 +2300,7 @@ export default function AdminDashboard() {
                       <CardContent>
                         <div className="space-y-4">
                           <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Progreso Promedio</span>
+                            <span className="text-sm text-gray-600">Avance Promedio en Lecciones</span>
                             <span className="text-2xl font-bold text-[#73A2D3]">{engagementMetrics?.averageProgress?.toFixed(1) || '0.0'}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
@@ -2321,7 +2311,7 @@ export default function AdminDashboard() {
                           </div>
                           
                           <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Tasa de Finalización</span>
+                            <span className="text-sm text-gray-600">Lecciones Terminadas</span>
                             <span className="text-2xl font-bold text-[#22c55e]">{engagementMetrics?.completionRate?.toFixed(1) || '0.0'}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
@@ -2344,18 +2334,18 @@ export default function AdminDashboard() {
                       <CardContent>
                         <div className="space-y-6">
                           <div className="text-center">
-                            <div className="text-3xl font-bold text-[#f97316]">{engagementMetrics?.totalStudyTimeHours?.toLocaleString('es-CO') || '0'}h</div>
-                            <div className="text-sm text-gray-600">Tiempo Total de Estudio</div>
+                            <div className="text-3xl font-bold text-[#f97316]">{engagementMetrics?.examTimeHours?.toLocaleString('es-CO') || '0'}h</div>
+                            <div className="text-sm text-gray-600">Tiempo Total en Exámenes</div>
                           </div>
                           
                           <div className="text-center">
-                            <div className="text-3xl font-bold text-[#8b5cf6]">{engagementMetrics?.averageSessionDurationMinutes?.toFixed(0) || '0'}min</div>
-                            <div className="text-sm text-gray-600">Duración Promedio de Sesión</div>
+                            <div className="text-3xl font-bold text-[#8b5cf6]">{engagementMetrics?.averageExamDurationMinutes?.toFixed(0) || '0'}min</div>
+                            <div className="text-sm text-gray-600">Duración Promedio por Examen</div>
                           </div>
                           
                           <div className="text-center">
                             <div className="text-3xl font-bold text-[#06b6d4]">{engagementMetrics?.activeUsers?.toLocaleString('es-CO') || '0'}</div>
-                            <div className="text-sm text-gray-600">Usuarios Activos</div>
+                            <div className="text-sm text-gray-600">Estudiantes Activos</div>
                           </div>
                         </div>
                       </CardContent>
@@ -2443,8 +2433,8 @@ export default function AdminDashboard() {
                             <div>
                               <div className="font-semibold text-orange-800">Baja Tasa de Finalización</div>
                               <div className="text-sm text-orange-700 mt-1">
-                                La tasa de finalización ({engagementMetrics.completionRate.toFixed(1)}%) indica que los estudiantes 
-                                no están completando los cursos. Considera implementar estrategias de engagement, 
+                                Solo el {engagementMetrics.completionRate.toFixed(1)}% de las lecciones trabajadas en el período 
+                                quedaron terminadas. Considera implementar estrategias de engagement, 
                                 recordatorios personalizados y contenido más interactivo.
                               </div>
                             </div>
@@ -2456,7 +2446,7 @@ export default function AdminDashboard() {
                             <div>
                               <div className="font-semibold text-green-800">Alto Nivel de Engagement</div>
                               <div className="text-sm text-green-700 mt-1">
-                                Excelente tasa de finalización ({engagementMetrics.completionRate.toFixed(1)}%). 
+                                El {engagementMetrics.completionRate.toFixed(1)}% de las lecciones trabajadas quedaron terminadas. 
                                 Los estudiantes están comprometidos con el aprendizaje. Mantén las estrategias actuales.
                               </div>
                             </div>
@@ -2467,27 +2457,15 @@ export default function AdminDashboard() {
                           <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                             <Target className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
                             <div>
-                              <div className="font-semibold text-amber-800">Progreso Promedio Bajo</div>
+                              <div className="font-semibold text-amber-800">Avance Bajo en Lecciones</div>
                               <div className="text-sm text-amber-700 mt-1">
-                                El progreso promedio ({engagementMetrics.averageProgress.toFixed(1)}%) sugiere que los estudiantes 
+                                El avance promedio en las lecciones ({engagementMetrics.averageProgress.toFixed(1)}%) sugiere que los estudiantes 
                                 necesitan más apoyo. Considera revisar la dificultad del contenido y proporcionar recursos adicionales.
                               </div>
                             </div>
                           </div>
                         )}
 
-                        {engagementMetrics.totalStudyTimeHours !== undefined && engagementMetrics.totalStudyTimeHours !== null && engagementMetrics.totalStudyTimeHours > 0 && engagementMetrics.totalStudyTimeHours < 10 && (
-                          <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                            <Clock className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="font-semibold text-blue-800">Oportunidad: Aumentar Tiempo de Estudio</div>
-                              <div className="text-sm text-blue-700 mt-1">
-                                El tiempo total de estudio ({engagementMetrics.totalStudyTimeHours.toFixed(1)}h) puede mejorarse. 
-                                Considera implementar recordatorios de estudio y establecer metas de tiempo semanales.
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </>
                     )}
 
@@ -2511,12 +2489,6 @@ export default function AdminDashboard() {
                           <li className="flex items-start gap-2">
                             <span className="text-amber-600">•</span>
                             <span>Promover mayor participación en evaluaciones mediante incentivos y recordatorios</span>
-                          </li>
-                        )}
-                        {engagementMetrics && engagementMetrics.totalStudyTimeHours < 20 && (
-                          <li className="flex items-start gap-2">
-                            <span className="text-amber-600">•</span>
-                            <span>Establecer metas de tiempo de estudio y proporcionar recursos de apoyo</span>
                           </li>
                         )}
                         <li className="flex items-start gap-2">
@@ -2564,13 +2536,12 @@ export default function AdminDashboard() {
                             const avgScore = data.totalAttempts > 0 
                               ? data.totalScore / data.totalAttempts 
                               : 0
-                            const competency = safeCompetencies.find(c => c.id === compId)
                             const passRate = data.totalAttempts > 0
                               ? data.competencies.reduce((sum, c) => sum + ((c.passRate || 0) * (c.attempts || 0)), 0) / data.totalAttempts
                               : 0
                             return {
                               competencyId: compId,
-                              competencyName: competency?.displayName || 'Competencia desconocida',
+                              competencyName: data.competencies[0]?.competencyName || 'Competencia desconocida',
                               avgScore,
                               passRate,
                               totalAttempts: data.totalAttempts,
