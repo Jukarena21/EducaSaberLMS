@@ -34,7 +34,6 @@ import {
   Filter,
   Download,
   AlertTriangle,
-  Lightbulb,
   Target,
   TrendingDown,
   CheckCircle2,
@@ -439,6 +438,63 @@ export function AnalyticsTab({
     }
   }
 
+  const [evolutionView, setEvolutionView] = useState<'areas' | 'avgScore' | 'passRate'>('areas')
+  const seriesAreaKeys = Object.keys(safeGradeSeries[0] || {}).filter(
+    (k) => k !== 'period' && k !== 'avgScore' && k !== 'passRate' && k !== 'attempts'
+  )
+
+  // Una fila por área, de peor a mejor promedio
+  const areaRows = (() => {
+    const byArea = new Map<string, { name: string; scoreSum: number; passSum: number; attempts: number; byDifficulty: any[] }>()
+    safeCompReportRows.forEach((row: any) => {
+      const key = row.competencyId || row.competencyName || 'general'
+      if (!byArea.has(key)) {
+        byArea.set(key, { name: row.competencyName || 'General', scoreSum: 0, passSum: 0, attempts: 0, byDifficulty: [] })
+      }
+      const area = byArea.get(key)!
+      const attempts = row.attempts || 0
+      area.scoreSum += (row.avgScore || 0) * attempts
+      area.passSum += (row.passRate || 0) * attempts
+      area.attempts += attempts
+      area.byDifficulty.push(row)
+    })
+    return Array.from(byArea.entries())
+      .map(([id, a]) => ({
+        id,
+        name: a.name,
+        attempts: a.attempts,
+        avgScore: a.attempts > 0 ? a.scoreSum / a.attempts : 0,
+        passRate: a.attempts > 0 ? a.passSum / a.attempts : 0,
+        byDifficulty: a.byDifficulty,
+      }))
+      .sort((a, b) => a.avgScore - b.avgScore)
+  })()
+
+  const areaStatus = (avg: number) =>
+    avg < 60
+      ? { label: 'Crítica', className: 'bg-red-500 text-white' }
+      : avg < 70
+      ? { label: 'Requiere atención', className: 'bg-orange-500 text-white' }
+      : avg < 80
+      ? { label: 'Aceptable', className: 'bg-blue-500 text-white' }
+      : { label: 'Fuerte', className: 'bg-green-500 text-white' }
+
+  const criticalAreas = areaRows.filter((a) => a.attempts > 0 && a.avgScore < 60)
+  const atRiskCount = studentsMetrics.filter((s: any) => s.status === 'requiere_atencion').length
+  const inactiveCount = studentsMetrics.filter((s: any) => s.isInactive).length
+
+  const formatMonthShort = (value: string) => {
+    const [year, month] = String(value).split('-')
+    const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+    return `${monthNames[parseInt(month) - 1]} ${year.slice(2)}`
+  }
+  const formatMonthLong = (value: string) => {
+    const [year, month] = String(value).split('-')
+    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+    return `${monthNames[parseInt(month) - 1]} ${year}`
+  }
+  const AREA_COLORS = ["#C00102", "#73A2D3", "#22c55e", "#f97316", "#8b5cf6", "#ec4899", "#14b8a6"]
+
   return (
     <>
                    {/* Resumen Ejecutivo - 3 Tarjetas Separadas */}
@@ -836,6 +892,532 @@ export function AnalyticsTab({
                        </div>
                      </CardContent>
                    </Card>
+
+            {/* Alertas concretas */}
+            {(criticalAreas.length > 0 || atRiskCount > 0 || inactiveCount > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {criticalAreas.length > 0 && (
+                  <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-red-800">
+                        {criticalAreas.length === 1 ? '1 área crítica' : `${criticalAreas.length} áreas críticas`}
+                      </div>
+                      <div className="text-sm text-red-700 mt-1">
+                        Promedio por debajo de 60%: {criticalAreas.slice(0, 3).map((a) => a.name).join(', ')}
+                        {criticalAreas.length > 3 ? ' y otras' : ''}.
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {atRiskCount > 0 && (
+                  <div className="flex items-start gap-3 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                    <Users className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-orange-800">
+                        {atRiskCount === 1 ? '1 estudiante requiere atención' : `${atRiskCount} estudiantes requieren atención`}
+                      </div>
+                      <div className="text-sm text-orange-700 mt-1">
+                        Bajo rendimiento sostenido en el período. Ver la sección de estudiantes.
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {inactiveCount > 0 && (
+                  <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <Clock className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-semibold text-amber-800">
+                        {inactiveCount === 1 ? '1 estudiante sin actividad' : `${inactiveCount} estudiantes sin actividad`}
+                      </div>
+                      <div className="text-sm text-amber-700 mt-1">
+                        Sin exámenes ni lecciones en los últimos 30 días.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ¿Cómo van? */}
+            <Card>
+              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-gray-700" />
+                  <span>¿Cómo van?</span>
+                </CardTitle>
+                <p className="text-xs text-gray-600 mt-1 ml-7">
+                  Evolución mes a mes, distribución de notas y comparación entre colegios
+                </p>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-4 flex-wrap">
+                    <CardTitle className="flex items-center space-x-2">
+                      <LineChart className="h-5 w-5" />
+                      <span>Evolución Mensual</span>
+                    </CardTitle>
+                    <Tabs value={evolutionView} onValueChange={(v) => setEvolutionView(v as typeof evolutionView)}>
+                      <TabsList>
+                        <TabsTrigger value="areas">Por área</TabsTrigger>
+                        <TabsTrigger value="avgScore">Promedio general</TabsTrigger>
+                        <TabsTrigger value="passRate">Aprobación</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </CardHeader>
+                  <CardContent>
+                    {safeGradeSeries.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={320}>
+                        <RechartsLineChart data={safeGradeSeries} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                          <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={formatMonthShort} />
+                          <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#6b7280' }} tickFormatter={(value) => `${value}%`} />
+                          <RechartsTooltip
+                            contentStyle={{
+                              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '8px',
+                              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                            }}
+                            labelFormatter={formatMonthLong}
+                            formatter={(value: any, name: any) => [`${Number(value).toFixed(1)}%`, name]}
+                          />
+                          {evolutionView === 'areas' ? (
+                            <>
+                              <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="line" />
+                              {seriesAreaKeys.map((key, idx) => (
+                                <Line
+                                  key={key}
+                                  type="monotone"
+                                  dataKey={key}
+                                  stroke={AREA_COLORS[idx % AREA_COLORS.length]}
+                                  strokeWidth={2.5}
+                                  dot={{ fill: AREA_COLORS[idx % AREA_COLORS.length], r: 3 }}
+                                  activeDot={{ r: 5 }}
+                                />
+                              ))}
+                            </>
+                          ) : (
+                            <Line
+                              type="monotone"
+                              dataKey={evolutionView}
+                              name={evolutionView === 'avgScore' ? 'Promedio' : 'Aprobación'}
+                              stroke={evolutionView === 'avgScore' ? '#73A2D3' : '#22c55e'}
+                              strokeWidth={2.5}
+                              dot={{ fill: evolutionView === 'avgScore' ? '#73A2D3' : '#22c55e', r: 4 }}
+                              activeDot={{ r: 6 }}
+                            />
+                          )}
+                        </RechartsLineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center h-[300px] text-gray-500">
+                        <div className="text-center">
+                          <BarChart3 className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                          <p>No hay datos disponibles</p>
+                          <p className="text-xs text-gray-400 mt-1">Ajusta los filtros o espera a que haya actividad</p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* Comparación Período Actual vs Anterior */}
+                          {safeReportSeries.length >= 2 && (
+                            <Card className="lg:col-span-2">
+                              <CardHeader>
+                                <CardTitle className="text-base">Último Mes vs Mes Anterior</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  {(() => {
+                                    const currentPeriod = safeReportSeries[safeReportSeries.length - 1]
+                                    const previousPeriod = safeReportSeries[safeReportSeries.length - 2]
+                                    
+                                    if (!currentPeriod || !previousPeriod) return null
+                                    
+                                    const avgScoreChange = (currentPeriod.avgScore || 0) - (previousPeriod.avgScore || 0)
+                                    const passRateChange = (currentPeriod.passRate || 0) - (previousPeriod.passRate || 0)
+                                    const attemptsChange = (currentPeriod.attempts || 0) - (previousPeriod.attempts || 0)
+
+                                    return (
+                                      <>
+                                        <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm text-blue-600 font-medium">Promedio</span>
+                                            {avgScoreChange >= 0 ? (
+                                              <TrendingUp className="h-4 w-4 text-green-600" />
+                                            ) : (
+                                              <TrendingDown className="h-4 w-4 text-red-600" />
+                                            )}
+                                          </div>
+                                          <div className="text-2xl font-bold text-blue-700">
+                                            {(currentPeriod.avgScore || 0).toFixed(1)}%
+                                          </div>
+                                          <div className={`text-xs mt-1 ${
+                                            avgScoreChange >= 0 ? 'text-green-600' : 'text-red-600'
+                                          }`}>
+                                            {avgScoreChange >= 0 ? '+' : ''}{avgScoreChange.toFixed(1)} puntos vs mes anterior
+                                          </div>
+                                        </div>
+
+                                        <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm text-green-600 font-medium">Tasa Aprobación</span>
+                                            {passRateChange >= 0 ? (
+                                              <TrendingUp className="h-4 w-4 text-green-600" />
+                                            ) : (
+                                              <TrendingDown className="h-4 w-4 text-red-600" />
+                                            )}
+                                          </div>
+                                          <div className="text-2xl font-bold text-green-700">
+                                            {(currentPeriod.passRate || 0).toFixed(1)}%
+                                          </div>
+                                          <div className={`text-xs mt-1 ${
+                                            passRateChange >= 0 ? 'text-green-600' : 'text-red-600'
+                                          }`}>
+                                            {passRateChange >= 0 ? '+' : ''}{passRateChange.toFixed(1)} puntos vs mes anterior
+                                          </div>
+                                        </div>
+
+                                        <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg">
+                                          <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm text-purple-600 font-medium">Exámenes Realizados</span>
+                                            {attemptsChange >= 0 ? (
+                                              <TrendingUp className="h-4 w-4 text-green-600" />
+                                            ) : (
+                                              <TrendingDown className="h-4 w-4 text-red-600" />
+                                            )}
+                                          </div>
+                                          <div className="text-2xl font-bold text-purple-700">
+                                            {currentPeriod.attempts || 0}
+                                          </div>
+                                          <div className={`text-xs mt-1 ${
+                                            attemptsChange >= 0 ? 'text-green-600' : 'text-red-600'
+                                          }`}>
+                                            {attemptsChange >= 0 ? '+' : ''}{attemptsChange} vs mes anterior
+                                          </div>
+                                        </div>
+                                      </>
+                                    )
+                                  })()}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+              {/* Distribución de Notas */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <BarChart3 className="h-5 w-5" />
+                    <span>Distribución de Calificaciones</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {safeGradeDistribution.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={320}>
+                      <BarChart 
+                        data={safeGradeDistribution} 
+                        layout="vertical"
+                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                        <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} />
+                        <YAxis 
+                          type="category" 
+                          dataKey="rango" 
+                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                          width={80}
+                        />
+                        <RechartsTooltip 
+                          contentStyle={{ 
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                          formatter={(value: any) => [`${value} estudiantes`, '']}
+                        />
+                        <Bar 
+                          dataKey="estudiantes" 
+                          radius={[0, 8, 8, 0]}
+                        >
+                          {safeGradeDistribution.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={['#ef4444','#f97316','#eab308','#22c55e'][index % 4]} 
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center h-[300px] text-gray-500">
+                      <div className="text-center">
+                        <BarChart3 className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                        <p>No hay datos disponibles</p>
+                        <p className="text-xs text-gray-400 mt-1">Ajusta los filtros o espera a que haya actividad</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Ranking de Instituciones - Solo una vez, sin duplicar */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <BarChart3 className="h-5 w-5" />
+                    <span>Ranking de Instituciones</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {safeSchoolRanking.length > 0 ? (
+                    <Tabs defaultValue="top5" className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="top5">Top 5</TabsTrigger>
+                        <TabsTrigger value="completo">Lista Completa ({safeSchoolRanking.length})</TabsTrigger>
+                      </TabsList>
+                      
+                      <TabsContent value="top5" className="mt-4">
+                        <ResponsiveContainer width="100%" height={320}>
+                          <BarChart
+                            data={safeSchoolRanking.slice(0, 5).map((r, idx) => {
+                              const school = safeSchools.find(s => s.id === r.schoolId)
+                              return {
+                                nombre: school?.name || r.schoolId || 'Sin nombre',
+                                promedio: r.avgScore || 0,
+                                rank: idx + 1,
+                              }
+                            })}
+                            layout="vertical"
+                            margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+                          >
+                            <defs>
+                              {safeSchoolRanking.slice(0, 5).map((r, idx) => {
+                                const school = safeSchools.find(s => s.id === r.schoolId)
+                                const schoolColor = hexToHsl(school?.themePrimary || '')
+                                return (
+                                  <linearGradient key={`gradient-${idx}`} id={`colorPromedio-${idx}`} x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stopColor={`hsl(${schoolColor})`} stopOpacity={0.9}/>
+                                    <stop offset="100%" stopColor={`hsl(${schoolColor})`} stopOpacity={0.7}/>
+                                  </linearGradient>
+                                )
+                              })}
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                            <XAxis 
+                              type="number" 
+                              domain={[0, 100]}
+                              tick={{ fontSize: 11, fill: '#6b7280' }}
+                              tickFormatter={(value) => `${value}`}
+                            />
+                            <YAxis 
+                              type="category" 
+                              dataKey="nombre" 
+                              tick={{ fontSize: 11, fill: '#6b7280' }}
+                              width={90}
+                            />
+                            <RechartsTooltip 
+                              contentStyle={{ 
+                                backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                                border: '1px solid #e5e7eb',
+                                borderRadius: '8px',
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                              }}
+                              formatter={(value: any) => [`${Number(value).toFixed(1)}`, 'Promedio']}
+                            />
+                            <Bar 
+                              dataKey="promedio" 
+                              radius={[0, 8, 8, 0]}
+                            >
+                              {safeSchoolRanking.slice(0, 5).map((_, idx) => (
+                                <Cell key={`cell-${idx}`} fill={`url(#colorPromedio-${idx})`} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </TabsContent>
+                      
+                      <TabsContent value="completo" className="mt-4">
+                        <div className="max-h-[320px] overflow-y-auto">
+                          <div className="space-y-2">
+                            {safeSchoolRanking.map((r, idx) => {
+                              const school = safeSchools.find(s => s.id === r.schoolId)
+                              const schoolName = school?.name || r.schoolId || 'Sin nombre'
+                              const schoolLogo = school?.logoUrl
+                              const promedio = r.avgScore || 0
+                              const position = idx + 1
+                              
+                              // Colores según posición
+                              let positionColor = 'text-gray-600'
+                              let bgColor = 'bg-gray-50'
+                              if (position === 1) {
+                                positionColor = 'text-yellow-600'
+                                bgColor = 'bg-yellow-50'
+                              } else if (position === 2) {
+                                positionColor = 'text-gray-400'
+                                bgColor = 'bg-gray-50'
+                              } else if (position === 3) {
+                                positionColor = 'text-amber-600'
+                                bgColor = 'bg-amber-50'
+                              }
+                              
+                              return (
+                                <div 
+                                  key={r.schoolId || idx} 
+                                  className={`flex items-center justify-between p-3 rounded-lg border ${bgColor} hover:shadow-sm transition-shadow`}
+                                >
+                                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${positionColor} ${position <= 3 ? 'bg-white border-2' : 'bg-white border border-gray-200'}`}>
+                                      {position <= 3 ? (
+                                        position === 1 ? '🥇' : position === 2 ? '🥈' : '🥉'
+                                      ) : (
+                                        position
+                                      )}
+                                    </div>
+                                    {schoolLogo && (
+                                      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-white border border-gray-200 p-1.5 flex items-center justify-center">
+                                        <img 
+                                          src={schoolLogo} 
+                                          alt={schoolName}
+                                          className="w-full h-full object-contain"
+                                          onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none'
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium text-gray-900 truncate">{schoolName}</div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-3 flex-shrink-0">
+                                    <div className="text-right">
+                                      <div className="text-lg font-bold text-gray-900">{promedio.toFixed(1)}</div>
+                                      <div className="text-xs text-gray-500">Promedio</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  ) : (
+                    <div className="flex items-center justify-center h-[300px] text-gray-500">
+                      <div className="text-center">
+                        <BarChart3 className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                        <p>No hay datos disponibles</p>
+                        <p className="text-xs text-gray-400 mt-1">Ajusta los filtros o espera a que haya actividad</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ¿Qué áreas fallan? */}
+            <Card>
+              <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Target className="h-5 w-5 text-red-600" />
+                      <span>¿Qué áreas fallan?</span>
+                    </CardTitle>
+                    <p className="text-xs text-gray-600 mt-1 ml-7">
+                      Rendimiento por área, de la más débil a la más fuerte
+                    </p>
+                  </div>
+                  <Button onClick={exportCompCSV} variant="outline" size="sm" disabled={safeCompReportRows.length === 0}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Exportar Excel
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                {analyticsLoading ? (
+                  <div className="py-8 text-center">Cargando...</div>
+                ) : analyticsError ? (
+                  <div className="py-8 text-center text-red-600">{analyticsError}</div>
+                ) : areaRows.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-gray-500">Sin datos para los filtros seleccionados</div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Área</TableHead>
+                            <TableHead>Intentos</TableHead>
+                            <TableHead>Promedio</TableHead>
+                            <TableHead>Aprobación</TableHead>
+                            <TableHead>Estado</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {areaRows.map((area) => {
+                            const status = areaStatus(area.avgScore)
+                            return (
+                              <TableRow key={area.id}>
+                                <TableCell className="font-medium">{area.name}</TableCell>
+                                <TableCell>{area.attempts}</TableCell>
+                                <TableCell>{area.avgScore.toFixed(1)}%</TableCell>
+                                <TableCell>{area.passRate.toFixed(1)}%</TableCell>
+                                <TableCell>
+                                  <Badge className={status.className}>{status.label}</Badge>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <Accordion type="single" collapsible className="w-full mt-4">
+                      <AccordionItem value="by-difficulty">
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex items-center gap-2">
+                            <PieChart className="h-4 w-4 text-purple-600" />
+                            <span className="font-semibold text-sm">Detalle por dificultad</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Área</TableHead>
+                                <TableHead>Dificultad</TableHead>
+                                <TableHead>Intentos</TableHead>
+                                <TableHead>Promedio</TableHead>
+                                <TableHead>Aprobación</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {areaRows.flatMap((area) =>
+                                area.byDifficulty.map((r: any, idx: number) => (
+                                  <TableRow key={`${area.id}-${idx}`}>
+                                    <TableCell>{area.name}</TableCell>
+                                    <TableCell>{r.difficultyLevel || 'N/A'}</TableCell>
+                                    <TableCell>{r.attempts || 0}</TableCell>
+                                    <TableCell>{(r.avgScore || 0).toFixed(1)}%</TableCell>
+                                    <TableCell>{(r.passRate || 0).toFixed(1)}%</TableCell>
+                                  </TableRow>
+                                ))
+                              )}
+                            </TableBody>
+                          </Table>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  </>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Vista de Estudiantes con Métricas Individuales */}
             <Card className="border-2 border-indigo-100">
@@ -1315,343 +1897,48 @@ export function AnalyticsTab({
               </CardContent>
             </Card>
 
-            {/* Análisis de Rendimiento */}
+
+            {/* Participación e informes */}
             <Card>
-              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-gray-700" />
-                  <span>Análisis de Rendimiento</span>
-                </CardTitle>
-              </CardHeader>
               <CardContent className="p-6">
-                <Accordion type="multiple" defaultValue={["performance"]} className="w-full">
-                  {/* Análisis Temporal - Evolución de Rendimiento */}
-                  {safeReportSeries.length > 0 && (
-                    <AccordionItem value="temporal">
-                      <AccordionTrigger className="hover:no-underline">
+                <Accordion type="multiple" className="w-full">
+                  <AccordionItem value="engagement">
+                    <div className="flex items-center justify-between pr-4">
+                      <AccordionTrigger className="hover:no-underline flex-1">
                         <div className="flex items-center gap-2">
-                          <TrendingUp className="h-4 w-4 text-blue-600" />
-                          <span className="font-semibold">Evolución Temporal del Rendimiento</span>
+                          <Activity className="h-4 w-4 text-green-600" />
+                          <span className="font-semibold">Participación</span>
                         </div>
                       </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
-                          {/* Evolución Mensual de Promedio */}
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-base">Promedio Mensual</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <ResponsiveContainer width="100%" height={250}>
-                                <RechartsLineChart data={safeReportSeries}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                  <XAxis 
-                                    dataKey="period" 
-                                    tick={{ fontSize: 11 }}
-                                    tickFormatter={(value) => {
-                                      const [year, month] = value.split('-')
-                                      const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-                                      return `${monthNames[parseInt(month) - 1]} ${year.slice(2)}`
-                                    }}
-                                  />
-                                  <YAxis 
-                                    domain={[0, 100]}
-                                    tick={{ fontSize: 11 }}
-                                    tickFormatter={(value) => `${value}%`}
-                                  />
-                                  <RechartsTooltip 
-                                    formatter={(value: any) => [`${value}%`, 'Promedio']}
-                                    labelFormatter={(label: string) => {
-                                      const [year, month] = label.split('-')
-                                      const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-                                      return `${monthNames[parseInt(month) - 1]} ${year}`
-                                    }}
-                                  />
-                                  <Line 
-                                    type="monotone" 
-                                    dataKey="avgScore" 
-                                    name="Promedio" 
-                                    stroke="#73A2D3" 
-                                    strokeWidth={2.5}
-                                    dot={{ fill: '#73A2D3', r: 4 }}
-                                    activeDot={{ r: 6 }}
-                                  />
-                                </RechartsLineChart>
-                              </ResponsiveContainer>
-                            </CardContent>
-                          </Card>
-
-                          {/* Evolución de Tasa de Aprobación */}
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-base">Tasa de Aprobación Mensual</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <ResponsiveContainer width="100%" height={250}>
-                                <RechartsLineChart data={safeReportSeries}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                  <XAxis 
-                                    dataKey="period" 
-                                    tick={{ fontSize: 11 }}
-                                    tickFormatter={(value) => {
-                                      const [year, month] = value.split('-')
-                                      const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-                                      return `${monthNames[parseInt(month) - 1]} ${year.slice(2)}`
-                                    }}
-                                  />
-                                  <YAxis 
-                                    domain={[0, 100]}
-                                    tick={{ fontSize: 11 }}
-                                    tickFormatter={(value) => `${value}%`}
-                                  />
-                                  <RechartsTooltip 
-                                    formatter={(value: any) => [`${value}%`, 'Tasa de Aprobación']}
-                                    labelFormatter={(label: string) => {
-                                      const [year, month] = label.split('-')
-                                      const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-                                      return `${monthNames[parseInt(month) - 1]} ${year}`
-                                    }}
-                                  />
-                                  <Line 
-                                    type="monotone" 
-                                    dataKey="passRate" 
-                                    name="Tasa de Aprobación" 
-                                    stroke="#22c55e" 
-                                    strokeWidth={2.5}
-                                    dot={{ fill: '#22c55e', r: 4 }}
-                                    activeDot={{ r: 6 }}
-                                  />
-                                </RechartsLineChart>
-                              </ResponsiveContainer>
-                            </CardContent>
-                          </Card>
-
-                          {/* Comparación Período Actual vs Anterior */}
-                          {safeReportSeries.length >= 2 && (
-                            <Card className="lg:col-span-2">
-                              <CardHeader>
-                                <CardTitle className="text-base">Último Mes vs Mes Anterior</CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                  {(() => {
-                                    const currentPeriod = safeReportSeries[safeReportSeries.length - 1]
-                                    const previousPeriod = safeReportSeries[safeReportSeries.length - 2]
-                                    
-                                    if (!currentPeriod || !previousPeriod) return null
-                                    
-                                    const avgScoreChange = (currentPeriod.avgScore || 0) - (previousPeriod.avgScore || 0)
-                                    const passRateChange = (currentPeriod.passRate || 0) - (previousPeriod.passRate || 0)
-                                    const attemptsChange = (currentPeriod.attempts || 0) - (previousPeriod.attempts || 0)
-
-                                    return (
-                                      <>
-                                        <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
-                                          <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm text-blue-600 font-medium">Promedio</span>
-                                            {avgScoreChange >= 0 ? (
-                                              <TrendingUp className="h-4 w-4 text-green-600" />
-                                            ) : (
-                                              <TrendingDown className="h-4 w-4 text-red-600" />
-                                            )}
-                                          </div>
-                                          <div className="text-2xl font-bold text-blue-700">
-                                            {(currentPeriod.avgScore || 0).toFixed(1)}%
-                                          </div>
-                                          <div className={`text-xs mt-1 ${
-                                            avgScoreChange >= 0 ? 'text-green-600' : 'text-red-600'
-                                          }`}>
-                                            {avgScoreChange >= 0 ? '+' : ''}{avgScoreChange.toFixed(1)} puntos vs mes anterior
-                                          </div>
-                                        </div>
-
-                                        <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg">
-                                          <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm text-green-600 font-medium">Tasa Aprobación</span>
-                                            {passRateChange >= 0 ? (
-                                              <TrendingUp className="h-4 w-4 text-green-600" />
-                                            ) : (
-                                              <TrendingDown className="h-4 w-4 text-red-600" />
-                                            )}
-                                          </div>
-                                          <div className="text-2xl font-bold text-green-700">
-                                            {(currentPeriod.passRate || 0).toFixed(1)}%
-                                          </div>
-                                          <div className={`text-xs mt-1 ${
-                                            passRateChange >= 0 ? 'text-green-600' : 'text-red-600'
-                                          }`}>
-                                            {passRateChange >= 0 ? '+' : ''}{passRateChange.toFixed(1)} puntos vs mes anterior
-                                          </div>
-                                        </div>
-
-                                        <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg">
-                                          <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm text-purple-600 font-medium">Exámenes Realizados</span>
-                                            {attemptsChange >= 0 ? (
-                                              <TrendingUp className="h-4 w-4 text-green-600" />
-                                            ) : (
-                                              <TrendingDown className="h-4 w-4 text-red-600" />
-                                            )}
-                                          </div>
-                                          <div className="text-2xl font-bold text-purple-700">
-                                            {currentPeriod.attempts || 0}
-                                          </div>
-                                          <div className={`text-xs mt-1 ${
-                                            attemptsChange >= 0 ? 'text-green-600' : 'text-red-600'
-                                          }`}>
-                                            {attemptsChange >= 0 ? '+' : ''}{attemptsChange} vs mes anterior
-                                          </div>
-                                        </div>
-                                      </>
-                                    )
-                                  })()}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                  {/* Gráficos de Rendimiento */}
-                  <AccordionItem value="performance">
-                    <AccordionTrigger className="hover:no-underline">
-                      <div className="flex items-center gap-2">
-                        <LineChart className="h-4 w-4 text-blue-600" />
-                        <span className="font-semibold">Gráficos de Rendimiento</span>
-                      </div>
-                    </AccordionTrigger>
+                      <Button onClick={exportEngagementCSV} variant="outline" size="sm" className="ml-2" disabled={!engagementMetrics}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Exportar Excel
+                      </Button>
+                    </div>
                     <AccordionContent>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
-              {/* Rendimiento por Materia */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <LineChart className="h-5 w-5" />
-                    <span>Evolución por Competencia</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {safeGradeSeries.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={320}>
-                      <RechartsLineChart data={safeGradeSeries} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
-                        <XAxis 
-                          dataKey="period" 
-                          tick={{ fontSize: 11, fill: '#6b7280' }}
-                          tickFormatter={(value) => {
-                            const [year, month] = value.split('-')
-                            const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-                            return `${monthNames[parseInt(month) - 1]} ${year.slice(2)}`
-                          }}
-                        />
-                        <YAxis 
-                          domain={[0, 100]}
-                          tick={{ fontSize: 11, fill: '#6b7280' }}
-                          tickFormatter={(value) => `${value}%`}
-                        />
-                        <RechartsTooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }}
-                          labelFormatter={(label: string) => {
-                            const [year, month] = label.split('-')
-                            const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-                            return `${monthNames[parseInt(month) - 1]} ${year}`
-                          }}
-                          formatter={(value: any) => [`${Number(value).toFixed(1)}%`, '']}
-                        />
-                        <Legend 
-                          wrapperStyle={{ paddingTop: '20px' }}
-                          iconType="line"
-                        />
-                        {Object.keys(safeGradeSeries[0] || {}).filter(k => k !== 'period' && k !== 'avgScore' && k !== 'passRate' && k !== 'attempts').map((key, idx) => (
-                          <Line 
-                            key={key} 
-                            type="monotone" 
-                            dataKey={key} 
-                            stroke={["#C00102","#73A2D3","#22c55e","#f97316","#8b5cf6","#ec4899","#14b8a6"][idx % 7]} 
-                            strokeWidth={2.5}
-                            dot={{ fill: ["#C00102","#73A2D3","#22c55e","#f97316","#8b5cf6","#ec4899","#14b8a6"][idx % 7], r: 3 }}
-                            activeDot={{ r: 5 }}
-                          />
-                        ))}
-                      </RechartsLineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-[300px] text-gray-500">
-                      <div className="text-center">
-                        <BarChart3 className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                        <p>No hay datos disponibles</p>
-                        <p className="text-xs text-gray-400 mt-1">Ajusta los filtros o espera a que haya actividad</p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Distribución de Notas */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <BarChart3 className="h-5 w-5" />
-                    <span>Distribución de Calificaciones</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {safeGradeDistribution.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={320}>
-                      <BarChart 
-                        data={safeGradeDistribution} 
-                        layout="vertical"
-                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
-                        <XAxis type="number" tick={{ fontSize: 11, fill: '#6b7280' }} />
-                        <YAxis 
-                          type="category" 
-                          dataKey="rango" 
-                          tick={{ fontSize: 11, fill: '#6b7280' }}
-                          width={80}
-                        />
-                        <RechartsTooltip 
-                          contentStyle={{ 
-                            backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                          }}
-                          formatter={(value: any) => [`${value} estudiantes`, '']}
-                        />
-                        <Bar 
-                          dataKey="estudiantes" 
-                          radius={[0, 8, 8, 0]}
-                        >
-                          {safeGradeDistribution.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={['#ef4444','#f97316','#eab308','#22c55e'][index % 4]} 
-                            />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex items-center justify-center h-[300px] text-gray-500">
-                      <div className="text-center">
-                        <BarChart3 className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                        <p>No hay datos disponibles</p>
-                        <p className="text-xs text-gray-400 mt-1">Ajusta los filtros o espera a que haya actividad</p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
+                      <div className="pt-4 space-y-6">
+                        {engagementMetrics ? (
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                            {[
+                              { label: 'Lecciones terminadas', value: engagementMetrics.totalLessonsCompleted?.toLocaleString('es-CO') ?? '0', icon: BookOpen, color: 'text-[#22c55e]' },
+                              { label: '% de lecciones trabajadas que se terminaron', value: `${engagementMetrics.completionRate?.toFixed(1) ?? '0.0'}%`, icon: CheckCircle2, color: 'text-[#8b5cf6]' },
+                              { label: 'Avance promedio en lecciones', value: `${engagementMetrics.averageProgress?.toFixed(1) ?? '0.0'}%`, icon: TrendingUp, color: 'text-[#73A2D3]' },
+                              { label: 'Cursos completados', value: engagementMetrics.courseCompletions?.toLocaleString('es-CO') ?? '0', icon: Award, color: 'text-[#06b6d4]' },
+                              { label: 'Tiempo total en exámenes', value: `${engagementMetrics.examTimeHours?.toLocaleString('es-CO') ?? '0'}h`, icon: Clock, color: 'text-[#f97316]' },
+                              { label: 'Duración promedio por examen', value: `${engagementMetrics.averageExamDurationMinutes?.toFixed(0) ?? '0'} min`, icon: Clock, color: 'text-[#8b5cf6]' },
+                            ].map((metric) => (
+                              <Card key={metric.label}>
+                                <CardContent className="p-4">
+                                  <metric.icon className={`h-5 w-5 mb-2 ${metric.color}`} />
+                                  <div className={`text-2xl font-bold ${metric.color}`}>{metric.value}</div>
+                                  <div className="text-xs text-gray-600 mt-1">{metric.label}</div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-4 text-center text-sm text-gray-500">Sin datos de participación</div>
+                        )}
               {/* Actividad Diaria */}
               <Card>
                 <CardHeader>
@@ -1713,190 +2000,17 @@ export function AnalyticsTab({
                 </CardContent>
               </Card>
 
-              {/* Ranking de Instituciones - Solo una vez, sin duplicar */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <BarChart3 className="h-5 w-5" />
-                    <span>Ranking de Instituciones</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {safeSchoolRanking.length > 0 ? (
-                    <Tabs defaultValue="top5" className="w-full">
-                      <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="top5">Top 5</TabsTrigger>
-                        <TabsTrigger value="completo">Lista Completa ({safeSchoolRanking.length})</TabsTrigger>
-                      </TabsList>
-                      
-                      <TabsContent value="top5" className="mt-4">
-                        <ResponsiveContainer width="100%" height={320}>
-                          <BarChart
-                            data={safeSchoolRanking.slice(0, 5).map((r, idx) => {
-                              const school = safeSchools.find(s => s.id === r.schoolId)
-                              return {
-                                nombre: school?.name || r.schoolId || 'Sin nombre',
-                                promedio: r.avgScore || 0,
-                                rank: idx + 1,
-                              }
-                            })}
-                            layout="vertical"
-                            margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
-                          >
-                            <defs>
-                              {safeSchoolRanking.slice(0, 5).map((r, idx) => {
-                                const school = safeSchools.find(s => s.id === r.schoolId)
-                                const schoolColor = hexToHsl(school?.themePrimary || '')
-                                return (
-                                  <linearGradient key={`gradient-${idx}`} id={`colorPromedio-${idx}`} x1="0" y1="0" x2="1" y2="0">
-                                    <stop offset="0%" stopColor={`hsl(${schoolColor})`} stopOpacity={0.9}/>
-                                    <stop offset="100%" stopColor={`hsl(${schoolColor})`} stopOpacity={0.7}/>
-                                  </linearGradient>
-                                )
-                              })}
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
-                            <XAxis 
-                              type="number" 
-                              domain={[0, 100]}
-                              tick={{ fontSize: 11, fill: '#6b7280' }}
-                              tickFormatter={(value) => `${value}`}
-                            />
-                            <YAxis 
-                              type="category" 
-                              dataKey="nombre" 
-                              tick={{ fontSize: 11, fill: '#6b7280' }}
-                              width={90}
-                            />
-                            <RechartsTooltip 
-                              contentStyle={{ 
-                                backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                                border: '1px solid #e5e7eb',
-                                borderRadius: '8px',
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                              }}
-                              formatter={(value: any) => [`${Number(value).toFixed(1)}`, 'Promedio']}
-                            />
-                            <Bar 
-                              dataKey="promedio" 
-                              radius={[0, 8, 8, 0]}
-                            >
-                              {safeSchoolRanking.slice(0, 5).map((_, idx) => (
-                                <Cell key={`cell-${idx}`} fill={`url(#colorPromedio-${idx})`} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </TabsContent>
-                      
-                      <TabsContent value="completo" className="mt-4">
-                        <div className="max-h-[320px] overflow-y-auto">
-                          <div className="space-y-2">
-                            {safeSchoolRanking.map((r, idx) => {
-                              const school = safeSchools.find(s => s.id === r.schoolId)
-                              const schoolName = school?.name || r.schoolId || 'Sin nombre'
-                              const schoolLogo = school?.logoUrl
-                              const promedio = r.avgScore || 0
-                              const position = idx + 1
-                              
-                              // Colores según posición
-                              let positionColor = 'text-gray-600'
-                              let bgColor = 'bg-gray-50'
-                              if (position === 1) {
-                                positionColor = 'text-yellow-600'
-                                bgColor = 'bg-yellow-50'
-                              } else if (position === 2) {
-                                positionColor = 'text-gray-400'
-                                bgColor = 'bg-gray-50'
-                              } else if (position === 3) {
-                                positionColor = 'text-amber-600'
-                                bgColor = 'bg-amber-50'
-                              }
-                              
-                              return (
-                                <div 
-                                  key={r.schoolId || idx} 
-                                  className={`flex items-center justify-between p-3 rounded-lg border ${bgColor} hover:shadow-sm transition-shadow`}
-                                >
-                                  <div className="flex items-center gap-4 flex-1 min-w-0">
-                                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${positionColor} ${position <= 3 ? 'bg-white border-2' : 'bg-white border border-gray-200'}`}>
-                                      {position <= 3 ? (
-                                        position === 1 ? '🥇' : position === 2 ? '🥈' : '🥉'
-                                      ) : (
-                                        position
-                                      )}
-                                    </div>
-                                    {schoolLogo && (
-                                      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-white border border-gray-200 p-1.5 flex items-center justify-center">
-                                        <img 
-                                          src={schoolLogo} 
-                                          alt={schoolName}
-                                          className="w-full h-full object-contain"
-                                          onError={(e) => {
-                                            (e.target as HTMLImageElement).style.display = 'none'
-                                          }}
-                                        />
-                                      </div>
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-medium text-gray-900 truncate">{schoolName}</div>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-3 flex-shrink-0">
-                                    <div className="text-right">
-                                      <div className="text-lg font-bold text-gray-900">{promedio.toFixed(1)}</div>
-                                      <div className="text-xs text-gray-500">Promedio</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-                  ) : (
-                    <div className="flex items-center justify-center h-[300px] text-gray-500">
-                      <div className="text-center">
-                        <BarChart3 className="h-12 w-12 mx-auto mb-3 text-gray-400" />
-                        <p>No hay datos disponibles</p>
-                        <p className="text-xs text-gray-400 mt-1">Ajusta los filtros o espera a que haya actividad</p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
                       </div>
                     </AccordionContent>
                   </AccordionItem>
 
-                </Accordion>
-              </CardContent>
-            </Card>
-
-            {/* Sección de Informes con Acordeones */}
-            {/* Informes Detallados - Tablas con datos agregados por curso/competencia */}
-            <Card>
-              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-gray-700" />
-                    <span>Informes Detallados</span>
-                  </CardTitle>
-                  <p className="text-xs text-gray-600 mt-1 ml-7">
-                    Tablas con métricas agregadas por curso y competencia (filtradas según los filtros aplicados)
-                  </p>
-                </div>
-              </CardHeader>
-              <CardContent className="p-6">
-                <Accordion type="multiple" defaultValue={["performance-report"]} className="w-full">
                   {/* Informe de Rendimiento */}
                   <AccordionItem value="performance-report">
                     <div className="flex items-center justify-between pr-4">
                       <AccordionTrigger className="hover:no-underline flex-1">
                         <div className="flex items-center gap-2">
                           <BarChart3 className="h-4 w-4 text-blue-600" />
-                          <span className="font-semibold">Informe de Rendimiento por Curso y Competencia</span>
+                          <span className="font-semibold">Informe por Colegio, Curso y Área</span>
                         </div>
                       </AccordionTrigger>
                       <Button 
@@ -1952,457 +2066,9 @@ export function AnalyticsTab({
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* Informe por Competencia y Dificultad */}
-                  <AccordionItem value="competency-difficulty">
-                    <div className="flex items-center justify-between pr-4">
-                      <AccordionTrigger className="hover:no-underline flex-1">
-                        <div className="flex items-center gap-2">
-                          <PieChart className="h-4 w-4 text-purple-600" />
-                          <span className="font-semibold">Análisis por Competencia y Dificultad</span>
-                        </div>
-                      </AccordionTrigger>
-                      <Button 
-                        onClick={exportCompCSV}
-                        variant="outline" 
-                        size="sm"
-                        className="ml-2"
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Exportar Excel
-                      </Button>
-                    </div>
-                    <AccordionContent>
-                      <div className="pt-4">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Competencia</TableHead>
-                              <TableHead>Dificultad</TableHead>
-                              <TableHead>Intentos</TableHead>
-                              <TableHead>Promedio</TableHead>
-                              <TableHead>Aprobación</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {safeCompReportRows.map((r:any, idx:number) => (
-                              <TableRow key={idx}>
-                                <TableCell>{r.competencyName}</TableCell>
-                                <TableCell>{r.difficultyLevel || 'N/A'}</TableCell>
-                                <TableCell>{r.attempts || 0}</TableCell>
-                                <TableCell>{(r.avgScore || 0).toFixed(1)}%</TableCell>
-                                <TableCell>{(r.passRate || 0).toFixed(1)}%</TableCell>
-                              </TableRow>
-                            ))}
-                            {compReportRows.length === 0 && (
-                              <TableRow>
-                                <TableCell colSpan={5} className="text-center text-sm text-gray-500">Sin datos</TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
                 </Accordion>
               </CardContent>
             </Card>
-
-            {/* Análisis de Engagement - Consolidado */}
-            {engagementMetrics && (
-              <Card>
-                <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <Activity className="h-5 w-5 text-green-600" />
-                      <span>Análisis de Engagement</span>
-                    </CardTitle>
-                    <Button onClick={exportEngagementCSV} variant="outline" size="sm">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Exportar Métricas
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {/* Métricas Principales */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-2xl font-bold text-[#22c55e]">{engagementMetrics?.totalLessonsCompleted?.toLocaleString('es-CO') || '0'}</div>
-                            <div className="text-sm text-gray-600">Lecciones Completadas</div>
-                          </div>
-                          <BookOpen className="h-8 w-8 text-[#22c55e]" />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-2xl font-bold text-[#f97316]">{engagementMetrics?.examTimeHours?.toLocaleString('es-CO') || '0'}h</div>
-                            <div className="text-sm text-gray-600">Tiempo en Exámenes</div>
-                          </div>
-                          <Clock className="h-8 w-8 text-[#f97316]" />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-2xl font-bold text-[#8b5cf6]">{engagementMetrics?.completionRate?.toFixed(1) || '0.0'}%</div>
-                            <div className="text-sm text-gray-600">Lecciones Terminadas</div>
-                          </div>
-                          <TrendingUp className="h-8 w-8 text-[#8b5cf6]" />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-2xl font-bold text-[#06b6d4]">{engagementMetrics?.courseCompletions?.toLocaleString('es-CO') || '0'}</div>
-                            <div className="text-sm text-gray-600">Cursos Completados</div>
-                          </div>
-                          <Award className="h-8 w-8 text-[#06b6d4]" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Gráficas de Engagement */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center space-x-2">
-                          <TrendingUp className="h-5 w-5" />
-                          <span>Progreso y Finalización</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Avance Promedio en Lecciones</span>
-                            <span className="text-2xl font-bold text-[#73A2D3]">{engagementMetrics?.averageProgress?.toFixed(1) || '0.0'}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-[#73A2D3] h-2 rounded-full" 
-                              style={{ width: `${engagementMetrics?.averageProgress || 0}%` }}
-                            ></div>
-                          </div>
-                          
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Lecciones Terminadas</span>
-                            <span className="text-2xl font-bold text-[#22c55e]">{engagementMetrics?.completionRate?.toFixed(1) || '0.0'}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-[#22c55e] h-2 rounded-full" 
-                              style={{ width: `${engagementMetrics?.completionRate || 0}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center space-x-2">
-                          <Clock className="h-5 w-5" />
-                          <span>Métricas de Tiempo</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-6">
-                          <div className="text-center">
-                            <div className="text-3xl font-bold text-[#f97316]">{engagementMetrics?.examTimeHours?.toLocaleString('es-CO') || '0'}h</div>
-                            <div className="text-sm text-gray-600">Tiempo Total en Exámenes</div>
-                          </div>
-                          
-                          <div className="text-center">
-                            <div className="text-3xl font-bold text-[#8b5cf6]">{engagementMetrics?.averageExamDurationMinutes?.toFixed(0) || '0'}min</div>
-                            <div className="text-sm text-gray-600">Duración Promedio por Examen</div>
-                          </div>
-                          
-                          <div className="text-center">
-                            <div className="text-3xl font-bold text-[#06b6d4]">{engagementMetrics?.activeUsers?.toLocaleString('es-CO') || '0'}</div>
-                            <div className="text-sm text-gray-600">Estudiantes Activos</div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Insights y Recomendaciones - Al final */}
-            {(kpis || engagementMetrics) && (
-              <>
-                <Card className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Lightbulb className="h-5 w-5 text-amber-600" />
-                      <span>Insights y Recomendaciones</span>
-                    </CardTitle>
-                  </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {/* Análisis de Rendimiento */}
-                    {kpis && (
-                      <>
-                        {kpis.averageScore !== undefined && kpis.averageScore !== null && (
-                          <>
-                            {kpis.averageScore < 70 ? (
-                              <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                                <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                                <div>
-                                  <div className="font-semibold text-red-800">Atención Requerida: Rendimiento Bajo</div>
-                                  <div className="text-sm text-red-700 mt-1">
-                                    El promedio general ({kpis.averageScore.toFixed(1)}%) está por debajo del umbral recomendado (70%). 
-                                    Se recomienda implementar estrategias de refuerzo académico y revisar las áreas con menor rendimiento.
-                                  </div>
-                                </div>
-                              </div>
-                            ) : kpis.averageScore >= 80 ? (
-                              <div className="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                                <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                                <div>
-                                  <div className="font-semibold text-green-800">Excelente Rendimiento</div>
-                                  <div className="text-sm text-green-700 mt-1">
-                                    El promedio general ({kpis.averageScore.toFixed(1)}%) indica un excelente desempeño académico. 
-                                    Continúa con las estrategias actuales que están generando buenos resultados.
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                <Target className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                                <div>
-                                  <div className="font-semibold text-blue-800">Buen Rendimiento con Oportunidades de Mejora</div>
-                                  <div className="text-sm text-blue-700 mt-1">
-                                    El promedio general ({kpis.averageScore.toFixed(1)}%) está en un rango aceptable. 
-                                    Hay oportunidades para mejorar identificando áreas específicas de fortalecimiento.
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        )}
-                        
-                        {kpis.examAttempts < 100 && (
-                          <div className="flex items-start gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="font-semibold text-yellow-800">Baja Participación en Evaluaciones</div>
-                              <div className="text-sm text-yellow-700 mt-1">
-                                Solo {kpis.examAttempts} exámenes realizados. Se recomienda promover una mayor participación 
-                                mediante incentivos, recordatorios y estrategias de gamificación.
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {/* Análisis de Engagement */}
-                    {engagementMetrics && (
-                      <>
-                        {engagementMetrics.completionRate !== undefined && engagementMetrics.completionRate !== null && engagementMetrics.completionRate < 50 && (
-                          <div className="flex items-start gap-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                            <TrendingDown className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="font-semibold text-orange-800">Baja Tasa de Finalización</div>
-                              <div className="text-sm text-orange-700 mt-1">
-                                Solo el {engagementMetrics.completionRate.toFixed(1)}% de las lecciones trabajadas en el período 
-                                quedaron terminadas. Considera implementar estrategias de engagement, 
-                                recordatorios personalizados y contenido más interactivo.
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {engagementMetrics.completionRate !== undefined && engagementMetrics.completionRate !== null && engagementMetrics.completionRate >= 70 && (
-                          <div className="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                            <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="font-semibold text-green-800">Alto Nivel de Engagement</div>
-                              <div className="text-sm text-green-700 mt-1">
-                                El {engagementMetrics.completionRate.toFixed(1)}% de las lecciones trabajadas quedaron terminadas. 
-                                Los estudiantes están comprometidos con el aprendizaje. Mantén las estrategias actuales.
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {engagementMetrics.averageProgress !== undefined && engagementMetrics.averageProgress !== null && engagementMetrics.averageProgress < 50 && (
-                          <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                            <Target className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="font-semibold text-amber-800">Avance Bajo en Lecciones</div>
-                              <div className="text-sm text-amber-700 mt-1">
-                                El avance promedio en las lecciones ({engagementMetrics.averageProgress.toFixed(1)}%) sugiere que los estudiantes 
-                                necesitan más apoyo. Considera revisar la dificultad del contenido y proporcionar recursos adicionales.
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                      </>
-                    )}
-
-                    {/* Recomendaciones Generales */}
-                    <div className="mt-4 pt-4 border-t border-amber-200">
-                      <div className="font-semibold text-amber-800 mb-2">Recomendaciones Estratégicas:</div>
-                      <ul className="space-y-2 text-sm text-amber-700">
-                        {kpis && kpis.averageScore < 70 && (
-                          <li className="flex items-start gap-2">
-                            <span className="text-amber-600">•</span>
-                            <span>Implementar sesiones de refuerzo para competencias con menor rendimiento</span>
-                          </li>
-                        )}
-                        {engagementMetrics && engagementMetrics.completionRate < 50 && (
-                          <li className="flex items-start gap-2">
-                            <span className="text-amber-600">•</span>
-                            <span>Desarrollar estrategias de gamificación para aumentar la participación</span>
-                          </li>
-                        )}
-                        {kpis && kpis.examAttempts < 100 && (
-                          <li className="flex items-start gap-2">
-                            <span className="text-amber-600">•</span>
-                            <span>Promover mayor participación en evaluaciones mediante incentivos y recordatorios</span>
-                          </li>
-                        )}
-                        <li className="flex items-start gap-2">
-                          <span className="text-amber-600">•</span>
-                          <span>Revisar regularmente los informes detallados para identificar tendencias y áreas de mejora</span>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Análisis de Competencias que Necesitan Atención */}
-              {safeCompReportRows.length > 0 && (
-                <Card className="border-2 border-red-100">
-                  <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b">
-                    <CardTitle className="flex items-center gap-2">
-                      <AlertTriangle className="h-5 w-5 text-red-600" />
-                      <span>Competencias que Requieren Atención</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                    <div className="space-y-4">
-                      {(() => {
-                        // Agrupar por competencia y calcular promedio general
-                        const compMap = new Map<string, { totalScore: number; totalAttempts: number; competencies: any[] }>()
-                        
-                        safeCompReportRows.forEach((row: any) => {
-                          const compId = row.competencyId
-                          if (!compId) return // Skip if no competency ID
-                          if (!compMap.has(compId)) {
-                            compMap.set(compId, { totalScore: 0, totalAttempts: 0, competencies: [] })
-                          }
-                          const comp = compMap.get(compId)!
-                          const avgScore = row.avgScore || 0
-                          const attempts = row.attempts || 0
-                          comp.totalScore += avgScore * attempts
-                          comp.totalAttempts += attempts
-                          comp.competencies.push(row)
-                        })
-
-                        // Calcular promedio por competencia y ordenar
-                        const compAnalysis = Array.from(compMap.entries())
-                          .map(([compId, data]) => {
-                            const avgScore = data.totalAttempts > 0 
-                              ? data.totalScore / data.totalAttempts 
-                              : 0
-                            const passRate = data.totalAttempts > 0
-                              ? data.competencies.reduce((sum, c) => sum + ((c.passRate || 0) * (c.attempts || 0)), 0) / data.totalAttempts
-                              : 0
-                            return {
-                              competencyId: compId,
-                              competencyName: data.competencies[0]?.competencyName || 'Competencia desconocida',
-                              avgScore,
-                              passRate,
-                              totalAttempts: data.totalAttempts,
-                              competencies: data.competencies
-                            }
-                          })
-                          .filter(comp => comp.avgScore < 70)
-                          .sort((a, b) => a.avgScore - b.avgScore)
-                          .slice(0, 5)
-
-                        if (compAnalysis.length === 0) {
-                          return (
-                            <div className="text-center py-8">
-                              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-3" />
-                              <p className="font-semibold text-green-700">¡Excelente!</p>
-                              <p className="text-sm text-gray-600 mt-1">
-                                Todas las competencias están por encima del umbral de atención (70%)
-                              </p>
-                            </div>
-                          )
-                        }
-
-                        return (
-                          <>
-                            <div className="text-sm text-gray-600 mb-4">
-                              Las siguientes competencias tienen un promedio inferior al 70% y requieren atención prioritaria:
-                            </div>
-                            {compAnalysis.map((comp) => (
-                              <div key={comp.competencyId} className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                                <div className="flex items-start justify-between mb-2">
-                                  <div className="flex-1">
-                                    <div className="font-semibold text-red-800 mb-1">{comp.competencyName}</div>
-                                    <div className="grid grid-cols-3 gap-4 text-sm">
-                                      <div>
-                                        <span className="text-gray-600">Promedio:</span>
-                                        <span className="ml-2 font-semibold text-red-700">
-                                          {comp.avgScore.toFixed(1)}%
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-600">Tasa de Aprobación:</span>
-                                        <span className="ml-2 font-semibold text-red-700">
-                                          {comp.passRate.toFixed(1)}%
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-600">Total Intentos:</span>
-                                        <span className="ml-2 font-semibold">{comp.totalAttempts}</span>
-                                      </div>
-                                    </div>
-                                    <div className="mt-2 text-xs text-gray-600">
-                                      <span className="text-gray-600">Estado:</span>
-                                      <span className="ml-2 font-semibold text-red-700">
-                                        {comp.avgScore < 60 ? 'Crítico' : 'Requiere Atención'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="mt-3 pt-3 border-t border-red-200">
-                                  <div className="text-xs text-red-700">
-                                    <strong>Recomendación:</strong> Implementar estrategias de refuerzo específicas para esta competencia, 
-                                    revisar el contenido y considerar sesiones de apoyo adicional.
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </>
-                        )
-                      })()}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              </>
-            )}
 
       {/* Modal de Detalles del Estudiante */}
       <StudentDetailModal
