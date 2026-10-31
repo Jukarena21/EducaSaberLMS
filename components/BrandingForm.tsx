@@ -1,21 +1,28 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
-import { useSchoolBranding, SchoolBranding } from "@/hooks/useSchoolBranding"
+import React, { useEffect, useRef, useState } from "react"
+import { SCHOOL_BRANDING_UPDATED_EVENT } from "@/hooks/useSchoolBranding"
+import { BRANDING_LOGO_MAX_BYTES, EDUCASABER_BRANDING_DEFAULTS } from "@/lib/branding"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Upload, X } from "lucide-react"
 
 interface BrandingFormProps {
   schoolId?: string
 }
 
-export default function BrandingForm({ schoolId }: BrandingFormProps) {
-  const { branding, refresh, loading } = useSchoolBranding(schoolId)
-  const [initialized, setInitialized] = useState(false)
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"]
 
+function colorOrDefault(value: string, fallback: string) {
+  return HEX_COLOR.test(value) ? value : fallback
+}
+
+export default function BrandingForm({ schoolId }: BrandingFormProps) {
+  const [loading, setLoading] = useState(true)
   const [logoUrl, setLogoUrl] = useState<string>("")
   const [themePrimary, setThemePrimary] = useState<string>("")
   const [themeSecondary, setThemeSecondary] = useState<string>("")
@@ -23,20 +30,82 @@ export default function BrandingForm({ schoolId }: BrandingFormProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [logoError, setLogoError] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Cargar valores actuales desde la DB cuando entra a la pestaña
+  // Se leen los valores guardados tal cual, sin los de la plataforma: si el
+  // formulario arrancara con ellos, al guardar quedarían escritos en el colegio
   useEffect(() => {
-    if (branding && !initialized) {
-      setLogoUrl(branding.logoUrl || "")
-      setThemePrimary(branding.themePrimary || "")
-      setThemeSecondary(branding.themeSecondary || "")
-      setThemeAccent(branding.themeAccent || "")
-      setInitialized(true)
+    if (!schoolId) {
+      setLoading(false)
+      return
     }
-  }, [branding, initialized])
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+    fetch(`/api/schools/branding-simple?schoolId=${schoolId}&raw=1`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("No se pudo cargar el branding actual")
+        return res.json()
+      })
+      .then((data) => {
+        if (cancelled) return
+        setLogoUrl(data.logoUrl || "")
+        setThemePrimary(data.themePrimary || "")
+        setThemeSecondary(data.themeSecondary || "")
+        setThemeAccent(data.themeAccent || "")
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err?.message || "Error desconocido")
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId])
+
+  useEffect(() => {
+    setLogoError(false)
+  }, [logoUrl])
+
+  function handleLogoFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+    setError(null)
+
+    if (!LOGO_TYPES.includes(file.type)) {
+      setError("El logo debe ser PNG, JPG, WebP o SVG")
+      return
+    }
+    if (file.size > BRANDING_LOGO_MAX_BYTES) {
+      setError("El logo debe pesar máximo 500 KB. Prueba con una versión más liviana o en WebP.")
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === "string") setLogoUrl(reader.result)
+    }
+    reader.onerror = () => setError("No se pudo leer el archivo del logo")
+    reader.readAsDataURL(file)
+  }
+
+  function resetToDefaults() {
+    setLogoUrl("")
+    setThemePrimary("")
+    setThemeSecondary("")
+    setThemeAccent("")
+    setSuccess(null)
+    setError(null)
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!schoolId) return
     setSaving(true)
     setError(null)
     setSuccess(null)
@@ -45,7 +114,8 @@ export default function BrandingForm({ schoolId }: BrandingFormProps) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          logoUrl: logoUrl || undefined,
+          schoolId,
+          logoUrl,
           themePrimary,
           themeSecondary,
           themeAccent,
@@ -56,7 +126,9 @@ export default function BrandingForm({ schoolId }: BrandingFormProps) {
         throw new Error(j?.error || "No se pudo guardar el branding")
       }
       setSuccess("Branding actualizado correctamente")
-      await refresh()
+      window.dispatchEvent(
+        new CustomEvent(SCHOOL_BRANDING_UPDATED_EVENT, { detail: { schoolId } })
+      )
     } catch (err: any) {
       setError(err?.message || "Error desconocido")
     } finally {
@@ -64,27 +136,58 @@ export default function BrandingForm({ schoolId }: BrandingFormProps) {
     }
   }
 
-  // Construir branding de vista previa sin tocar el CSS global
-  const buildPreviewBranding = (): SchoolBranding => ({
-    logoUrl: logoUrl || branding?.logoUrl || null,
-    themePrimary: themePrimary || branding?.themePrimary || "#3B82F6",
-    themeSecondary: themeSecondary || branding?.themeSecondary || "#6B7280",
-    themeAccent: themeAccent || branding?.themeAccent || "#EF4444",
-  })
+  if (!schoolId) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-sm text-gray-500">
+          Tu usuario no tiene un colegio asignado, así que no hay branding que configurar.
+        </CardContent>
+      </Card>
+    )
+  }
 
-  const preview = buildPreviewBranding()
+  const preview = {
+    logoUrl: logoUrl || EDUCASABER_BRANDING_DEFAULTS.logoUrl,
+    themePrimary: colorOrDefault(themePrimary, EDUCASABER_BRANDING_DEFAULTS.themePrimary),
+    themeSecondary: colorOrDefault(themeSecondary, EDUCASABER_BRANDING_DEFAULTS.themeSecondary),
+    themeAccent: colorOrDefault(themeAccent, EDUCASABER_BRANDING_DEFAULTS.themeAccent),
+  }
 
   const headerGradient = `linear-gradient(120deg,
-    ${preview.themePrimary || "#3B82F6"} 0%,
-    ${preview.themeSecondary || "#6B7280"} 45%,
-    ${preview.themeAccent || "#EF4444"} 100%)`
+    ${preview.themePrimary} 0%,
+    ${preview.themeSecondary} 45%,
+    ${preview.themeAccent} 100%)`
 
   const tabsBarGradient = `linear-gradient(120deg,
-    ${preview.themePrimary || "#3B82F6"} 0%,
-    ${preview.themeSecondary || "#6B7280"} 100%)`
+    ${preview.themePrimary} 0%,
+    ${preview.themeSecondary} 100%)`
 
-  const primaryBg = preview.themePrimary || "#3B82F6"
-  const accentBg = preview.themeAccent || "#EF4444"
+  const colorFields = [
+    {
+      id: "themePrimary",
+      label: "Color Primario",
+      help: "Usado en encabezados y botones principales.",
+      value: themePrimary,
+      setValue: setThemePrimary,
+      fallback: EDUCASABER_BRANDING_DEFAULTS.themePrimary,
+    },
+    {
+      id: "themeSecondary",
+      label: "Color Secundario",
+      help: "Usado en textos y elementos secundarios.",
+      value: themeSecondary,
+      setValue: setThemeSecondary,
+      fallback: EDUCASABER_BRANDING_DEFAULTS.themeSecondary,
+    },
+    {
+      id: "themeAccent",
+      label: "Color de Acento",
+      help: "Usado en alertas y elementos que queremos resaltar.",
+      value: themeAccent,
+      setValue: setThemeAccent,
+      fallback: EDUCASABER_BRANDING_DEFAULTS.themeAccent,
+    },
+  ]
 
   return (
     <div className="max-w-6xl space-y-6">
@@ -98,129 +201,110 @@ export default function BrandingForm({ schoolId }: BrandingFormProps) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {loading && !initialized ? (
+            {loading ? (
               <p className="text-sm text-gray-500">Cargando branding actual...</p>
             ) : (
               <form onSubmit={onSubmit} className="space-y-6">
                 {/* Logo */}
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="logoUrl">Logo de la Institución</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="logoUrl">Logo de la Institución</Label>
+                  <div className="flex gap-2">
                     <Input
                       id="logoUrl"
                       placeholder="https://ejemplo.com/logo.png"
-                      value={logoUrl}
+                      value={logoUrl.startsWith("data:") ? "Imagen subida desde tu equipo" : logoUrl}
+                      readOnly={logoUrl.startsWith("data:")}
                       onChange={(e) => setLogoUrl(e.target.value)}
                     />
-                    <p className="text-xs text-gray-500">
-                      URL pública del logo (PNG/SVG recomendado). Se mostrará en el encabezado de la
-                      plataforma.
-                    </p>
-                    {(logoUrl || branding?.logoUrl) && (
-                      <div className="mt-2 p-2 border rounded bg-gray-50">
-                        <p className="text-xs text-gray-600 mb-2">Vista previa rápida del logo:</p>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={logoUrl || branding?.logoUrl || ""}
-                          alt="Vista previa del logo"
-                          className="h-12 w-auto object-contain mx-auto"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none"
-                            const errorMsg = e.currentTarget.nextElementSibling as HTMLElement | null
-                            if (errorMsg) errorMsg.classList.remove("hidden")
-                          }}
-                        />
-                        <p className="hidden text-xs text-red-500 text-center mt-1">
-                          Error al cargar la imagen
-                        </p>
-                      </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Subir
+                    </Button>
+                    {logoUrl && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setLogoUrl("")}
+                        title="Quitar logo"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     )}
                   </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={LOGO_TYPES.join(",")}
+                    className="hidden"
+                    onChange={handleLogoFile}
+                  />
+                  <p className="text-xs text-gray-500">
+                    Sube una imagen (PNG, JPG, WebP o SVG, máximo 500 KB) o pega una URL pública.
+                    Sin logo se usa el de EducaSaber.
+                  </p>
+                  {logoUrl && (
+                    <div className="mt-2 p-2 border rounded bg-gray-50">
+                      <p className="text-xs text-gray-600 mb-2">Vista previa del logo:</p>
+                      {logoError ? (
+                        <p className="text-xs text-red-500 text-center">
+                          No se pudo cargar la imagen. Revisa que la URL sea pública y apunte
+                          directamente a la imagen.
+                        </p>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={logoUrl}
+                          alt="Vista previa del logo"
+                          className="h-12 w-auto object-contain mx-auto"
+                          onError={() => setLogoError(true)}
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Colores */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium">Paleta de Colores</h3>
                   <p className="text-sm text-gray-600">
-                    Selecciona los colores que representen a tu institución. Los usaremos en fondos,
-                    botones y secciones clave para tu colegio.
+                    Selecciona los colores que representen a tu institución. Los campos vacíos
+                    usan los colores de EducaSaber.
                   </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Primario */}
-                    <div className="space-y-3">
-                      <Label htmlFor="themePrimary">Color Primario</Label>
-                      <div className="flex items-center space-x-3">
-                        <input
-                          type="color"
-                          id="themePrimary"
-                          value={themePrimary || branding?.themePrimary || "#3B82F6"}
-                          onChange={(e) => setThemePrimary(e.target.value)}
-                          className="w-12 h-12 rounded border border-gray-300 cursor-pointer"
-                        />
-                        <div className="flex-1">
-                          <Input
-                            value={themePrimary}
-                            onChange={(e) => setThemePrimary(e.target.value)}
-                            placeholder={branding?.themePrimary || "#3B82F6"}
-                            className="font-mono text-sm"
-                          />
+                    {colorFields.map((field) => {
+                      const invalid = field.value !== "" && !HEX_COLOR.test(field.value)
+                      return (
+                        <div key={field.id} className="space-y-3">
+                          <Label htmlFor={field.id}>{field.label}</Label>
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="color"
+                              id={field.id}
+                              value={colorOrDefault(field.value, field.fallback)}
+                              onChange={(e) => field.setValue(e.target.value)}
+                              className="w-12 h-12 rounded border border-gray-300 cursor-pointer"
+                            />
+                            <div className="flex-1">
+                              <Input
+                                value={field.value}
+                                onChange={(e) => field.setValue(e.target.value.trim())}
+                                placeholder={field.fallback}
+                                className={`font-mono text-sm ${invalid ? "border-red-400" : ""}`}
+                              />
+                            </div>
+                          </div>
+                          <p className={`text-xs ${invalid ? "text-red-500" : "text-gray-500"}`}>
+                            {invalid ? "Usa el formato #RRGGBB, por ejemplo #1E40AF." : field.help}
+                          </p>
                         </div>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Usado en encabezados y botones principales.
-                      </p>
-                    </div>
-
-                    {/* Secundario */}
-                    <div className="space-y-3">
-                      <Label htmlFor="themeSecondary">Color Secundario</Label>
-                      <div className="flex items-center space-x-3">
-                        <input
-                          type="color"
-                          id="themeSecondary"
-                          value={themeSecondary || branding?.themeSecondary || "#6B7280"}
-                          onChange={(e) => setThemeSecondary(e.target.value)}
-                          className="w-12 h-12 rounded border border-gray-300 cursor-pointer"
-                        />
-                        <div className="flex-1">
-                          <Input
-                            value={themeSecondary}
-                            onChange={(e) => setThemeSecondary(e.target.value)}
-                            placeholder={branding?.themeSecondary || "#6B7280"}
-                            className="font-mono text-sm"
-                          />
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Usado en textos y elementos secundarios.
-                      </p>
-                    </div>
-
-                    {/* Acento */}
-                    <div className="space-y-3">
-                      <Label htmlFor="themeAccent">Color de Acento</Label>
-                      <div className="flex items-center space-x-3">
-                        <input
-                          type="color"
-                          id="themeAccent"
-                          value={themeAccent || branding?.themeAccent || "#EF4444"}
-                          onChange={(e) => setThemeAccent(e.target.value)}
-                          className="w-12 h-12 rounded border border-gray-300 cursor-pointer"
-                        />
-                        <div className="flex-1">
-                          <Input
-                            value={themeAccent}
-                            onChange={(e) => setThemeAccent(e.target.value)}
-                            placeholder={branding?.themeAccent || "#EF4444"}
-                            className="font-mono text-sm"
-                          />
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Usado en alertas y elementos que queremos resaltar.
-                      </p>
-                    </div>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -236,8 +320,10 @@ export default function BrandingForm({ schoolId }: BrandingFormProps) {
                   </div>
                 )}
 
-                {/* Botón */}
-                <div className="flex justify-end">
+                <div className="flex justify-between gap-2">
+                  <Button type="button" variant="outline" onClick={resetToDefaults}>
+                    Usar valores de EducaSaber
+                  </Button>
                   <Button type="submit" disabled={saving} className="min-w-[140px]">
                     {saving ? "Guardando..." : "Guardar Cambios"}
                   </Button>
@@ -264,15 +350,11 @@ export default function BrandingForm({ schoolId }: BrandingFormProps) {
               <div className="flex items-center gap-3">
                 <div className="bg-white/90 rounded-xl p-2 flex items-center justify-center shadow-sm">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  {preview.logoUrl ? (
-                    <img
-                      src={preview.logoUrl}
-                      alt="Logo colegio"
-                      className="h-10 w-10 object-contain"
-                    />
-                  ) : (
-                    <div className="h-10 w-10 rounded bg-gray-200" />
-                  )}
+                  <img
+                    src={preview.logoUrl}
+                    alt="Logo colegio"
+                    className="h-10 w-10 object-contain"
+                  />
                 </div>
                 <div>
                   <p className="text-sm font-semibold">Nombre del Colegio</p>
@@ -306,7 +388,7 @@ export default function BrandingForm({ schoolId }: BrandingFormProps) {
               <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div
                   className="rounded-xl p-3 text-xs text-white shadow-sm"
-                  style={{ background: primaryBg }}
+                  style={{ background: preview.themePrimary }}
                 >
                   <p className="font-semibold text-sm mb-1">Cursos Activos</p>
                   <p className="text-2xl font-bold">12</p>
@@ -319,7 +401,7 @@ export default function BrandingForm({ schoolId }: BrandingFormProps) {
                 </div>
                 <div
                   className="rounded-xl p-3 text-xs text-white shadow-sm"
-                  style={{ background: accentBg }}
+                  style={{ background: preview.themeAccent }}
                 >
                   <p className="font-semibold text-sm mb-1">Aviso Importante</p>
                   <p className="text-xs text-white/90">
@@ -339,5 +421,3 @@ export default function BrandingForm({ schoolId }: BrandingFormProps) {
     </div>
   )
 }
-
-

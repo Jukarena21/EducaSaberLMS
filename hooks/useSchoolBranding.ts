@@ -8,6 +8,8 @@ export interface SchoolBranding {
   themeAccent?: string | null
 }
 
+export const SCHOOL_BRANDING_UPDATED_EVENT = 'school-branding-updated'
+
 export function useSchoolBranding(schoolId?: string) {
   // Inicializar desde localStorage si existe para evitar parpadeo
   const getCachedBranding = (): SchoolBranding | null => {
@@ -55,9 +57,32 @@ export function useSchoolBranding(schoolId?: string) {
     return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`
   }
 
-  const applyBrandingToCSS = useCallback((b: SchoolBranding) => {
+  const applyBrandingToCSS = useCallback((input: SchoolBranding) => {
     if (typeof document === 'undefined') return
     const root = document.documentElement
+
+    // Un valor que no sea #RRGGBB produciría NaN en las variables y dejaría
+    // los botones sin color, así que se trata como si no estuviera definido
+    const validHex = (value?: string | null) =>
+      value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : null
+    const b: SchoolBranding = {
+      ...input,
+      themePrimary: validHex(input.themePrimary),
+      themeSecondary: validHex(input.themeSecondary),
+      themeAccent: validHex(input.themeAccent),
+    }
+
+    // Con un primario claro (amarillo, por ejemplo) el texto blanco de los
+    // botones dejaría de leerse
+    const primaryForeground = (hex?: string | null) => {
+      if (!hex) return '0 0% 98%'
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const bl = parseInt(hex.slice(5, 7), 16)
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * bl) / 255
+      return luminance > 0.62 ? '0 0% 9%' : '0 0% 98%'
+    }
+    root.style.setProperty('--primary-foreground', primaryForeground(b.themePrimary))
     
     // Valores por defecto de EducaSaber (en HSL)
     const EDUCASABER_DEFAULTS = {
@@ -153,6 +178,18 @@ export function useSchoolBranding(schoolId?: string) {
   useEffect(() => {
     fetchBranding()
   }, [fetchBranding])
+
+  // El formulario de branding avisa al guardar para que el encabezado y los
+  // colores se actualicen sin recargar la página
+  useEffect(() => {
+    if (typeof window === 'undefined' || !schoolId) return
+    const onUpdated = (event: Event) => {
+      const updatedId = (event as CustomEvent<{ schoolId?: string }>).detail?.schoolId
+      if (updatedId === schoolId) fetchBranding()
+    }
+    window.addEventListener(SCHOOL_BRANDING_UPDATED_EVENT, onUpdated)
+    return () => window.removeEventListener(SCHOOL_BRANDING_UPDATED_EVENT, onUpdated)
+  }, [fetchBranding, schoolId])
 
   return { branding, loading, error, refresh: fetchBranding }
 }

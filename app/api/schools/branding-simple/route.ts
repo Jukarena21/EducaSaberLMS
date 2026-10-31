@@ -2,25 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/rbac'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-
-const brandingSchema = z.object({
-  logoUrl: z.string().url().optional().or(z.literal('').transform(() => undefined)),
-  themePrimary: z.string().optional(),
-  themeSecondary: z.string().optional(),
-  themeAccent: z.string().optional(),
-})
+import {
+  EDUCASABER_BRANDING_DEFAULTS,
+  brandingUpdateSchema,
+  isPlaceholderLogo,
+} from '@/lib/branding'
 
 export async function GET(request: NextRequest) {
   try {
-    // Obtener el schoolId del query parameter
     const { searchParams } = new URL(request.url)
     const schoolId = searchParams.get('schoolId')
+    // raw=1 devuelve solo lo que el colegio guardó, sin rellenar con los valores
+    // de la plataforma: el formulario de branding lo necesita para no guardar
+    // los valores por defecto como si fueran del colegio
+    const raw = searchParams.get('raw') === '1'
 
     if (!schoolId) {
       return NextResponse.json({ error: 'SchoolId requerido' }, { status: 400 })
     }
 
-    // Obtener datos reales del colegio específico
     const school = await prisma.school.findUnique({
       where: { id: schoolId },
       select: {
@@ -35,29 +35,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Colegio no encontrado' }, { status: 404 })
     }
 
-    // Valores por defecto de EducaSaber
-    const EDUCASABER_DEFAULTS = {
-      logoUrl: '/logo-educasaber.png',
-      themePrimary: '#8B5CF6', // Púrpura (262 83% 58% en HSL)
-      themeSecondary: '#10B981', // Verde (158 64% 52% en HSL)
-      themeAccent: '#F59E0B' // Naranja (38 92% 50% en HSL)
+    const storedLogo = isPlaceholderLogo(school.logoUrl) ? null : school.logoUrl
+
+    if (raw) {
+      return NextResponse.json({
+        logoUrl: storedLogo || null,
+        themePrimary: school.themePrimary || null,
+        themeSecondary: school.themeSecondary || null,
+        themeAccent: school.themeAccent || null,
+      })
     }
 
-    const branding = { 
-      logoUrl: school.logoUrl || EDUCASABER_DEFAULTS.logoUrl, 
-      themePrimary: school.themePrimary || EDUCASABER_DEFAULTS.themePrimary, 
-      themeSecondary: school.themeSecondary || EDUCASABER_DEFAULTS.themeSecondary, 
-      themeAccent: school.themeAccent || EDUCASABER_DEFAULTS.themeAccent 
-    }
-    
-    // Si el logo es example.com o un placeholder, usar logo de EducaSaber
-    if (branding.logoUrl === 'https://example.com/logo.png' || 
-        branding.logoUrl?.includes('via.placeholder.com') ||
-        branding.logoUrl === 'https://via.placeholder.com/100x100/3B82F6/FFFFFF?text=COLEGIO') {
-      branding.logoUrl = EDUCASABER_DEFAULTS.logoUrl
-    }
-    
-    return NextResponse.json(branding)
+    return NextResponse.json({
+      logoUrl: storedLogo || EDUCASABER_BRANDING_DEFAULTS.logoUrl,
+      themePrimary: school.themePrimary || EDUCASABER_BRANDING_DEFAULTS.themePrimary,
+      themeSecondary: school.themeSecondary || EDUCASABER_BRANDING_DEFAULTS.themeSecondary,
+      themeAccent: school.themeAccent || EDUCASABER_BRANDING_DEFAULTS.themeAccent,
+    })
   } catch (error) {
     console.error('Error fetching school branding:', error)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
@@ -71,7 +65,7 @@ export async function PUT(request: NextRequest) {
 
     const user = gate.session!.user as any
     const body = await request.json()
-    const data = brandingSchema.parse(body)
+    const data = brandingUpdateSchema.parse(body)
 
     let targetSchoolId: string | undefined = undefined
     if (user.role === 'school_admin') {
@@ -81,17 +75,16 @@ export async function PUT(request: NextRequest) {
     }
 
     if (!targetSchoolId) {
-      return NextResponse.json({ error: 'Falta schoolId' }, { status: 400 })
+      return NextResponse.json({ error: 'Selecciona el colegio que quieres actualizar' }, { status: 400 })
     }
 
-    // Actualizar la base de datos con los nuevos datos de branding
     const updatedSchool = await prisma.school.update({
       where: { id: targetSchoolId },
       data: {
-        logoUrl: data.logoUrl || null,
-        themePrimary: data.themePrimary || null,
-        themeSecondary: data.themeSecondary || null,
-        themeAccent: data.themeAccent || null
+        logoUrl: data.logoUrl ?? null,
+        themePrimary: data.themePrimary ?? null,
+        themeSecondary: data.themeSecondary ?? null,
+        themeAccent: data.themeAccent ?? null
       },
       select: {
         id: true,
@@ -102,18 +95,16 @@ export async function PUT(request: NextRequest) {
       }
     })
 
-    
     return NextResponse.json({
-      id: updatedSchool.id,
-      logoUrl: updatedSchool.logoUrl,
-      themePrimary: updatedSchool.themePrimary,
-      themeSecondary: updatedSchool.themeSecondary,
-      themeAccent: updatedSchool.themeAccent,
+      ...updatedSchool,
       message: 'Branding actualizado exitosamente'
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Datos inválidos', details: error.errors }, { status: 400 })
+      return NextResponse.json(
+        { error: error.errors[0]?.message || 'Datos inválidos', details: error.errors },
+        { status: 400 }
+      )
     }
     console.error('Error updating school branding:', error)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
