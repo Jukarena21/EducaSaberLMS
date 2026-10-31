@@ -863,6 +863,9 @@ export function AnalyticsTab({
                                setFilterGender('all')
                                setFilterSocioeconomicStratum('all')
                                setSelectedPeriod('6m')
+                               const defaults = { period: '6m' } as ReturnType<typeof buildFilterParams>
+                               refetchAnalytics(defaults)
+                               loadStudentsMetrics(defaults, true)
                              }}
                              variant="outline"
                              size="lg"

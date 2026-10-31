@@ -133,8 +133,10 @@
         <span class="badge badge-bueno">Bueno</span>
         {{else if (eq status 'mejorable')}}
         <span class="badge badge-mejorable">Mejorable</span>
-        {{else}}
+        {{else if (eq status 'requiere_atencion')}}
         <span class="badge badge-requiere_atencion">Requiere Atención</span>
+        {{else}}
+        <span class="badge">Sin exámenes</span>
         {{/if}}
       </div>
     </div>

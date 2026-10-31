@@ -578,8 +578,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Obtener información del estudiante
-    const { PrismaClient } = await import('@prisma/client')
-    const prisma = new PrismaClient()
+    const { prisma } = await import('@/lib/prisma')
 
     const student = await prisma.user.findUnique({
       where: { id: userId },
@@ -629,7 +628,7 @@ export async function POST(request: NextRequest) {
 
     // Obtener resultados reales de exámenes por competencia
     console.log('📊 Fetching real exam results...')
-    let examResultsWhere: any = { userId }
+    let examResultsWhere: any = { userId, completedAt: { not: null } }
     
     // Si es estudiante ICFES, filtrar solo exámenes de competencias ICFES
     if (isIcfesStudentForFilter) {
@@ -924,7 +923,7 @@ export async function POST(request: NextRequest) {
 
         // Obtener resultados de exámenes por competencia
         const competencyExamResults = await prisma.examResult.findMany({
-          where: { userId },
+          where: { userId, completedAt: { not: null } },
           include: {
             exam: {
               include: {
