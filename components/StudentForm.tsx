@@ -72,6 +72,11 @@ const disabilityTypes = [
 export function StudentForm({ student, onSubmit, onCancel, loading = false, schools = [] }: StudentFormProps) {
   const { data: session } = useSession();
   const { toast } = useToast();
+  const isSchoolAdmin = session?.user?.role === 'school_admin';
+  const lockedSchoolId = isSchoolAdmin ? session?.user?.schoolId || '' : '';
+  const lockedSchoolName = lockedSchoolId
+    ? schools.find((school) => school.id === lockedSchoolId)?.name
+    : undefined;
   
   const [formData, setFormData] = useState<StudentFormData>({
     email: '',
@@ -100,7 +105,7 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false, scho
     medicalConditions: '',
     homeTechnologyAccess: false,
     homeInternetAccess: false,
-    schoolId: '',
+    schoolId: lockedSchoolId,
   });
 
   const isEditing = !!student;
@@ -125,10 +130,12 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false, scho
         // Normalizar documentType a minúsculas para que coincida con los valores del Select
         documentType: student.documentType ? student.documentType.toLowerCase() : '',
         documentNumber: student.documentNumber || '',
-        schoolId: student.schoolId || '',
+        schoolId: isSchoolAdmin ? lockedSchoolId || student.schoolId || '' : student.schoolId || '',
       });
+    } else if (isSchoolAdmin && lockedSchoolId) {
+      setFormData((prev) => ({ ...prev, schoolId: lockedSchoolId }));
     }
-  }, [student]);
+  }, [student, isSchoolAdmin, lockedSchoolId]);
 
   const handleInputChange = (field: keyof StudentFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -165,17 +172,20 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false, scho
       return;
     }
 
-    if (!formData.schoolId) {
+    const schoolId = isSchoolAdmin ? lockedSchoolId : formData.schoolId;
+    if (!schoolId) {
       toast({
         title: "Error",
-        description: "Selecciona el colegio del estudiante",
+        description: isSchoolAdmin
+          ? "Tu usuario no tiene colegio asignado"
+          : "Selecciona el colegio del estudiante",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      await onSubmit(formData);
+      await onSubmit({ ...formData, schoolId });
     } catch (error) {
       toast({
         title: "Error",
@@ -273,18 +283,26 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false, scho
                   </div>
                   <div>
                     <Label htmlFor="schoolId">Colegio *</Label>
-                    <Select value={formData.schoolId || ''} onValueChange={(value) => handleInputChange('schoolId', value)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar colegio" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {schools.filter((school) => school.id).map((school) => (
-                          <SelectItem key={school.id} value={school.id!}>
-                            {school.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {isSchoolAdmin ? (
+                      <Input
+                        id="schoolId"
+                        value={lockedSchoolName || 'Tu institución'}
+                        disabled
+                      />
+                    ) : (
+                      <Select value={formData.schoolId || ''} onValueChange={(value) => handleInputChange('schoolId', value)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar colegio" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {schools.filter((school) => school.id).map((school) => (
+                            <SelectItem key={school.id} value={school.id!}>
+                              {school.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="academicGrade">Grado Académico</Label>

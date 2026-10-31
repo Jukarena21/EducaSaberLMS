@@ -159,17 +159,17 @@ export async function PUT(
       )
     }
 
-    // School admins can only update students and school_admin users for their school
+    // El admin de colegio solo edita estudiantes de su institución y no cambia el colegio
     if (gate.session?.user.role === 'school_admin') {
-      if (existingUser.role === 'teacher_admin') {
+      if (existingUser.role !== 'student') {
         return NextResponse.json(
-          { error: 'No puedes modificar usuarios teacher_admin' },
+          { error: 'Solo puedes modificar estudiantes' },
           { status: 403 }
         )
       }
-      if (schoolId && schoolId !== gate.session.user.schoolId) {
+      if (role && role !== 'student') {
         return NextResponse.json(
-          { error: 'Solo puedes asignar usuarios a tu colegio' },
+          { error: 'No puedes cambiar el rol del estudiante' },
           { status: 403 }
         )
       }
@@ -194,8 +194,8 @@ export async function PUT(
       email: email || existingUser.email,
       firstName: firstName || existingUser.firstName,
       lastName: lastName || existingUser.lastName,
-      role: role || existingUser.role,
-      schoolId: schoolId || existingUser.schoolId,
+      role: gate.session?.user.role === 'school_admin' ? existingUser.role : (role || existingUser.role),
+      schoolId: gate.session?.user.role === 'school_admin' ? existingUser.schoolId : (schoolId || existingUser.schoolId),
       academicGrade: academicGrade !== undefined ? normalizeAcademicGrade(academicGrade) : existingUser.academicGrade,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : existingUser.dateOfBirth,
       gender: gender !== undefined ? gender : existingUser.gender,

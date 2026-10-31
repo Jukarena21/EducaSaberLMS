@@ -106,26 +106,49 @@ export async function POST(
       return NextResponse.json({ error: 'Sin acceso a esta lección' }, { status: 403 })
     }
 
+    const exerciseCount = await prisma.lessonQuestion.count({
+      where: {
+        lessonId,
+        usage: { in: ['lesson', 'both'] },
+        questionType: { not: 'essay' },
+      },
+    })
+
+    const hasVideo = Boolean(lesson.videoUrl?.trim())
+    const hasTheory = Boolean(lesson.theoryContent?.trim())
+    const hasExercises = exerciseCount > 0
+
+    // Buscar o crear el progreso de la lección
+    const existingProgress = await prisma.studentLessonProgress.findFirst({
+      where: {
+        userId,
+        lessonId
+      }
+    })
+
+    const videoDone = !hasVideo || Boolean(videoViewed) || Boolean(existingProgress?.videoCompleted)
+    const theoryDone = !hasTheory || Boolean(theoryViewed) || Boolean(existingProgress?.theoryCompleted)
+    const exercisesDone = resetExercises
+      ? false
+      : Boolean(exercisesCompleted) || Boolean(existingProgress?.exercisesCompleted)
+
     // La lección se compone de tres actividades con peso similar.
-    // Los ejercicios solo cuentan completos cuando se alcanza el mínimo de
-    // aciertos; por debajo suman de forma proporcional para que el avance se
-    // note, pero la lección no queda terminada.
+    // Sin video o sin teoría esa parte no se exige. Los ejercicios solo
+    // cuentan completos con el mínimo de aciertos; si el cliente no manda
+    // el total (p. ej. al marcar video), se usa el conteo real de la lección.
     let progressPercentage = 0
 
-    if (videoViewed) progressPercentage += 33
-    if (theoryViewed) progressPercentage += 33
+    if (videoDone) progressPercentage += 33
+    if (theoryDone) progressPercentage += 33
 
-    // Una lección sin ejercicios no puede exigirlos para darse por terminada
-    const hasExercises = totalQuestions > 0
-    const accuracy = hasExercises ? correctAnswers / totalQuestions : 1
+    const scoredTotal = totalQuestions > 0 ? totalQuestions : exerciseCount
+    const accuracy = hasExercises && scoredTotal > 0 ? correctAnswers / scoredTotal : 1
     const exercisesPassed =
-      !resetExercises && (hasExercises
-        ? exercisesCompleted && accuracy >= LESSON_PASSING_ACCURACY
-        : true)
+      !hasExercises || (exercisesDone && accuracy >= LESSON_PASSING_ACCURACY)
 
     if (exercisesPassed) {
       progressPercentage += 34
-    } else if (exercisesCompleted && !resetExercises) {
+    } else if (exercisesDone) {
       progressPercentage += Math.round(34 * accuracy)
     }
 
@@ -137,14 +160,6 @@ export async function POST(
       status = 'in_progress'
     }
 
-    // Buscar o crear el progreso de la lección
-    const existingProgress = await prisma.studentLessonProgress.findFirst({
-      where: {
-        userId,
-        lessonId
-      }
-    })
-
     if (existingProgress) {
       // Actualizar progreso existente
       await prisma.studentLessonProgress.update({
@@ -152,11 +167,9 @@ export async function POST(
         data: {
           progressPercentage: Math.round(progressPercentage),
           status,
-          videoCompleted: videoViewed || existingProgress.videoCompleted,
-          theoryCompleted: theoryViewed || existingProgress.theoryCompleted,
-          exercisesCompleted: resetExercises
-            ? false
-            : exercisesCompleted || existingProgress.exercisesCompleted,
+          videoCompleted: videoDone,
+          theoryCompleted: theoryDone,
+          exercisesCompleted: exercisesDone,
           completedAt: status === 'completed' ? new Date() : resetExercises ? null : existingProgress.completedAt
         }
       })
@@ -168,9 +181,9 @@ export async function POST(
           lessonId,
           progressPercentage: Math.round(progressPercentage),
           status,
-          videoCompleted: videoViewed || false,
-          theoryCompleted: theoryViewed || false,
-          exercisesCompleted: exercisesCompleted || false,
+          videoCompleted: videoDone,
+          theoryCompleted: theoryDone,
+          exercisesCompleted: exercisesDone,
           completedAt: status === 'completed' ? new Date() : null
         }
       })

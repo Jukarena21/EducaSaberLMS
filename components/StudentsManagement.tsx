@@ -750,11 +750,11 @@ export function StudentsManagement() {
           <p className="text-sm text-gray-600">
             {session?.user?.role === 'teacher_admin' 
               ? 'Administra los estudiantes de todas las instituciones'
-              : 'Consulta y supervisa los estudiantes de tu institución'
+              : 'Administra los estudiantes de tu institución'
             }
           </p>
         </div>
-        {session?.user?.role === 'teacher_admin' && (
+        {(session?.user?.role === 'teacher_admin' || session?.user?.role === 'school_admin') && (
           <Button 
             className="bg-[#73A2D3]"
             onClick={() => setShowAddUser(true)}
@@ -1142,27 +1142,26 @@ export function StudentsManagement() {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
+                        {(session?.user?.role === 'teacher_admin' || session?.user?.role === 'school_admin') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingUser(student);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
                         {session?.user?.role === 'teacher_admin' && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                console.log('🔧 Editando estudiante:', student);
-                                setEditingUser(student);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteUser(student.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteUser(student.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -1327,8 +1326,7 @@ export function StudentsManagement() {
         </Dialog>
       )}
 
-      {/* Student Form Modal - Only for Teacher Admins */}
-      {session?.user?.role === 'teacher_admin' && showAddUser && (
+      {(session?.user?.role === 'teacher_admin' || session?.user?.role === 'school_admin') && showAddUser && (
         <StudentForm
           schools={schools}
           onSubmit={async (data) => {
@@ -1338,7 +1336,9 @@ export function StudentsManagement() {
               body: JSON.stringify({ 
                 ...data, 
                 role: 'student',
-                schoolId: data.schoolId
+                schoolId: session?.user?.role === 'school_admin'
+                  ? session.user.schoolId
+                  : data.schoolId
               })
             });
             
@@ -1352,20 +1352,20 @@ export function StudentsManagement() {
         />
       )}
 
-      {/* Edit Student Form Modal - Only for Teacher Admins */}
-      {session?.user?.role === 'teacher_admin' && editingUser && (
-        <>
-          {console.log('🔧 Renderizando modal de edición para:', editingUser)}
-          <StudentForm
-            student={editingUser}
-            schools={schools}
+      {(session?.user?.role === 'teacher_admin' || session?.user?.role === 'school_admin') && editingUser && (
+        <StudentForm
+          student={editingUser}
+          schools={schools}
           onSubmit={async (data) => {
             const response = await fetch(`/api/users/${editingUser.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 ...data,
-                schoolId: data.schoolId || editingUser.schoolId
+                role: 'student',
+                schoolId: session?.user?.role === 'school_admin'
+                  ? session.user.schoolId
+                  : (data.schoolId || editingUser.schoolId)
               })
             });
             
@@ -1377,7 +1377,6 @@ export function StudentsManagement() {
           }}
           onCancel={() => setEditingUser(null)}
         />
-        </>
       )}
 
       {/* Course Assignment Dialog */}

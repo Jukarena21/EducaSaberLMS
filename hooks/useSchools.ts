@@ -94,7 +94,7 @@ export function useSchools(): UseSchoolsReturn {
     const activeFilters = newFilters ?? filters
     const activePage = newPage ?? page
     const url = buildUrl(activeFilters, activePage, limit)
-    const cacheKey = url
+    const cacheKey = `${session.user.role}:${session.user.schoolId || 'all'}:${url}`
 
     if (!options.skipCache) {
       const cached = getSchoolCacheEntry(cacheKey)

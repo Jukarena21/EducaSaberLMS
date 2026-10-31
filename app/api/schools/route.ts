@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { requireRole } from '@/lib/rbac'
@@ -25,12 +23,10 @@ export async function GET(request: NextRequest) {
   try {
     console.log('Schools API called')
     
-    // Verificar autenticación básica
-    const session = await getServerSession(authOptions)
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-    
+    const gate = await requireRole(['teacher_admin', 'school_admin'])
+    if (!gate.allowed || !gate.session) return NextResponse.json({ error: gate.error }, { status: gate.status })
+    const session = gate.session
+
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
@@ -41,6 +37,16 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit
 
     let whereClause: any = {}
+
+    if (session.user.role === 'school_admin') {
+      if (!session.user.schoolId) {
+        return NextResponse.json({
+          schools: [],
+          pagination: { page, limit, total: 0, pages: 0 },
+        })
+      }
+      whereClause.id = session.user.schoolId
+    }
 
     if (search) {
       whereClause.OR = [

@@ -112,22 +112,6 @@ export default function LessonPage({
 
   useLessonStudyTime(lesson?.id, activeTab, !!lesson)
 
-  // Efecto para detectar cuando se ve el video
-  useEffect(() => {
-    if (activeTab === "video" && lesson && !videoViewed) {
-      setVideoViewed(true)
-      updateProgress(true, theoryViewed, exercisesCompleted, 0, 0)
-    }
-  }, [activeTab, lesson, videoViewed, theoryViewed, exercisesCompleted])
-
-  // Efecto para detectar cuando se ve la teoría
-  useEffect(() => {
-    if (activeTab === "theory" && lesson && !theoryViewed) {
-      setTheoryViewed(true)
-      updateProgress(videoViewed, true, exercisesCompleted, 0, 0)
-    }
-  }, [activeTab, lesson, theoryViewed, videoViewed, exercisesCompleted])
-
   const loadLessonData = useCallback(async () => {
     if (!courseId || !lessonIdParam) {
       setError("Curso o lección no especificados")
@@ -215,6 +199,9 @@ export default function LessonPage({
         foundLesson.progressPercentage = progressData.progressPercentage || 0
         foundLesson.status = progressData.status || 'not_started'
       }
+
+      if (!foundLesson.videoUrl) setVideoViewed(true)
+      if (!foundLesson.theoryContent) setTheoryViewed(true)
 
       setLesson(foundLesson)
     } catch (err) {
@@ -394,6 +381,33 @@ export default function LessonPage({
       console.error('Error updating progress:', error)
     }
   }
+
+  // El video y la teoría no se marcan al abrir la pestaña: hay que permanecer
+  // un rato con la pestaña visible. Sin contenido, esa parte no se exige.
+  useEffect(() => {
+    if (!lesson) return
+    const watchingVideo = activeTab === "video" && Boolean(lesson.videoUrl) && !videoViewed
+    const readingTheory = activeTab === "theory" && Boolean(lesson.theoryContent) && !theoryViewed
+    if (!watchingVideo && !readingTheory) return
+
+    const VIEW_SECONDS = 20
+    let elapsed = 0
+    const tick = setInterval(() => {
+      if (document.visibilityState !== "visible") return
+      elapsed += 1
+      if (elapsed < VIEW_SECONDS) return
+      clearInterval(tick)
+      if (watchingVideo) {
+        setVideoViewed(true)
+        updateProgress(true, theoryViewed, exercisesCompleted, 0, lesson.questions?.length || 0)
+      } else if (readingTheory) {
+        setTheoryViewed(true)
+        updateProgress(videoViewed, true, exercisesCompleted, 0, lesson.questions?.length || 0)
+      }
+    }, 1000)
+
+    return () => clearInterval(tick)
+  }, [activeTab, lesson, videoViewed, theoryViewed, exercisesCompleted])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -824,8 +838,8 @@ export default function LessonPage({
                       ) : (
                         <div className="w-4 h-4 border-2 border-gray-300 rounded-full"></div>
                       )}
-                      <span className={videoViewed ? 'text-green-600' : 'text-gray-500'}>
-                        {videoViewed ? 'Visto' : 'Pendiente'}
+                      <span className={videoViewed || !lesson.videoUrl ? 'text-green-600' : 'text-gray-500'}>
+                        {!lesson.videoUrl ? 'No aplica' : videoViewed ? 'Visto' : 'Pendiente'}
                       </span>
                     </div>
                   </div>
@@ -838,8 +852,8 @@ export default function LessonPage({
                       ) : (
                         <div className="w-4 h-4 border-2 border-gray-300 rounded-full"></div>
                       )}
-                      <span className={theoryViewed ? 'text-green-600' : 'text-gray-500'}>
-                        {theoryViewed ? 'Leída' : 'Pendiente'}
+                      <span className={theoryViewed || !lesson.theoryContent ? 'text-green-600' : 'text-gray-500'}>
+                        {!lesson.theoryContent ? 'No aplica' : theoryViewed ? 'Leída' : 'Pendiente'}
                       </span>
                     </div>
                   </div>

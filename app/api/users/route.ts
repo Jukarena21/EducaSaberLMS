@@ -144,18 +144,9 @@ export async function GET(request: NextRequest) {
 // POST /api/users - Create new user
 export async function POST(request: NextRequest) {
   try {
-    const gate = await requireRole(['teacher_admin'])
-    if (!gate.allowed) return NextResponse.json({ error: gate.error }, { status: gate.status })
-    const session = await getServerSession(authOptions)
-    
-    if (!session) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
-    // Only school_admin and teacher_admin can create users
-    if (session.user?.role !== 'school_admin' && session.user?.role !== 'teacher_admin') {
-      return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 })
-    }
+    const gate = await requireRole(['teacher_admin', 'school_admin'])
+    if (!gate.allowed || !gate.session) return NextResponse.json({ error: gate.error }, { status: gate.status })
+    const session = gate.session
 
     const body = await request.json()
     const {
@@ -206,27 +197,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (role === 'student' && !schoolId) {
+    let resolvedRole = role
+    let resolvedSchoolId = schoolId
+
+    // El admin de colegio solo crea estudiantes de su institución
+    if (session.user?.role === 'school_admin') {
+      if (!session.user.schoolId) {
+        return NextResponse.json(
+          { error: 'Tu usuario no tiene colegio asignado' },
+          { status: 403 }
+        )
+      }
+      if (role !== 'student') {
+        return NextResponse.json(
+          { error: 'Solo puedes crear estudiantes' },
+          { status: 403 }
+        )
+      }
+      resolvedRole = 'student'
+      resolvedSchoolId = session.user.schoolId
+    }
+
+    if (resolvedRole === 'student' && !resolvedSchoolId) {
       return NextResponse.json(
         { error: 'El estudiante debe pertenecer a un colegio' },
         { status: 400 }
       )
-    }
-
-    // School admins can only create students and school_admin users for their school
-    if (session.user?.role === 'school_admin') {
-      if (role === 'teacher_admin') {
-        return NextResponse.json(
-          { error: 'No puedes crear usuarios teacher_admin' },
-          { status: 403 }
-        )
-      }
-      if (schoolId !== session.user?.schoolId) {
-        return NextResponse.json(
-          { error: 'Solo puedes crear usuarios para tu colegio' },
-          { status: 403 }
-        )
-      }
     }
 
     // Check if email already exists
@@ -251,8 +247,8 @@ export async function POST(request: NextRequest) {
         passwordHash: hashedPassword,
         firstName,
         lastName,
-        role,
-        schoolId: schoolId || null,
+        role: resolvedRole,
+        schoolId: resolvedSchoolId || null,
         academicGrade: normalizeAcademicGrade(academicGrade),
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         gender,
@@ -319,7 +315,7 @@ export async function POST(request: NextRequest) {
 
     // Si es un estudiante y tiene academicGrade, asignar automáticamente todos los cursos ICFES de ese grado
     const studentGrade = normalizeAcademicGrade(academicGrade)
-    if (role === 'student' && studentGrade) {
+    if (resolvedRole === 'student' && studentGrade) {
       try {
         // Buscar todos los cursos ICFES activos del grado especificado
         const coursesToEnroll = await prisma.course.findMany({
