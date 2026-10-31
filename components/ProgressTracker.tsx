@@ -148,12 +148,7 @@ export function ProgressTracker() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            type,
-            competencyId,
-            coursesData: coursesProgress,
-            competenciesData: competenciesProgress
-          })
+          body: JSON.stringify({ type, competencyId })
         })
       } else if (type === 'competency') {
         // Usar la nueva API para reporte de competencia específica

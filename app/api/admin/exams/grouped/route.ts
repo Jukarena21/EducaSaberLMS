@@ -39,7 +39,6 @@ export async function GET(request: NextRequest) {
 
     // Construir filtros para resultados
     const resultWhere: any = {
-      score: { gt: 0 },
       completedAt: { not: null }
     }
 

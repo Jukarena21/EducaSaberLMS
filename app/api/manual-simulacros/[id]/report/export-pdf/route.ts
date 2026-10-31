@@ -11,6 +11,8 @@ import {
   buildQuestionReportRows,
   groupRowsByArea,
   pct,
+  resolveReportSchoolId,
+  summarizeAttempts,
   type QuestionReportRow,
 } from '@/lib/reports/manualSimulacroReport'
 
@@ -68,7 +70,11 @@ export async function GET(
 
     const { id } = await params
     const { searchParams } = new URL(request.url)
-    const schoolId = searchParams.get('schoolId') || undefined
+    const schoolScope = resolveReportSchoolId(gate.session?.user, searchParams.get('schoolId'))
+    if (!schoolScope.ok) {
+      return NextResponse.json({ error: schoolScope.error }, { status: 403 })
+    }
+    const schoolFilterId = schoolScope.schoolId
 
     const exam = await prisma.exam.findUnique({
       where: { id },
@@ -108,10 +114,6 @@ export async function GET(
       logoUrl: ED_LOGO,
       schoolName: 'EducaSaber',
     }
-
-    const schoolFilterId =
-      schoolId ||
-      (gate.session?.user.role === 'school_admin' ? gate.session.user.schoolId : undefined)
 
     if (schoolFilterId) {
       const school = await prisma.school.findUnique({
@@ -174,14 +176,7 @@ export async function GET(
       orderBy: { completedAt: 'desc' }
     })
 
-    const totalStudents = results.length
-    const totalAttempts = results.length
-    const averageScore = totalStudents > 0
-      ? Math.round(results.reduce((s, r) => s + (r.score ?? 0), 0) / totalStudents)
-      : 0
-    const passRate = totalStudents > 0
-      ? Math.round((results.filter(r => r.isPassed).length / totalStudents) * 100)
-      : 0
+    const { totalStudents, totalAttempts, averageScore, passRate } = summarizeAttempts(results)
 
     // Una fila por pregunta del simulacro, numeradas por orden de presentación
     const allAnswers = results.flatMap((r) =>
@@ -390,7 +385,7 @@ export async function GET(
       <div class="card">
         <h4>Promedio del grupo</h4>
         <div class="value">${averageScore}%</div>
-        <div class="sub">${totalStudents} estudiante(s)</div>
+        <div class="sub">${totalStudents} estudiante(s), ${totalAttempts} intento(s)</div>
       </div>
       <div class="card">
         <h4>Tasa de aprobación</h4>

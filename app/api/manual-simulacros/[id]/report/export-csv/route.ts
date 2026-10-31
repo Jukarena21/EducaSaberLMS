@@ -3,7 +3,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { requireRole } from '@/lib/rbac'
 import { prisma } from '@/lib/prisma'
-import { buildQuestionReportRows } from '@/lib/reports/manualSimulacroReport'
+import {
+  buildQuestionReportRows,
+  resolveReportSchoolId,
+  summarizeAttempts,
+} from '@/lib/reports/manualSimulacroReport'
 
 function csvEscape(value: any): string {
   if (value === null || value === undefined) return ''
@@ -31,7 +35,11 @@ export async function GET(
 
     const { id } = await params
     const { searchParams } = new URL(request.url)
-    const schoolId = searchParams.get('schoolId') || undefined
+    const school = resolveReportSchoolId(gate.session?.user, searchParams.get('schoolId'))
+    if (!school.ok) {
+      return NextResponse.json({ error: school.error }, { status: 403 })
+    }
+    const schoolId = school.schoolId
 
     // Verificar que el simulacro existe y es manual
     const exam = await prisma.exam.findUnique({
@@ -70,11 +78,7 @@ export async function GET(
       where: {
         examId: id,
         completedAt: { not: null },
-        ...(schoolId
-          ? { user: { schoolId } }
-          : gate.session?.user.role === 'school_admin' && gate.session.user.schoolId
-            ? { user: { schoolId: gate.session.user.schoolId } }
-            : {}),
+        ...(schoolId ? { user: { schoolId } } : {}),
       },
       include: {
         user: {
@@ -102,14 +106,7 @@ export async function GET(
       orderBy: { completedAt: 'desc' }
     })
 
-    const totalStudents = results.length
-    const totalAttempts = results.length
-    const averageScore = totalStudents > 0
-      ? Math.round(results.reduce((s, r) => s + (r.score ?? 0), 0) / totalStudents)
-      : 0
-    const passRate = totalStudents > 0
-      ? Math.round((results.filter(r => r.isPassed).length / totalStudents) * 100)
-      : 0
+    const { totalStudents, totalAttempts, averageScore, passRate } = summarizeAttempts(results)
 
     // Una fila por pregunta, numeradas igual que en el PDF
     const questionRows = buildQuestionReportRows(

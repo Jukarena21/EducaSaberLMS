@@ -139,9 +139,11 @@ export async function POST(request: NextRequest) {
                 module: {
                   include: {
                     moduleLessons: {
+                      where: { lesson: { isPublished: true } },
                       include: {
                         lesson: true
-                      }
+                      },
+                      orderBy: { orderIndex: 'asc' }
                     }
                   }
                 }
@@ -216,27 +218,39 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Procesar datos de lecciones
-    const lessonsData = lessonProgress.map(lp => {
-      const moduleName = lp.lesson.moduleLessons[0]?.module?.title || 'Sin módulo asignado'
-      
-      return {
-        id: lp.lesson.id,
-        title: lp.lesson.title || 'Lección sin nombre',
-        moduleName,
-        status: lp.status,
-        statusText: lp.status === 'completed' || lp.status === 'completado' ? 'Completado' : 
-                    lp.status === 'in_progress' || lp.status === 'en_progreso' ? 'En Progreso' : 'No Iniciado',
-        statusClass: lp.status === 'completed' || lp.status === 'completado' ? 'completed' : 
-                     lp.status === 'in_progress' || lp.status === 'en_progreso' ? 'progress' : 'not-started',
-        progress: lp.progressPercentage || 0,
-        videoCompleted: lp.videoCompleted || false,
-        theoryCompleted: lp.theoryCompleted || false,
-        exercisesCompleted: lp.exercisesCompleted || false,
-        timeMinutes: lp.totalTimeMinutes || 0,
-        completedDate: lp.completedAt ? new Date(lp.completedAt).toLocaleDateString('es-ES') : '-'
-      }
-    })
+    // Procesar datos de lecciones: todas las publicadas del curso, tengan o no
+    // progreso registrado
+    const progressByLesson = new Map(lessonProgress.map(lp => [lp.lessonId, lp]))
+    const seenLessons = new Set<string>()
+    const lessonsData = course.courseModules.flatMap(cm =>
+      cm.module.moduleLessons
+        .filter(ml => {
+          if (seenLessons.has(ml.lessonId)) return false
+          seenLessons.add(ml.lessonId)
+          return true
+        })
+        .map(ml => {
+          const lp = progressByLesson.get(ml.lessonId)
+          const status = lp?.status ?? 'not_started'
+          const isCompleted = status === 'completed' || status === 'completado'
+          const isInProgress = status === 'in_progress' || status === 'en_progreso'
+
+          return {
+            id: ml.lesson.id,
+            title: ml.lesson.title || 'Lección sin nombre',
+            moduleName: cm.module.title || 'Sin módulo asignado',
+            status,
+            statusText: isCompleted ? 'Completado' : isInProgress ? 'En Progreso' : 'No Iniciado',
+            statusClass: isCompleted ? 'completed' : isInProgress ? 'progress' : 'not-started',
+            progress: lp?.progressPercentage || 0,
+            videoCompleted: lp?.videoCompleted || false,
+            theoryCompleted: lp?.theoryCompleted || false,
+            exercisesCompleted: lp?.exercisesCompleted || false,
+            timeMinutes: lp?.totalTimeMinutes || 0,
+            completedDate: lp?.completedAt ? new Date(lp.completedAt).toLocaleDateString('es-ES') : '-'
+          }
+        })
+    )
 
     // Calcular métricas generales
     const totalLessons = lessonsData.length
@@ -256,7 +270,12 @@ export async function POST(request: NextRequest) {
       : 0
 
     // Calcular días desde última actividad
-    const lastActivityDate = courseEnrollment.lastActivityAt || courseEnrollment.enrolledAt
+    const lastProgressAt = lessonProgress.reduce<Date | null>((latest, lp) => {
+      const updatedAt = lp.updatedAt ? new Date(lp.updatedAt) : null
+      if (!updatedAt) return latest
+      return !latest || updatedAt > latest ? updatedAt : latest
+    }, null)
+    const lastActivityDate = lastProgressAt || courseEnrollment.enrolledAt
     const daysSinceLastActivity = lastActivityDate
       ? Math.floor((new Date().getTime() - new Date(lastActivityDate).getTime()) / (1000 * 60 * 60 * 24))
       : null

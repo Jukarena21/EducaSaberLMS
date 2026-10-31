@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { launchBrowser } from '@/lib/pdf/launchBrowser'
+import {
+  getStudentCompetenciesProgress,
+  getStudentCoursesProgress,
+} from '@/lib/progress/studentProgress'
 import fs from 'fs'
 import path from 'path'
 import { AchievementService } from '@/lib/achievementService'
@@ -379,14 +383,91 @@ function generateExamHistoryFromResults(examResults: any[], competencyId?: strin
   })
 }
 
-function calculateSchoolRank(progressPercentage: number): number {
-  // Simulación: estudiantes con buen rendimiento están en percentiles altos
-  return Math.round(Math.min(95, Math.max(5, progressPercentage + Math.random() * 10 - 5)))
+type PeerStats = {
+  schoolAverage: number | null
+  platformAverage: number | null
+  schoolRank: number | null
+  platformRank: number | null
 }
 
-function calculatePlatformRank(progressPercentage: number): number {
-  // Simulación: estudiantes activos en la plataforma tienen buen ranking
-  return Math.round(Math.min(90, Math.max(10, progressPercentage + Math.random() * 15 - 7)))
+function average(values: number[]): number | null {
+  if (values.length === 0) return null
+  return Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+}
+
+// Percentil del estudiante: % de compañeros con promedio menor (empates cuentan
+// la mitad). null si el estudiante no tiene exámenes en el área.
+function percentileRank(studentAverage: number | undefined, peerAverages: number[]): number | null {
+  if (studentAverage === undefined || peerAverages.length === 0) return null
+  const below = peerAverages.filter((v) => v < studentAverage).length
+  const equal = peerAverages.filter((v) => v === studentAverage).length
+  return Math.max(1, Math.round(((below + equal / 2) / peerAverages.length) * 100))
+}
+
+/**
+ * Compara al estudiante con su colegio y con toda la plataforma usando los
+ * promedios reales de exámenes completados por estudiante en cada área.
+ */
+async function computePeerStats(
+  prisma: any,
+  userId: string,
+  schoolId: string | null,
+  competencyIds: string[]
+): Promise<Map<string, PeerStats>> {
+  const stats = new Map<string, PeerStats>()
+  if (competencyIds.length === 0) return stats
+
+  const results: Array<{
+    userId: string
+    score: number
+    exam: { competencyId: string | null }
+    user: { schoolId: string | null }
+  }> = await prisma.examResult.findMany({
+    where: {
+      completedAt: { not: null },
+      exam: { competencyId: { in: competencyIds } },
+      user: { role: 'student' },
+    },
+    select: {
+      userId: true,
+      score: true,
+      exam: { select: { competencyId: true } },
+      user: { select: { schoolId: true } },
+    },
+  })
+
+  // competencyId -> userId -> { suma, cantidad, colegio }
+  const byCompetency = new Map<string, Map<string, { sum: number; count: number; schoolId: string | null }>>()
+  for (const r of results) {
+    const competencyId = r.exam.competencyId
+    if (!competencyId) continue
+    if (!byCompetency.has(competencyId)) byCompetency.set(competencyId, new Map())
+    const users = byCompetency.get(competencyId)!
+    const entry = users.get(r.userId) ?? { sum: 0, count: 0, schoolId: r.user.schoolId }
+    entry.sum += r.score
+    entry.count += 1
+    users.set(r.userId, entry)
+  }
+
+  for (const competencyId of competencyIds) {
+    const users = byCompetency.get(competencyId) ?? new Map()
+    const platform: number[] = []
+    const school: number[] = []
+    let studentAverage: number | undefined
+    for (const [id, entry] of users) {
+      const avg = entry.sum / entry.count
+      platform.push(avg)
+      if (schoolId && entry.schoolId === schoolId) school.push(avg)
+      if (id === userId) studentAverage = avg
+    }
+    stats.set(competencyId, {
+      schoolAverage: average(school),
+      platformAverage: average(platform),
+      schoolRank: percentileRank(studentAverage, school),
+      platformRank: percentileRank(studentAverage, platform),
+    })
+  }
+  return stats
 }
 
 function generateIcfesComparison(icfesScore: number): string {
@@ -555,7 +636,7 @@ export async function POST(request: NextRequest) {
 
     // Obtener datos del request
     const body = await request.json()
-    const { type, competencyId, proposal, coursesData, competenciesData, studentId } = body
+    const { type, competencyId, proposal, studentId } = body
 
     // Determinar el userId: si es admin y se pasa studentId, usar ese; si no, usar el del session
     let userId = session.user.id
@@ -572,9 +653,7 @@ export async function POST(request: NextRequest) {
     console.log('📊 Request data:', {
       type,
       competencyId,
-      studentId: studentId || 'none (using session user)',
-      coursesDataLength: coursesData?.length,
-      competenciesDataLength: competenciesData?.length
+      studentId: studentId || 'none (using session user)'
     })
 
     // Obtener información del estudiante
@@ -699,297 +778,18 @@ export async function POST(request: NextRequest) {
 
     console.log('🏆 Achievements loaded:', achievementsWithStatus.length)
 
-    // Si no se proporcionan coursesData o competenciesData, obtenerlos de la base de datos
-    let finalCoursesData = coursesData
-    
-    // Determinar si el estudiante es tipo ICFES (basado en si está inscrito en cursos ICFES)
-    // Primero obtener los enrollments para determinar el tipo
-    const initialEnrollments = await prisma.courseEnrollment.findMany({
-      where: {
-        userId,
-        isActive: true
-      },
-      include: {
-        course: {
-          select: {
-            isIcfesCourse: true
-          }
-        }
-      }
-    })
-    const isIcfesStudent = initialEnrollments.some((enrollment: any) => enrollment.course.isIcfesCourse)
-
-    // Competencias ICFES (nombres exactos)
-    const ICFES_COMPETENCY_NAMES = [
-      'lectura_critica',
-      'razonamiento_cuantitativo',
-      'competencias_ciudadanas',
-      'comunicacion_escrita',
-      'ingles',
-      // Aliases para compatibilidad
-      'matematicas',
-      'ciencias_naturales',
-      'ciencias_sociales',
-      'sociales_y_ciudadanas'
-    ]
-
-    // Filtrar competencias según el tipo de estudiante
-    let finalCompetenciesData
-    if (competenciesData) {
-      // Si vienen del frontend, filtrar según tipo de estudiante
-      if (isIcfesStudent) {
-        // Solo competencias ICFES
-        finalCompetenciesData = competenciesData.filter((c: any) => 
-          c.name !== 'otros' && 
-          c.displayName !== 'Otros' &&
-          (ICFES_COMPETENCY_NAMES.includes(c.name) ||
-           ['Lectura Crítica', 'Razonamiento Cuantitativo', 'Competencias Ciudadanas', 'Comunicación Escrita', 'Inglés', 'Matemáticas', 'Ciencias Naturales', 'Ciencias Sociales y Ciudadanas'].includes(c.displayName))
-        )
-      } else {
-        // Excluir competencias ICFES y "otros"
-        finalCompetenciesData = competenciesData.filter((c: any) => 
-          c.name !== 'otros' && 
-          c.displayName !== 'Otros' &&
-          !ICFES_COMPETENCY_NAMES.includes(c.name) &&
-          !['Lectura Crítica', 'Razonamiento Cuantitativo', 'Competencias Ciudadanas', 'Comunicación Escrita', 'Inglés', 'Matemáticas', 'Ciencias Naturales', 'Ciencias Sociales y Ciudadanas'].includes(c.displayName)
-        )
-      }
-    }
-    let courseEnrollments: any[] = []
-    let lessonProgress: any[] = []
-    let contentProgress: any[] = []
-
-    if (!finalCoursesData || !finalCompetenciesData) {
-      console.log('📚 Fetching courses and competencies data from database...')
-      
-      // Obtener cursos en los que está inscrito el estudiante
-      courseEnrollments = await prisma.courseEnrollment.findMany({
-        where: { 
-          userId,
-          isActive: true
-        },
-        include: {
-          course: {
-            include: {
-              competency: true,
-              courseModules: {
-                include: {
-                  module: {
-                    include: {
-                      moduleLessons: {
-                        include: {
-                          lesson: true
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      })
-
-      // Obtener progreso de lecciones del estudiante
-      lessonProgress = await prisma.studentLessonProgress.findMany({
-        where: { userId },
-        include: {
-          lesson: {
-            include: {
-              moduleLessons: {
-                include: {
-                  module: {
-                    include: {
-                      competency: true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      })
-
-      // Obtener progreso de contenido del estudiante
-      contentProgress = await prisma.studentLessonProgress.findMany({
-        where: { userId },
-        include: {
-          lesson: {
-            include: {
-              moduleLessons: {
-                include: {
-                  module: {
-                    include: {
-                      competency: true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      })
-
-      // Procesar datos para cada curso (si no se proporcionaron)
-      if (!finalCoursesData) {
-        finalCoursesData = courseEnrollments.map(enrollment => {
-          const course = enrollment.course
-          const totalLessons = course.courseModules.reduce((acc: number, cm: any) => 
-            acc + cm.module.moduleLessons.length, 0
-          )
-          
-          const totalModules = course.courseModules.length
-          
-          // Calcular lecciones completadas
-          const completedLessons = lessonProgress.filter((lp: any) => 
-            course.courseModules.some((cm: any) => 
-              cm.module.moduleLessons.some((ml: any) => ml.lessonId === lp.lessonId)
-            ) && lp.status === 'completed'
-          ).length
-
-          // Calcular tiempo total invertido
-          const totalTimeMinutes = contentProgress
-            .filter((cp: any) => 
-              course.courseModules.some((cm: any) => 
-                cm.module.moduleLessons.some((ml: any) => ml.lessonId === cp.lessonId)
-              )
-            )
-            .reduce((acc: number, cp: any) => acc + (cp.totalTimeMinutes || 0), 0)
-
-          const progressPercentage = totalLessons > 0 
-            ? Math.round((completedLessons / totalLessons) * 100)
-            : 0
-
-          return {
-            id: course.id,
-            title: course.title,
-            competencyId: course.competencyId,
-            competencyName: course.competency?.name || 'Sin competencia',
-            totalLessons,
-            completedLessons,
-            totalModules,
-            progressPercentage,
-            timeSpentMinutes: totalTimeMinutes
-          }
-        })
-      }
-
-      // Procesar datos por competencia (si no se proporcionaron)
-      if (!finalCompetenciesData) {
-        // Determinar si el estudiante es tipo ICFES (basado en si está inscrito en cursos ICFES)
-        const isIcfesStudent = courseEnrollments.some((enrollment: any) => enrollment.course.isIcfesCourse)
-
-        // Competencias ICFES (nombres exactos)
-        const ICFES_COMPETENCY_NAMES = [
-          'lectura_critica',
-          'razonamiento_cuantitativo',
-          'competencias_ciudadanas',
-          'comunicacion_escrita',
-          'ingles',
-          // Aliases para compatibilidad
-          'matematicas',
-          'ciencias_naturales',
-          'ciencias_sociales',
-          'sociales_y_ciudadanas'
-        ]
-
-        // Obtener competencias según el tipo de estudiante
-        let competencies
-        if (isIcfesStudent) {
-          // Si es estudiante ICFES, solo mostrar competencias ICFES
-          competencies = await prisma.area.findMany({
-            where: {
-              OR: [
-                { name: { in: ICFES_COMPETENCY_NAMES } },
-                { displayName: { in: ['Lectura Crítica', 'Razonamiento Cuantitativo', 'Competencias Ciudadanas', 'Comunicación Escrita', 'Inglés', 'Matemáticas', 'Ciencias Naturales', 'Ciencias Sociales y Ciudadanas'] } }
-              ],
-              name: { not: 'otros' }
-            },
-            orderBy: { name: 'asc' }
-          })
-        } else {
-          // Si no es ICFES, mostrar todas excepto ICFES y "otros"
-          competencies = await prisma.area.findMany({
-            where: {
-              AND: [
-                { name: { not: 'otros' } },
-                { name: { notIn: ICFES_COMPETENCY_NAMES } },
-                { displayName: { notIn: ['Lectura Crítica', 'Razonamiento Cuantitativo', 'Competencias Ciudadanas', 'Comunicación Escrita', 'Inglés', 'Matemáticas', 'Ciencias Naturales', 'Ciencias Sociales y Ciudadanas'] } }
-              ]
-            },
-            orderBy: { name: 'asc' }
-          })
-        }
-
-        // Obtener resultados de exámenes por competencia
-        const competencyExamResults = await prisma.examResult.findMany({
-          where: { userId, completedAt: { not: null } },
-          include: {
-            exam: {
-              include: {
-                competency: true
-              }
-            }
-          }
-        })
-
-        finalCompetenciesData = competencies.map(competency => {
-          // Filtrar resultados de exámenes para esta competencia
-          const competencyExams = competencyExamResults.filter(er => 
-            er.exam?.competencyId === competency.id
-          )
-
-          // Calcular promedio de notas
-          const examScores = competencyExams.map(er => er.score)
-          const averageScore = examScores.length > 0
-            ? Math.round(examScores.reduce((a, b) => a + b, 0) / examScores.length)
-            : 0
-
-          // Calcular progreso basado en lecciones completadas
-          const competencyLessons = lessonProgress.filter((lp: any) => 
-            lp.lesson?.moduleLessons?.some((ml: any) => 
-              ml.module?.competencyId === competency.id
-            )
-          )
-
-          const completedLessons = competencyLessons.filter((lp: any) => lp.status === 'completed').length
-          const totalLessons = competencyLessons.length
-          const progressPercentage = totalLessons > 0
-            ? Math.round((completedLessons / totalLessons) * 100)
-            : 0
-
-          // Calcular tiempo total
-          const totalTimeMinutes = contentProgress
-            .filter((cp: any) => 
-              cp.lesson?.moduleLessons?.some((ml: any) => 
-                ml.module?.competencyId === competency.id
-              )
-            )
-            .reduce((acc: number, cp: any) => acc + (cp.totalTimeMinutes || 0), 0)
-
-          return {
-            id: competency.id,
-            name: competency.name,
-            displayName: competency.name,
-            averageScore,
-            progressPercentage,
-            totalExams: competencyExams.length,
-            totalTimeMinutes,
-            examHistory: competencyExams.map(er => ({
-              id: er.id,
-              score: er.score,
-              completedAt: er.completedAt ? (er.completedAt instanceof Date ? er.completedAt.toISOString() : new Date(er.completedAt).toISOString()) : new Date().toISOString(),
-              examTitle: er.exam?.title || 'Examen'
-            }))
-          }
-        })
-      }
-
-      console.log('✅ Courses and competencies data loaded:', {
-        coursesCount: finalCoursesData.length,
-        competenciesCount: finalCompetenciesData.length
-      })
-    }
+    // Siempre se calcula en el servidor con la misma lógica de la pestaña de
+    // progreso; los datos que envía el navegador no se usan.
+    const [finalCoursesData, finalCompetenciesData]: [any[], any[]] = await Promise.all([
+      getStudentCoursesProgress(userId),
+      getStudentCompetenciesProgress(userId),
+    ])
+    const peerStats = await computePeerStats(
+      prisma,
+      userId,
+      student.schoolId,
+      finalCompetenciesData.map((c: any) => c.id)
+    )
 
     // Calcular métricas generales
     const totalCourses = finalCoursesData?.length || 0
@@ -1005,7 +805,7 @@ export async function POST(request: NextRequest) {
     const completedExamResults = examResults.filter(er => er.completedAt !== null)
     const averageExamScore = completedExamResults.length > 0
       ? Math.round(completedExamResults.reduce((acc, er) => {
-          const percentage = er.totalQuestions > 0 ? (er.score / er.totalQuestions) * 100 : 0
+          const percentage = er.score
           return acc + percentage
         }, 0) / completedExamResults.length)
       : 0
@@ -1041,7 +841,7 @@ export async function POST(request: NextRequest) {
         
         // Calcular promedio de exámenes (porcentaje 0-100)
         const examScores = competencyExams.map(er => {
-          return er.totalQuestions > 0 ? (er.score / er.totalQuestions) * 100 : 0
+          return er.score
         })
         const averageScore = examScores.length > 0
           ? Math.round(examScores.reduce((a, b) => a + b, 0) / examScores.length)
@@ -1073,8 +873,8 @@ export async function POST(request: NextRequest) {
           bestScore, // Mejor calificación como porcentaje (0-100)
           score: averageScore, // Para compatibilidad
           progressPercentage: competency.progressPercentage || 0, // Progreso de lecciones como porcentaje
-          schoolRank: calculateSchoolRank(averageScore), // Percentil como porcentaje
-          platformRank: calculatePlatformRank(averageScore), // Percentil como porcentaje
+          schoolRank: peerStats.get(competency.id)?.schoolRank ?? null,
+          platformRank: peerStats.get(competency.id)?.platformRank ?? null,
           timeSpent: Math.round((competency.totalTimeMinutes || 0) / 60),
           examHistory: examHistory,
           overallTrend: overallTrend,
@@ -1084,58 +884,18 @@ export async function POST(request: NextRequest) {
       
       // Cursos - Datos resumidos para el informe completo
       courses: (finalCoursesData || []).map((course: any) => {
-        // Si ya tenemos totalModules en el curso, usarlo; si no, calcularlo
-        const totalModules = course.totalModules || 0
-        
-        // Calcular módulos completados basado en lecciones completadas
-        // Un módulo está completo si todas sus lecciones están completadas
-        let completedModules = 0
-        if (courseEnrollments && lessonProgress) {
-          const enrollment = courseEnrollments.find((ce: any) => ce.course.id === course.id)
-          if (enrollment) {
-            const courseModules = enrollment.course?.courseModules || []
-            completedModules = courseModules.filter((cm: any) => {
-              const moduleLessons = cm.module?.moduleLessons || []
-              if (moduleLessons.length === 0) return false
-              
-              const moduleProgress = lessonProgress.filter((lp: any) =>
-                moduleLessons.some((ml: any) => ml.lessonId === lp.lessonId)
-              )
-              const completed = moduleProgress.filter((lp: any) => 
-                lp.status === 'completed' || lp.status === 'completado'
-              ).length
-              return completed === moduleLessons.length
-            }).length
-          }
-        }
-        
         return {
           id: course.id,
           title: course.title,
-          competencyName: course.competencyName || 'Sin competencia',
+          competencyName: course.competency || 'Sin competencia',
           progressPercentage: course.progressPercentage || 0,
-          completedModules: completedModules || 0,
-          totalModules: totalModules || 0,
+          completedModules: course.completedModules || 0,
+          totalModules: course.totalModules || 0,
           completedLessons: course.completedLessons || 0,
           totalLessons: course.totalLessons || 0,
           timeSpentHours: Math.round((course.timeSpentMinutes || 0) / 60 * 10) / 10
         }
       }),
-      
-      // Rankings individuales para clasificaciones
-      schoolRankGeneral: calculateSchoolRank(averageProgress),
-      schoolRankMath: calculateSchoolRank(getCompetencyScore(finalCompetenciesData || [], 'Matemáticas')),
-      schoolRankScience: calculateSchoolRank(getCompetencyScore(finalCompetenciesData || [], 'Ciencias Naturales')),
-      schoolRankReading: calculateSchoolRank(getCompetencyScore(finalCompetenciesData || [], 'Lectura Crítica')),
-      schoolRankSocial: calculateSchoolRank(getCompetencyScore(finalCompetenciesData || [], 'Ciencias Sociales y Ciudadanas')),
-      schoolRankEnglish: calculateSchoolRank(getCompetencyScore(finalCompetenciesData || [], 'Inglés')),
-      
-      platformRankGeneral: calculatePlatformRank(averageProgress),
-      platformRankMath: calculatePlatformRank(getCompetencyScore(finalCompetenciesData || [], 'Matemáticas')),
-      platformRankScience: calculatePlatformRank(getCompetencyScore(finalCompetenciesData || [], 'Ciencias Naturales')),
-      platformRankReading: calculatePlatformRank(getCompetencyScore(finalCompetenciesData || [], 'Lectura Crítica')),
-      platformRankSocial: calculatePlatformRank(getCompetencyScore(finalCompetenciesData || [], 'Ciencias Sociales y Ciudadanas')),
-      platformRankEnglish: calculatePlatformRank(getCompetencyScore(finalCompetenciesData || [], 'Inglés')),
       
       // Comparación ICFES - Usar nueva fórmula basada en preguntas
       estimatedIcfesScore: await calculateIcfesScoreFromQuestions(userId) || calculateIcfesScore(finalCompetenciesData || [], averageProgress),
@@ -1159,39 +919,18 @@ export async function POST(request: NextRequest) {
         .reduce((total, a) => total + a.points, 0),
       
       // Datos para gráfica radar (3 series: estudiante, colegio, plataforma)
-      studentScoresForRadar: (finalCompetenciesData || []).map((comp: any) => {
-        const rawScore = comp.averageScore > 0 ? comp.averageScore : Math.max(15, comp.progressPercentage || 0)
-        const clampedScore = Math.min(Math.max(rawScore, 0), 100) // Limitar entre 0 y 100
-        return {
-          id: comp.id,
-          score: clampedScore
-        }
-      }),
-      schoolScoresForRadar: (finalCompetenciesData || []).map((comp: any) => {
-        // Estimar promedio del colegio basado en el percentil del estudiante
-        // Si el estudiante está en percentil 80%, el promedio del colegio sería aproximadamente 5-10 puntos menos
-        const studentScore = comp.averageScore > 0 ? comp.averageScore : Math.max(15, comp.progressPercentage || 0)
-        const schoolRank = calculateSchoolRank(studentScore)
-        // Convertir percentil a nota estimada (percentil 50% = nota promedio, ajustar según percentil)
-        const estimatedSchoolAvg = Math.max(30, Math.min(90, studentScore - (100 - schoolRank) * 0.3))
-        const clampedScore = Math.min(Math.max(Math.round(estimatedSchoolAvg), 0), 100) // Limitar entre 0 y 100
-        return {
-          id: comp.id,
-          score: clampedScore
-        }
-      }),
-      platformScoresForRadar: (finalCompetenciesData || []).map((comp: any) => {
-        // Estimar promedio de la plataforma basado en el percentil del estudiante
-        const studentScore = comp.averageScore > 0 ? comp.averageScore : Math.max(15, comp.progressPercentage || 0)
-        const platformRank = calculatePlatformRank(studentScore)
-        // Convertir percentil a nota estimada
-        const estimatedPlatformAvg = Math.max(40, Math.min(85, studentScore - (100 - platformRank) * 0.25))
-        const clampedScore = Math.min(Math.max(Math.round(estimatedPlatformAvg), 0), 100) // Limitar entre 0 y 100
-        return {
-          id: comp.id,
-          score: clampedScore
-        }
-      })
+      studentScoresForRadar: (finalCompetenciesData || []).map((comp: any) => ({
+        id: comp.id,
+        score: Math.min(Math.max(comp.averageScore || 0, 0), 100)
+      })),
+      schoolScoresForRadar: (finalCompetenciesData || []).map((comp: any) => ({
+        id: comp.id,
+        score: peerStats.get(comp.id)?.schoolAverage ?? 0
+      })),
+      platformScoresForRadar: (finalCompetenciesData || []).map((comp: any) => ({
+        id: comp.id,
+        score: peerStats.get(comp.id)?.platformAverage ?? 0
+      }))
     }
 
     console.log('📄 Template data prepared:', {

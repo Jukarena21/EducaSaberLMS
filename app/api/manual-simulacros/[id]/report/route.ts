@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/rbac'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { resolveReportSchoolId, summarizeAttempts } from '@/lib/reports/manualSimulacroReport'
 
 export async function GET(
   request: NextRequest,
@@ -22,7 +23,11 @@ export async function GET(
     const { id } = await params
     const { searchParams } = new URL(request.url)
     const studentId = searchParams.get('studentId')
-    const schoolId = searchParams.get('schoolId')
+    const school = resolveReportSchoolId(gate.session?.user, searchParams.get('schoolId'))
+    if (!school.ok) {
+      return NextResponse.json({ error: school.error }, { status: 403 })
+    }
+    const schoolId = school.schoolId
 
     // Verificar que el simulacro existe y es manual
     const exam = await prisma.exam.findUnique({
@@ -99,15 +104,7 @@ export async function GET(
     })
 
     // Calcular estadísticas agregadas
-    const countable = results.filter((r) => r.score > 0)
-    const totalStudents = countable.length
-    const totalAttempts = countable.length
-    const averageScore = totalStudents > 0
-      ? Math.round(countable.reduce((sum, r) => sum + r.score, 0) / totalStudents)
-      : 0
-    const passRate = totalStudents > 0
-      ? Math.round((countable.filter(r => r.isPassed).length / totalStudents) * 100)
-      : 0
+    const { totalStudents, totalAttempts, averageScore, passRate } = summarizeAttempts(results)
 
     // Calcular resultados por metadatos (agregados de todos los estudiantes)
     const resultsByCompetency: Record<string, { correct: number; total: number; percentage: number }> = {}

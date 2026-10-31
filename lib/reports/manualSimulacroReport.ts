@@ -31,6 +31,40 @@ export function pct(correct: number, total: number): number {
 }
 
 /**
+ * Colegio al que se limita el reporte. Un school_admin solo puede ver su
+ * propio colegio; si pide otro se rechaza en lugar de ignorarlo en silencio.
+ */
+export function resolveReportSchoolId(
+  user: { role?: string | null; schoolId?: string | null } | undefined,
+  requestedSchoolId: string | null | undefined
+): { ok: true; schoolId: string | undefined } | { ok: false; error: string } {
+  const requested = requestedSchoolId || undefined
+  if (user?.role !== 'school_admin') return { ok: true, schoolId: requested }
+  if (!user.schoolId) return { ok: false, error: 'Tu cuenta no tiene un colegio asignado' }
+  if (requested && requested !== user.schoolId) {
+    return { ok: false, error: 'No autorizado para ver resultados de otro colegio' }
+  }
+  return { ok: true, schoolId: user.schoolId }
+}
+
+/**
+ * Totales del reporte. Cuenta todos los intentos completados (también los de
+ * 0%) y distingue estudiantes únicos de intentos.
+ */
+export function summarizeAttempts(
+  results: Array<{ userId: string; score: number | null; isPassed: boolean | null }>
+) {
+  const totalAttempts = results.length
+  const totalStudents = new Set(results.map((r) => r.userId)).size
+  const averageScore =
+    totalAttempts > 0
+      ? Math.round(results.reduce((sum, r) => sum + (r.score ?? 0), 0) / totalAttempts)
+      : 0
+  const passRate = pct(results.filter((r) => r.isPassed).length, totalAttempts)
+  return { totalStudents, totalAttempts, averageScore, passRate }
+}
+
+/**
  * Numera las preguntas del simulacro según su orden de presentación.
  * Se usa `orderIndex` cuando existe; si viene nulo o repetido, el desempate
  * es por id para que la numeración sea estable entre PDF, CSV y pantalla.

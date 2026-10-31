@@ -250,9 +250,7 @@ export async function POST(request: NextRequest) {
       exam.examResults
         .filter(result => result.completedAt !== null) // Solo exámenes completados
         .map(result => {
-          const scorePercentage = result.totalQuestions > 0 
-            ? Math.round((result.score / result.totalQuestions) * 100)
-            : 0
+          const scorePercentage = result.score
           return {
             id: result.id,
             title: exam.title,
@@ -297,9 +295,7 @@ export async function POST(request: NextRequest) {
 
         if (groupExamResults.length > 0) {
           const groupAverage = groupExamResults.reduce((acc, er) => {
-            const percentage = er.totalQuestions > 0 
-              ? (er.score / er.totalQuestions) * 100 
-              : 0
+            const percentage = er.score
             return acc + percentage
           }, 0) / groupExamResults.length
           
