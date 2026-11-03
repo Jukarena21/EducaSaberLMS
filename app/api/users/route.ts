@@ -4,7 +4,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
-import { academicGradeAliases, normalizeAcademicGrade } from '@/lib/academicGrades'
+import { normalizeAcademicGrade } from '@/lib/academicGrades'
+import { syncStudentSchoolGradeEnrollments } from '@/lib/enrollments/syncSchoolGrade'
 
 // GET /api/users - List users with filtering and pagination
 export async function GET(request: NextRequest) {
@@ -313,55 +314,14 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Si es un estudiante y tiene academicGrade, asignar automáticamente todos los cursos ICFES de ese grado
-    const studentGrade = normalizeAcademicGrade(academicGrade)
-    if (resolvedRole === 'student' && studentGrade) {
+    if (resolvedRole === 'student') {
       try {
-        // Buscar todos los cursos ICFES activos del grado especificado
-        const coursesToEnroll = await prisma.course.findMany({
-          where: {
-            isIcfesCourse: true,
-            isPublished: true,
-            academicGrade: { in: academicGradeAliases(studentGrade) },
-            // Si el estudiante tiene schoolId, solo asignar cursos de ese colegio (si aplica)
-            // Nota: Los cursos pueden estar asociados a múltiples colegios o ser globales
-          },
-          select: {
-            id: true,
-            title: true,
-          },
+        await syncStudentSchoolGradeEnrollments({
+          userId: user.id,
+          schoolId: resolvedSchoolId,
+          academicGrade: normalizeAcademicGrade(academicGrade),
         })
-
-        // Crear las inscripciones automáticamente
-        if (coursesToEnroll.length > 0) {
-          const enrollments = await Promise.all(
-            coursesToEnroll.map(course =>
-              prisma.courseEnrollment.upsert({
-                where: {
-                  userId_courseId: {
-                    userId: user.id,
-                    courseId: course.id,
-                  },
-                },
-                update: {
-                  isActive: true, // Reactivar si ya existía
-                },
-                create: {
-                  userId: user.id,
-                  courseId: course.id,
-                  isActive: true,
-                  enrolledAt: new Date(),
-                },
-              })
-            )
-          )
-
-          console.log(`✅ Asignados automáticamente ${enrollments.length} cursos al estudiante ${user.id} (grado ${academicGrade})`)
-        } else {
-          console.log(`ℹ️ No se encontraron cursos ICFES para el grado ${academicGrade}. El estudiante ${user.id} no tiene cursos asignados automáticamente.`)
-        }
       } catch (enrollmentError) {
-        // No fallar la creación del usuario si hay error en la asignación de cursos
         console.error('Error al asignar cursos automáticamente:', enrollmentError)
       }
     }

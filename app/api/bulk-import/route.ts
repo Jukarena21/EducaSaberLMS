@@ -6,6 +6,10 @@ import * as XLSX from 'xlsx'
 import bcrypt from 'bcryptjs'
 import { normalizeAcademicGrade } from '@/lib/academicGrades'
 import {
+  findPublishedCourseIdsForSchoolGrade,
+  syncStudentSchoolGradeEnrollments,
+} from '@/lib/enrollments/syncSchoolGrade'
+import {
   normalizeDocumentType,
   pickStudentSheetName,
   remapStudentRow,
@@ -215,6 +219,7 @@ export async function POST(req: NextRequest) {
         ? session.user.schoolId
         : undefined
 
+      const courseIdCache = new Map<string, string[]>()
       const schools = await prisma.school.findMany({
         select: { id: true, name: true },
       })
@@ -266,7 +271,7 @@ export async function POST(req: NextRequest) {
           const finalSchoolId = resolveSchoolId(r)
           const existing = await prisma.user.findUnique({
             where: { email },
-            select: { id: true, role: true, schoolId: true },
+            select: { id: true, role: true, schoolId: true, academicGrade: true },
           })
 
           const sharedData = {
@@ -298,6 +303,7 @@ export async function POST(req: NextRequest) {
             homeInternetAccess: parseBool(r.homeinternetaccess),
           }
 
+          let userId = existing?.id
           if (existing) {
             if (existing.role && existing.role !== 'student') {
               throw new Error('Ese correo ya está registrado con otro rol')
@@ -312,14 +318,42 @@ export async function POST(req: NextRequest) {
             updated++
           } else {
             const passwordHash = await bcrypt.hash(documentNumber, 12)
-            await prisma.user.create({
+            const createdUser = await prisma.user.create({
               data: {
                 email,
                 passwordHash,
                 ...sharedData,
               },
+              select: { id: true },
             })
+            userId = createdUser.id
             created++
+          }
+
+          if (userId) {
+            try {
+              const cacheKey = `${finalSchoolId}::${academicGrade}`
+              if (!courseIdCache.has(cacheKey)) {
+                courseIdCache.set(
+                  cacheKey,
+                  await findPublishedCourseIdsForSchoolGrade(finalSchoolId, academicGrade)
+                )
+              }
+              await syncStudentSchoolGradeEnrollments({
+                userId,
+                schoolId: finalSchoolId,
+                academicGrade,
+                ...(existing
+                  ? {
+                      previousSchoolId: existing.schoolId,
+                      previousGrade: existing.academicGrade,
+                    }
+                  : {}),
+                courseIds: courseIdCache.get(cacheKey),
+              })
+            } catch (enrollmentError) {
+              console.error('Error al asignar cursos en carga masiva:', enrollmentError)
+            }
           }
         } catch (e: any) {
           errors.push({ row: i + 2, message: e.message || 'Error' })
