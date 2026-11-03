@@ -34,6 +34,7 @@ export function ManualSimulacroForm({
     description: '',
     timeLimitMinutes: 120,
     passingScore: 70,
+    maxAttempts: 1,
     openDate: '',
     closeDate: '',
     isPredefined: false,
@@ -57,6 +58,7 @@ export function ManualSimulacroForm({
         description: simulacro.description || '',
         timeLimitMinutes: simulacro.timeLimitMinutes || 120,
         passingScore: simulacro.passingScore,
+        maxAttempts: simulacro.maxAttempts || 1,
         openDate: simulacro.openDate || '',
         closeDate: simulacro.closeDate || '',
         isPredefined: simulacro.isPredefined || false,
@@ -181,6 +183,20 @@ export function ManualSimulacroForm({
             onChange={(e) => setFormData({ ...formData, passingScore: parseInt(e.target.value) || 0 })}
             required
           />
+        </div>
+
+        <div>
+          <Label htmlFor="maxAttempts">Intentos permitidos *</Label>
+          <Input
+            id="maxAttempts"
+            type="number"
+            min="1"
+            max="20"
+            value={formData.maxAttempts}
+            onChange={(e) => setFormData({ ...formData, maxAttempts: Math.max(1, parseInt(e.target.value) || 1) })}
+            required
+          />
+          <p className="text-xs text-gray-500 mt-1">Incluye el primero. Un admin puede dar un intento extra después.</p>
         </div>
 
         <div className="md:col-span-2">

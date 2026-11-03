@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { ICFES_AREA_SLUGS, resolveAreaDisplayName } from '@/lib/icfesAreas'
+import { latestCompletedByUserExam } from '@/lib/exams/attempts'
 
 export type ScoreByArea = {
   id: string
@@ -302,7 +303,7 @@ export async function getAreaRadarComparison(
     await Promise.all([
       prisma.examResult.findMany({
         where: { userId, completedAt: { not: null } },
-        select: { score: true, exam: { select: { competencyId: true } } },
+        select: { userId: true, examId: true, completedAt: true, score: true, exam: { select: { competencyId: true } } },
       }),
       schoolId
         ? prisma.examResult.findMany({
@@ -310,12 +311,12 @@ export async function getAreaRadarComparison(
               user: { schoolId },
               completedAt: { not: null },
             },
-            select: { score: true, exam: { select: { competencyId: true } } },
+            select: { userId: true, examId: true, completedAt: true, score: true, exam: { select: { competencyId: true } } },
           })
         : Promise.resolve([]),
       prisma.examResult.findMany({
         where: { completedAt: { not: null } },
-        select: { score: true, exam: { select: { competencyId: true } } },
+        select: { userId: true, examId: true, completedAt: true, score: true, exam: { select: { competencyId: true } } },
         take: 10000,
       }),
     ])
@@ -347,9 +348,9 @@ export async function getAreaRadarComparison(
         ? activeAreaIds.includes(s.id)
         : true
     ),
-    studentScores: averageScoresByArea(studentExamResults, displayAreas.map((a) => a.id)),
-    schoolScores: averageScoresByArea(schoolExamResults, displayAreas.map((a) => a.id)),
-    platformScores: averageScoresByArea(platformExamResults, displayAreas.map((a) => a.id)),
+    studentScores: averageScoresByArea(latestCompletedByUserExam(studentExamResults), displayAreas.map((a) => a.id)),
+    schoolScores: averageScoresByArea(latestCompletedByUserExam(schoolExamResults), displayAreas.map((a) => a.id)),
+    platformScores: averageScoresByArea(latestCompletedByUserExam(platformExamResults), displayAreas.map((a) => a.id)),
     activeAreaIds,
   }
 }

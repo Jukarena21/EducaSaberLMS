@@ -10,6 +10,7 @@ const manualSimulacroSchema = z.object({
   description: z.string().optional(),
   timeLimitMinutes: z.number().min(1).optional(),
   passingScore: z.number().min(0).max(100).optional(),
+  maxAttempts: z.number().int().min(1).max(20).optional(),
   openDate: z.string().optional(),
   closeDate: z.string().optional(),
   isPredefined: z.boolean().optional(),
@@ -189,6 +190,7 @@ export async function PUT(
     if (validatedData.description !== undefined) updateData.description = validatedData.description
     if (validatedData.timeLimitMinutes !== undefined) updateData.timeLimitMinutes = validatedData.timeLimitMinutes
     if (validatedData.passingScore !== undefined) updateData.passingScore = validatedData.passingScore
+    if (validatedData.maxAttempts !== undefined) updateData.maxAttempts = validatedData.maxAttempts
     if (validatedData.isPredefined !== undefined) updateData.isPredefined = validatedData.isPredefined
     if (validatedData.isPublished !== undefined) updateData.isPublished = validatedData.isPublished
     if (validatedData.openDate !== undefined) {

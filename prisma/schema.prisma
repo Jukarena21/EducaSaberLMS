@@ -433,6 +433,7 @@ model Exam {
   academicGrade    String? // 'sexto', 'septimo', 'octavo', 'noveno', 'decimo', 'once'
   timeLimitMinutes Int?
   passingScore     Int         @default(70)
+  maxAttempts      Int         @default(1) // Veces que el alumno puede presentar (incluye la primera)
   difficultyLevel  String      @default("intermedio") // 'facil', 'intermedio', 'dificil', 'variable'
   isAdaptive       Boolean     @default(false)
   isPublished      Boolean     @default(false)

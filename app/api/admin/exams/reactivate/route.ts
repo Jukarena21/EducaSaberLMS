@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar que todos estén completados
-    const incompleteResults = examResults.filter(r => r.score === 0)
+    const incompleteResults = examResults.filter(r => r.completedAt === null)
     if (incompleteResults.length > 0) {
       return NextResponse.json({ error: 'Algunos exámenes aún están en progreso' }, { status: 400 })
     }

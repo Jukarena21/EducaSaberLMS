@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { regularExamVisibilityWhere, studentEnrolledCourseIds } from '@/lib/exams/studentAccess'
 import { academicGradeAliases } from '@/lib/academicGrades'
+import { latestCompletedByExam } from '@/lib/exams/attempts'
 
 /**
  * Calcula el puntaje ICFES basado en respuestas individuales a preguntas
@@ -367,14 +368,14 @@ export async function GET(req: NextRequest) {
 
     // Calcular KPIs
     const activeCourses = enrolledCourses.length
-    // examResults ya está filtrado para solo incluir completados
-    const examCompleted = examResults.length
+    const latestExamResults = latestCompletedByExam(examResults)
+    const examCompleted = latestExamResults.length
     const studyTimeMinutes = lessonProgress.reduce((total, progress) => 
       total + (progress.totalTimeMinutes || 0), 0
     )
-    // Calcular promedio de puntajes (0-100%) solo de exámenes completados
-    const averageScore = examResults.length > 0 
-      ? examResults.reduce((sum, result) => sum + result.score, 0) / examResults.length
+    // Promedio solo del último intento de cada examen
+    const averageScore = latestExamResults.length > 0 
+      ? latestExamResults.reduce((sum, result) => sum + result.score, 0) / latestExamResults.length
       : 0
     
     // Calcular puntaje ICFES (0-500)

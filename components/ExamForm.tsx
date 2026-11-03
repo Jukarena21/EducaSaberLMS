@@ -43,6 +43,7 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
     academicGrade: '',
     timeLimitMinutes: 60,
     passingScore: 70,
+    maxAttempts: 1,
     difficultyLevel: 'intermedio',
     isAdaptive: false,
     isPublished: false,
@@ -101,6 +102,7 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
         academicGrade: exam.course?.competency?.name || '',
         timeLimitMinutes: exam.timeLimitMinutes || 60,
         passingScore: exam.passingScore,
+        maxAttempts: exam.maxAttempts || 1,
         difficultyLevel: exam.difficultyLevel,
         isAdaptive: exam.isAdaptive,
         isPublished: exam.isPublished,
@@ -1028,7 +1030,7 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
                     <CardTitle className="text-lg">Tiempo y puntuación</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="timeLimitMinutes">Tiempo Límite (minutos)</Label>
                         <Input
@@ -1050,6 +1052,19 @@ export function ExamForm({ exam, onSubmit, onCancel, loading = false }: ExamForm
                           min="0"
                           max="100"
                         />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="maxAttempts">Intentos permitidos</Label>
+                        <Input
+                          id="maxAttempts"
+                          type="number"
+                          value={formData.maxAttempts || 1}
+                          onChange={(e) => handleInputChange('maxAttempts', Math.max(1, parseInt(e.target.value) || 1))}
+                          min="1"
+                          max="20"
+                        />
+                        <p className="text-xs text-gray-500">Incluye el primero. 1 = una sola vez. Un admin puede dar un intento extra después.</p>
                       </div>
 
                       <div className="space-y-2">

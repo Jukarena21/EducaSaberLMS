@@ -8,6 +8,7 @@ export interface ManualSimulacroFormData {
   description?: string
   timeLimitMinutes: number
   passingScore: number
+  maxAttempts: number
   openDate?: string
   closeDate?: string
   isPredefined: boolean // Si es predefinido de EducaSaber

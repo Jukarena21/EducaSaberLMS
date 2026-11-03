@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { NotificationCenter } from "@/components/NotificationCenter"
 import { useSchoolBranding } from "@/hooks/useSchoolBranding"
-import { LogOut, ArrowLeft } from "lucide-react"
+import { LogOut, ArrowLeft, KeyRound } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { ChangePasswordDialog } from "@/components/ChangePasswordDialog"
 
 interface StudentHeaderProps {
   title?: string
@@ -27,6 +29,7 @@ export function StudentHeader({
   const { data: session } = useSession()
   const { branding, loading } = useSchoolBranding(session?.user?.schoolId)
   const router = useRouter()
+  const [passwordOpen, setPasswordOpen] = useState(false)
   
   // No mostrar logo por defecto mientras carga si hay schoolId (evita parpadeo)
   const shouldShowDefaultLogo = !session?.user?.schoolId || (!loading && !branding?.logoUrl)
@@ -96,11 +99,20 @@ export function StudentHeader({
           <Badge variant="secondary" className="school-primary">
             Estudiante
           </Badge>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Cambiar contraseña"
+            onClick={() => setPasswordOpen(true)}
+          >
+            <KeyRound className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={() => signOut({ callbackUrl: "/" })}>
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </div>
+      <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
     </header>
   )
 }

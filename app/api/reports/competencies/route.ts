@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/rbac'
 import { prisma } from '@/lib/prisma'
 import { examResultWhere, resolveAnalyticsFilters, resultPassed } from '@/lib/analytics/filters'
+import { latestCompletedByUserExam } from '@/lib/exams/attempts'
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,11 +20,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const filters = resolveAnalyticsFilters(searchParams, gate.session.user)
 
-    const results = await prisma.examResult.findMany({
+    const allResults = await prisma.examResult.findMany({
       where: examResultWhere(filters),
       select: {
+        userId: true,
+        examId: true,
         score: true,
         isPassed: true,
+        completedAt: true,
         exam: {
           select: {
             passingScore: true,
@@ -33,6 +37,7 @@ export async function GET(request: NextRequest) {
         },
       },
     })
+    const results = latestCompletedByUserExam(allResults)
 
     type Agg = {
       competencyId: string | null

@@ -7,6 +7,7 @@ import {
   resolveAnalyticsFilters,
   resultPassed,
 } from '@/lib/analytics/filters'
+import { latestCompletedByUserExam } from '@/lib/exams/attempts'
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,9 +25,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const filters = resolveAnalyticsFilters(searchParams, gate.session.user)
 
-    const results = await prisma.examResult.findMany({
+    const allResults = await prisma.examResult.findMany({
       where: examResultWhere(filters),
       select: {
+        userId: true,
+        examId: true,
         score: true,
         isPassed: true,
         completedAt: true,
@@ -40,6 +43,7 @@ export async function GET(request: NextRequest) {
         },
       },
     })
+    const results = latestCompletedByUserExam(allResults)
 
     // Agregado por colegio del estudiante, curso del examen y área
     type Agg = {

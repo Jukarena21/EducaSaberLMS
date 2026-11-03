@@ -10,6 +10,7 @@ export interface ExamData {
   isIcfesExam?: boolean
   timeLimitMinutes?: number
   passingScore: number
+  maxAttempts?: number
   difficultyLevel: 'facil' | 'intermedio' | 'dificil' | 'variable'
   isAdaptive: boolean
   isPublished: boolean
@@ -64,6 +65,7 @@ export interface ExamFormData {
   academicGrade: string
   timeLimitMinutes: number
   passingScore: number
+  maxAttempts?: number
   difficultyLevel: 'facil' | 'intermedio' | 'dificil' | 'variable'
   isAdaptive: boolean
   isPublished: boolean

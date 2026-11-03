@@ -153,6 +153,16 @@ export async function POST(request: NextRequest) {
       // Usar el resultado existente
       result = existingResult
     } else {
+      const completedCount = await prisma.examResult.count({
+        where: { userId, examId, completedAt: { not: null } },
+      })
+      const allowed = Math.max(1, exam.maxAttempts ?? 1)
+      if (completedCount >= allowed) {
+        return NextResponse.json(
+          { error: 'Ya usaste los intentos permitidos. Un administrador puede reactivar el examen.' },
+          { status: 400 }
+        )
+      }
       // Crear nuevo resultado de examen
       result = await prisma.examResult.create({
         data: {

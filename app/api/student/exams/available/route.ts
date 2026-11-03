@@ -183,13 +183,15 @@ export async function GET(request: NextRequest) {
         } else if (!feedbackReleased) {
           // Entregado pero aún sin liberar resultados: estado neutro
           status = 'submitted'
-          canRetake = false
+          const completedCount = exam.examResults.filter((r) => r.completedAt !== null).length
+          const allowed = Math.max(1, (exam as { maxAttempts?: number }).maxAttempts ?? 1)
+          canRetake = completedCount < allowed
         } else {
           // El examen está completado
           status = lastResult.isPassed ? 'passed' : 'failed'
-          // Si el score es 0 y está completado, significa que fue reactivado
-          // Permitir reintentos en este caso
-          canRetake = lastResult.score === 0
+          const completedCount = exam.examResults.filter((r) => r.completedAt !== null).length
+          const allowed = Math.max(1, (exam as { maxAttempts?: number }).maxAttempts ?? 1)
+          canRetake = completedCount < allowed
         }
       }
       

@@ -116,8 +116,9 @@ export async function GET(
           canTake = true
         } else {
           status = 'completed'
-          // Permitir reintentos si el score es 0 (reactivado)
-          canTake = lastResult.score === 0
+          const completedCount = quiz.examResults.filter((r) => r.completedAt !== null).length
+          const allowed = Math.max(1, quiz.maxAttempts ?? 1)
+          canTake = completedCount < allowed
         }
       }
 

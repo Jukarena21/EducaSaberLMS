@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,34 +11,10 @@ import { ParticleBackground } from "@/components/ParticleBackground"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function ForgotPasswordPage() {
-  const router = useRouter()
   const [email, setEmail] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  // Verificar si el usuario es estudiante antes de permitir el uso
-  useEffect(() => {
-    const checkUserRole = async () => {
-      try {
-        // Intentar obtener el email del usuario si está logueado
-        const res = await fetch("/api/auth/session")
-        if (res.ok) {
-          const session = await res.json()
-          if (session?.user?.role === 'student') {
-            // Si es estudiante, mostrar mensaje y redirigir después de 3 segundos
-            setError("Los estudiantes no pueden cambiar su contraseña. Usa tu documento como contraseña.")
-            setTimeout(() => {
-              router.push("/")
-            }, 3000)
-          }
-        }
-      } catch (err) {
-        // Si no hay sesión, continuar normalmente (puede ser admin o teacher)
-      }
-    }
-    checkUserRole()
-  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

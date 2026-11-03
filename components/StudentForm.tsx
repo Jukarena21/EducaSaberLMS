@@ -243,18 +243,17 @@ export function StudentForm({ student, onSubmit, onCancel, loading = false, scho
                       required
                     />
                   </div>
-                  {!isEditing && (
-                    <div>
-                      <Label htmlFor="password">Contraseña *</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        value={formData.password}
-                        onChange={(e) => handleInputChange('password', e.target.value)}
-                        required
-                      />
-                    </div>
-                  )}
+                  <div>
+                    <Label htmlFor="password">{isEditing ? 'Nueva contraseña' : 'Contraseña *'}</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => handleInputChange('password', e.target.value)}
+                      required={!isEditing}
+                      placeholder={isEditing ? 'Dejar en blanco para mantener' : ''}
+                    />
+                  </div>
                   <div>
                     <Label htmlFor="firstName">Nombre *</Label>
                     <Input
