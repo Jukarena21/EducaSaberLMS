@@ -82,7 +82,7 @@ export function resolveAnalyticsFilters(
 /** Clave estable para cachear: se arma con los filtros ya resueltos, no con la URL. */
 export function analyticsCacheKey(scope: string, filters: AnalyticsFilters): string {
   const day = (d: Date) => d.toISOString().slice(0, 13)
-  return `analytics:v3:${scope}:${JSON.stringify({
+  return `analytics:v4:${scope}:${JSON.stringify({
     ...filters,
     from: day(filters.from),
     to: day(filters.to),

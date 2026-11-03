@@ -6,9 +6,11 @@
 import { prisma } from '@/lib/prisma'
 import { colombiaMonthKey, resultPassed } from '@/lib/analytics/filters'
 import { summarizeStudent } from '@/lib/analytics/studentStatus'
+import { COMPLETED_LESSON_STATUS_VALUES } from '@/lib/progress/lessonProgress'
 
 const round1 = (value: number) => Math.round(value * 10) / 10
-export const COMPLETED_LESSON_STATUSES = ['completed', 'completado']
+
+export const COMPLETED_LESSON_STATUSES = [...COMPLETED_LESSON_STATUS_VALUES]
 
 export type EnrollmentWithLessons = {
   userId: string

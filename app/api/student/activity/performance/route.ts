@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { isLessonCompletedStatus } from '@/lib/progress/lessonProgress';
 
 export async function GET(request: NextRequest) {
   try {
@@ -113,7 +114,7 @@ export async function GET(request: NextRequest) {
       }
       
       acc[competencyName].totalLessons += 1;
-      if (progress.status === 'completed') {
+      if (isLessonCompletedStatus(progress.status)) {
         acc[competencyName].completedLessons += 1;
       }
       acc[competencyName].totalTime += progress.totalTimeMinutes || 0;
@@ -144,7 +145,7 @@ export async function GET(request: NextRequest) {
       averageScore: competencyPerformance.length > 0 
         ? Math.round(competencyPerformance.reduce((sum, exam) => sum + exam.score, 0) / competencyPerformance.length)
         : 0,
-      totalLessonsCompleted: lessonProgress.filter(l => l.status === 'completed').length,
+      totalLessonsCompleted: lessonProgress.filter(l => isLessonCompletedStatus(l.status)).length,
       totalStudyTime: lessonProgress.reduce((sum, lesson) => sum + (lesson.totalTimeMinutes || 0), 0),
       period: parseInt(period),
       startDate,

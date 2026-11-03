@@ -6,6 +6,7 @@ import fs from 'fs'
 import path from 'path'
 import Handlebars from 'handlebars'
 import { prisma } from '@/lib/prisma'
+import { isLessonCompletedStatus } from '@/lib/progress/lessonProgress'
 
 // Función para generar análisis y recomendaciones específicas por curso
 function generateCourseAnalysisAndRecommendations(
@@ -51,7 +52,7 @@ function generateCourseAnalysisAndRecommendations(
   }
 
   // Análisis de lecciones
-  const completedLessons = lessons.filter(l => l.status === 'completado')
+  const completedLessons = lessons.filter(l => isLessonCompletedStatus(l.status))
   const videoProgress = lessons.filter(l => l.videoCompleted).length
   const theoryProgress = lessons.filter(l => l.theoryCompleted).length
   const exercisesProgress = lessons.filter(l => l.exercisesCompleted).length
@@ -202,7 +203,7 @@ export async function POST(request: NextRequest) {
       const moduleLessons = lessonProgress.filter(lp => 
         module.moduleLessons.some(ml => ml.lessonId === lp.lessonId)
       )
-      const completedLessons = moduleLessons.filter(lp => lp.status === 'completed' || lp.status === 'completado')
+      const completedLessons = moduleLessons.filter(lp => isLessonCompletedStatus(lp.status))
       const totalTime = moduleLessons.reduce((sum, lp) => sum + (lp.totalTimeMinutes || 0), 0)
       const progressPercentage = module.moduleLessons.length > 0 
         ? Math.round((completedLessons.length / module.moduleLessons.length) * 100)
@@ -232,7 +233,7 @@ export async function POST(request: NextRequest) {
         .map(ml => {
           const lp = progressByLesson.get(ml.lessonId)
           const status = lp?.status ?? 'not_started'
-          const isCompleted = status === 'completed' || status === 'completado'
+          const isCompleted = isLessonCompletedStatus(status)
           const isInProgress = status === 'in_progress' || status === 'en_progreso'
 
           return {
@@ -254,7 +255,7 @@ export async function POST(request: NextRequest) {
 
     // Calcular métricas generales
     const totalLessons = lessonsData.length
-    const completedLessons = lessonsData.filter(l => l.status === 'completed' || l.status === 'completado').length
+    const completedLessons = lessonsData.filter(l => isLessonCompletedStatus(l.status)).length
     const progressPercentage = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0
     const totalTimeMinutes = lessonsData.reduce((sum, l) => sum + l.timeMinutes, 0)
     const totalTimeHours = Math.round(totalTimeMinutes / 60 * 10) / 10
@@ -285,7 +286,7 @@ export async function POST(request: NextRequest) {
     for (const cm of course.courseModules.sort((a, b) => a.module.orderIndex - b.module.orderIndex)) {
       for (const ml of cm.module.moduleLessons.sort((a, b) => a.orderIndex - b.orderIndex)) {
         const lessonProg = lessonProgress.find(lp => lp.lessonId === ml.lessonId)
-        if (!lessonProg || (lessonProg.status !== 'completed' && lessonProg.status !== 'completado')) {
+        if (!lessonProg || !isLessonCompletedStatus(lessonProg.status)) {
           nextLesson = {
             id: ml.lesson.id,
             title: ml.lesson.title,

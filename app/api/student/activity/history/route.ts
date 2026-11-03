@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import {
+  completedLessonStatusFilter,
+  isLessonCompletedStatus,
+} from '@/lib/progress/lessonProgress';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,7 +26,7 @@ export async function GET(request: NextRequest) {
     const lessonHistory = await prisma.studentLessonProgress.findMany({
       where: {
         userId,
-        ...(type === 'lessons' && { status: 'completed' }),
+        status: completedLessonStatusFilter,
       },
       include: {
         lesson: {
@@ -149,7 +153,7 @@ export async function GET(request: NextRequest) {
     // Estadísticas del historial
     const stats = {
       totalActivities: allActivities.length,
-      lessonsCompleted: lessonHistory.filter(l => l.status === 'completed').length,
+      lessonsCompleted: lessonHistory.filter(l => isLessonCompletedStatus(l.status)).length,
       examsCompleted: examHistory.length,
       coursesEnrolled: enrollmentHistory.length,
       averageExamScore: examHistory.length > 0 

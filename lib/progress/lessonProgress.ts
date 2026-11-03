@@ -12,8 +12,14 @@
 /** Proporción mínima de aciertos en los ejercicios para dar la lección por vista. */
 export const LESSON_PASSING_ACCURACY = 0.8
 
-const COMPLETED_STATUSES = new Set(['completed', 'completado'])
+export const COMPLETED_LESSON_STATUS_VALUES = ['completed', 'completado'] as const
+const COMPLETED_STATUSES = new Set<string>(COMPLETED_LESSON_STATUS_VALUES)
 const IN_PROGRESS_STATUSES = new Set(['in_progress', 'en_progreso'])
+
+/** Filtro Prisma para lecciones terminadas, en inglés o español. */
+export const completedLessonStatusFilter = {
+  in: [...COMPLETED_LESSON_STATUS_VALUES],
+}
 
 export function isLessonCompletedStatus(status?: string | null): boolean {
   return COMPLETED_STATUSES.has((status || '').trim().toLowerCase())

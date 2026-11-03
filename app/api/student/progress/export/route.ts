@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { isLessonCompletedStatus } from '@/lib/progress/lessonProgress'
 import jsPDF from 'jspdf'
 import { ChartJSNodeCanvas } from 'chartjs-node-canvas'
 import { Chart, registerables } from 'chart.js'
@@ -157,7 +158,7 @@ async function getHistoricalProgressData(userId: string, competencyId?: string) 
       }
       
       const dayData = dailyProgress.get(date)
-      if (progress.status === 'completed') {
+      if (isLessonCompletedStatus(progress.status)) {
         dayData.lessonsCompleted++
       }
       
@@ -172,7 +173,7 @@ async function getHistoricalProgressData(userId: string, competencyId?: string) 
           })
         }
         
-        if (progress.status === 'completed' && compId) {
+        if (isLessonCompletedStatus(progress.status) && compId) {
           dayData.competencies.get(compId).lessonsCompleted++
         }
       })

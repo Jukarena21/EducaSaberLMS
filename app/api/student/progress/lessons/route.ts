@@ -125,17 +125,17 @@ export async function GET(request: NextRequest) {
         } : null,
         contentProgress: {
           video: {
-            completed: videoProgress?.status === 'completed',
+            completed: videoProgress?.isCompleted === true,
             timeSpent: videoProgress?.timeSpentMinutes || 0,
             lastAccessed: videoProgress?.lastAccessedAt
           },
           theory: {
-            completed: theoryProgress?.status === 'completed',
+            completed: theoryProgress?.isCompleted === true,
             timeSpent: theoryProgress?.timeSpentMinutes || 0,
             lastAccessed: theoryProgress?.lastAccessedAt
           },
           exercises: {
-            completed: exercisesProgress?.status === 'completed',
+            completed: exercisesProgress?.isCompleted === true,
             timeSpent: exercisesProgress?.timeSpentMinutes || 0,
             lastAccessed: exercisesProgress?.lastAccessedAt
           }

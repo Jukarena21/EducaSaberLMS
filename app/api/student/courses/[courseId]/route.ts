@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-
-/** Progreso en BD usa valores en español (completado) en algunos registros */
-function isLessonCompletedStatus(status: string | undefined | null): boolean {
-  return status === 'completed' || status === 'completado';
-}
+import { isLessonCompletedStatus } from '@/lib/progress/lessonProgress';
 
 export async function GET(
   request: NextRequest,

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { completedLessonStatusFilter } from '@/lib/progress/lessonProgress'
 
 export interface AchievementCriteria {
   type: string
@@ -171,11 +172,7 @@ export class AchievementService {
     const count = await prisma.studentLessonProgress.count({
       where: {
         userId,
-        OR: [
-          { status: 'completed' },
-          { status: 'completado' },
-          { progressPercentage: { gte: 100 } } // Fallback por si el status no está actualizado
-        ]
+        status: completedLessonStatusFilter
       }
     })
     return count
@@ -461,11 +458,7 @@ export class AchievementService {
         where: {
           userId,
           lessonId: { in: lessonIds },
-          OR: [
-            { status: 'completed' },
-            { status: 'completado' },
-            { progressPercentage: { gte: 100 } }
-          ]
+          status: completedLessonStatusFilter,
         }
       })
 

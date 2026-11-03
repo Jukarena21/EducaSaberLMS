@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-
-function lessonDone(status: string | null | undefined): boolean {
-  return status === 'completed' || status === 'completado'
-}
+import { isLessonCompletedStatus } from '@/lib/progress/lessonProgress'
 
 export async function GET(request: NextRequest) {
   try {
@@ -69,7 +66,7 @@ export async function GET(request: NextRequest) {
       const completedLessons = lessonProgress.filter(lp => 
         course.courseModules.some(cm => 
           cm.module.moduleLessons.some(ml => ml.lessonId === lp.lessonId)
-        ) && lessonDone(lp.status)
+        ) && isLessonCompletedStatus(lp.status)
       ).length
 
       // Calcular tiempo total invertido
@@ -91,7 +88,7 @@ export async function GET(request: NextRequest) {
       const modulesProgress = course.courseModules.map(cm => {
         const moduleLessons = cm.module.moduleLessons
         const completedModuleLessons = lessonProgress.filter(lp => 
-          moduleLessons.some(ml => ml.lessonId === lp.lessonId) && lessonDone(lp.status)
+          moduleLessons.some(ml => ml.lessonId === lp.lessonId) && isLessonCompletedStatus(lp.status)
         ).length
         
         const moduleTimeMinutes = contentProgress
@@ -124,7 +121,7 @@ export async function GET(request: NextRequest) {
       for (const cm of course.courseModules.sort((a, b) => a.module.orderIndex - b.module.orderIndex)) {
         for (const ml of cm.module.moduleLessons.sort((a, b) => a.orderIndex - b.orderIndex)) {
           const lessonProg = lessonProgress.find(lp => lp.lessonId === ml.lessonId)
-          if (!lessonProg || !lessonDone(lessonProg.status)) {
+          if (!lessonProg || !isLessonCompletedStatus(lessonProg.status)) {
             nextLesson = {
               id: ml.lesson.id,
               title: ml.lesson.title,

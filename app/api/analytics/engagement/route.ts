@@ -9,6 +9,7 @@ import {
   studentWhere,
 } from '@/lib/analytics/filters'
 import { lessonStudySecondsByUser } from '@/lib/studyTime'
+import { completedLessonStatusFilter, isLessonCompletedStatus } from '@/lib/progress/lessonProgress'
 
 export async function GET(request: NextRequest) {
   try {
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
     const totalStudyMinutes = Array.from(studyMinutesByUser.values()).reduce((a, b) => a + b, 0)
     const studentsWithStudyTime = Array.from(studyMinutesByUser.values()).filter((m) => m > 0).length
 
-    const completedProgress = lessonProgress.filter((lp) => lp.status === 'completed')
+    const completedProgress = lessonProgress.filter((lp) => isLessonCompletedStatus(lp.status))
     const totalLessonsCompleted = completedProgress.length
 
     // Estudiantes activos: misma definición que la tarjeta principal
@@ -137,7 +138,7 @@ async function countCourseCompletions(
   })
 
   const allCompleted = await prisma.studentLessonProgress.findMany({
-    where: { userId: { in: candidateUserIds }, status: 'completed' },
+    where: { userId: { in: candidateUserIds }, status: completedLessonStatusFilter },
     select: { userId: true, lessonId: true },
   })
   const completedByUser = new Map<string, Set<string>>()

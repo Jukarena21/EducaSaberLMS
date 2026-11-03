@@ -11,6 +11,7 @@ import {
   resultPassed,
 } from '@/lib/analytics/filters'
 import { latestCompletedByUserExam } from '@/lib/exams/attempts'
+import { completedLessonStatusFilter } from '@/lib/progress/lessonProgress'
 
 const TEN_MINUTES_MS = 10 * 60 * 1000
 
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
     const results = latestCompletedByUserExam(allResults)
 
     const studentsWithLessons = await prisma.studentLessonProgress.findMany({
-      where: { ...lessonProgressWhere(filters), status: 'completed' },
+      where: { ...lessonProgressWhere(filters), status: completedLessonStatusFilter },
       select: { userId: true, user: { select: { schoolId: true } } },
       distinct: ['userId'],
     })
