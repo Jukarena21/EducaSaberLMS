@@ -80,6 +80,7 @@
     "cmdk": "latest",
     "date-fns": "4.1.0",
     "embla-carousel-react": "latest",
+    "exceljs": "^4.4.0",
     "handlebars": "^4.7.8",
     "html2canvas": "^1.4.1",
     "input-otp": "latest",

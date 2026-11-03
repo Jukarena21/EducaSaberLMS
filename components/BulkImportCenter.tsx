@@ -9,12 +9,16 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
+  isRequiredStudentPreviewHeader,
+  missingStudentColumns,
+  pickStudentSheetName,
+} from "@/lib/bulk-import/studentColumns"
+import {
   Upload,
   FileText,
   CheckCircle2,
   XCircle,
   AlertCircle,
-  Download,
   Users,
   Building,
   GraduationCap,
@@ -40,9 +44,9 @@ const importTypes: ImportTypeConfig[] = [
     id: 'students',
     label: 'Estudiantes',
     icon: <Users className="h-6 w-6" />,
-    description: 'Información personal, académica y condiciones especiales',
-    requiredFields: ['email', 'firstName', 'lastName', 'documentType', 'documentNumber', 'contactPhone'],
-    optionalFields: ['dateOfBirth', 'gender', 'schoolId', 'academicGrade', 'city', 'neighborhood', 'address']
+    description: 'Correo, nombre, documento, grado y colegio. El resto se llena después en la ficha.',
+    requiredFields: ['Correo', 'Nombres', 'Apellidos', 'Documento', 'Grado', 'Colegio'],
+    optionalFields: ['Tipo de documento', 'Teléfono']
   },
   {
     id: 'schools',
@@ -91,6 +95,7 @@ export function BulkImportCenter() {
   const [isDragging, setIsDragging] = useState(false)
   const [preview, setPreview] = useState<FilePreview | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [result, setResult] = useState<UploadResult | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -111,8 +116,11 @@ export function BulkImportCenter() {
         const arrayBuffer = await file.arrayBuffer()
         const workbook = XLSX.read(arrayBuffer, { type: 'array' })
         
-        // Buscar hoja de datos
-        let worksheet = workbook.Sheets['Datos'] || workbook.Sheets[workbook.SheetNames[0]]
+        const sheetName =
+          selectedType === 'students'
+            ? pickStudentSheetName(workbook.SheetNames)
+            : (workbook.SheetNames.includes('Datos') ? 'Datos' : workbook.SheetNames[0])
+        const worksheet = sheetName ? workbook.Sheets[sheetName] : undefined
         
         if (!worksheet) {
           return {
@@ -252,6 +260,11 @@ export function BulkImportCenter() {
         // Advertir sobre campos opcionales según el tipo
         warnings.push('Nota: Los campos optionA-D y correctOption son requeridos según el tipo de pregunta (excepto para essay)')
       }
+    } else if (selectedType === 'students') {
+      const missingRequired = missingStudentColumns(headers)
+      if (missingRequired.length > 0) {
+        errors.push(`Faltan columnas requeridas: ${missingRequired.join(', ')}`)
+      }
     } else {
       // Validación normal para otros tipos
       const missingRequired = selectedConfig.requiredFields.filter(
@@ -280,7 +293,7 @@ export function BulkImportCenter() {
       errors,
       warnings
     }
-  }, [selectedConfig])
+  }, [selectedConfig, selectedType])
 
   // Manejar selección de archivo
   const handleFileSelect = useCallback(async (selectedFile: File) => {
@@ -360,8 +373,30 @@ export function BulkImportCenter() {
     }
   }
 
-  // Descargar plantilla
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    if (selectedType === 'students') {
+      setDownloadingTemplate(true)
+      try {
+        const response = await fetch('/api/bulk-import/template')
+        if (!response.ok) {
+          throw new Error('No se pudo descargar la plantilla')
+        }
+        const blob = await response.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'plantilla-estudiantes.xlsx'
+        a.click()
+        URL.revokeObjectURL(url)
+      } catch (error) {
+        console.error('Error downloading student template:', error)
+        alert('No se pudo descargar la plantilla de estudiantes')
+      } finally {
+        setDownloadingTemplate(false)
+      }
+      return
+    }
+
     let csv = ''
     
     // Función helper para escapar comas en CSV
@@ -994,17 +1029,21 @@ export function BulkImportCenter() {
                                 <th
                                   key={idx}
                                   className={`border border-gray-300 px-3 py-2 text-left font-semibold ${
-                                    selectedConfig.requiredFields.some(
-                                      rf => rf.toLowerCase() === header.toLowerCase()
-                                    )
+                                    (selectedType === 'students'
+                                      ? isRequiredStudentPreviewHeader(header)
+                                      : selectedConfig.requiredFields.some(
+                                          rf => rf.toLowerCase() === header.toLowerCase()
+                                        ))
                                       ? 'bg-red-50 text-red-700'
                                       : 'text-gray-700'
                                   }`}
                                 >
                                   {header}
-                                  {selectedConfig.requiredFields.some(
-                                    rf => rf.toLowerCase() === header.toLowerCase()
-                                  ) && (
+                                  {(selectedType === 'students'
+                                    ? isRequiredStudentPreviewHeader(header)
+                                    : selectedConfig.requiredFields.some(
+                                        rf => rf.toLowerCase() === header.toLowerCase()
+                                      )) && (
                                     <Badge variant="destructive" className="ml-2 text-xs">
                                       Requerido
                                     </Badge>
@@ -1047,9 +1086,14 @@ export function BulkImportCenter() {
               <Button
                 variant="outline"
                 onClick={downloadTemplate}
+                disabled={downloadingTemplate}
                 className="flex items-center gap-2"
               >
-                <FileSpreadsheet className="h-4 w-4" />
+                {downloadingTemplate ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileSpreadsheet className="h-4 w-4" />
+                )}
                 Descargar Plantilla Excel
               </Button>
               <span className="text-xs text-gray-500">(Formato visual con instrucciones)</span>
@@ -1165,7 +1209,9 @@ export function BulkImportCenter() {
               </p>
             )}
             <p className="mt-2">
-              💡 <strong>Tip:</strong> Usa la plantilla descargable como base. Asegúrate de que el archivo esté en formato UTF-8.
+              {selectedType === 'students'
+                ? 'Descarga la plantilla: pestaña Estudiantes para llenar, Colegios para copiar el nombre exacto. La contraseña inicial es el documento.'
+                : 'Usa la plantilla descargable como base. Asegúrate de que el archivo esté en formato UTF-8.'}
             </p>
             {selectedType === 'lessons' && (
               <Alert className="mt-3 border-blue-200 bg-blue-50">

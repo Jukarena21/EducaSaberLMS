@@ -9,7 +9,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  serverExternalPackages: ['@sparticuz/chromium', 'puppeteer-core', 'puppeteer'],
+  serverExternalPackages: ['@sparticuz/chromium', 'puppeteer-core', 'puppeteer', 'exceljs'],
 }
 
 export default nextConfig

@@ -5,6 +5,12 @@ import { prisma } from '@/lib/prisma'
 import * as XLSX from 'xlsx'
 import bcrypt from 'bcryptjs'
 import { normalizeAcademicGrade } from '@/lib/academicGrades'
+import {
+  normalizeDocumentType,
+  pickStudentSheetName,
+  remapStudentRow,
+  schoolNameKey,
+} from '@/lib/bulk-import/studentColumns'
 
 type ImportType = 'students' | 'schools' | 'lessons' | 'questions'
 
@@ -133,8 +139,11 @@ export async function POST(req: NextRequest) {
       const arrayBuffer = await file.arrayBuffer()
       const workbook = XLSX.read(arrayBuffer, { type: 'array' })
       
-      // Buscar hoja de datos (puede llamarse 'Datos' o ser la primera hoja)
-      let worksheet = workbook.Sheets['Datos'] || workbook.Sheets[workbook.SheetNames[0]]
+      const sheetName =
+        type === 'students'
+          ? pickStudentSheetName(workbook.SheetNames)
+          : (workbook.SheetNames.includes('Datos') ? 'Datos' : workbook.SheetNames[0])
+      const worksheet = sheetName ? workbook.Sheets[sheetName] : undefined
       
       if (!worksheet) {
         return NextResponse.json({ error: 'No se encontró hoja de datos en el archivo Excel' }, { status: 400 })
@@ -193,116 +202,125 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    if (type === 'students') {
+      rows = rows.map(remapStudentRow)
+    }
+
     const errors: Array<{ row: number; message: string }>=[]
     let created = 0
+    let updated = 0
 
     if (type === 'students') {
-      // Para school_admin, forzar schoolId del admin
-      const forcedSchoolId = session.user.role === 'school_admin' && session.user.schoolId 
-        ? session.user.schoolId 
+      const forcedSchoolId = session.user.role === 'school_admin' && session.user.schoolId
+        ? session.user.schoolId
         : undefined
+
+      const schools = await prisma.school.findMany({
+        select: { id: true, name: true },
+      })
+      const schoolsByName = new Map<string, Array<{ id: string; name: string }>>()
+      for (const school of schools) {
+        const key = schoolNameKey(school.name)
+        const current = schoolsByName.get(key) || []
+        current.push(school)
+        schoolsByName.set(key, current)
+      }
+
+      const resolveSchoolId = (row: Record<string, string>): string => {
+        if (forcedSchoolId) return forcedSchoolId
+        const schoolName = (row.colegio || '').trim()
+        if (schoolName) {
+          const matches = schoolsByName.get(schoolNameKey(schoolName)) || []
+          if (matches.length === 1) return matches[0].id
+          if (matches.length > 1) {
+            throw new Error(`Hay más de un colegio llamado "${schoolName}". Avísanos para distinguirlo.`)
+          }
+          throw new Error(`No encontré el colegio "${schoolName}". Copie el nombre exacto de la pestaña Colegios.`)
+        }
+        const legacyId = (row.schoolid || '').trim()
+        if (legacyId && schools.some((school) => school.id === legacyId)) return legacyId
+        throw new Error('Indica el colegio: copie el nombre exacto de la pestaña Colegios.')
+      }
 
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i]
         try {
-          const email = (r.email || '').trim()
+          const email = (r.email || '').trim().toLowerCase()
           const firstName = (r.firstname || '').trim()
           const lastName = (r.lastname || '').trim()
-          // Normalizar documentType a minúsculas para consistencia con el formulario
-          const documentTypeRaw = (r.documenttype || '').trim()
-          const documentType = documentTypeRaw.toLowerCase() === 'ti' ? 'ti' :
-                              documentTypeRaw.toLowerCase() === 'cc' ? 'cc' :
-                              documentTypeRaw.toLowerCase() === 'ce' ? 'ce' :
-                              documentTypeRaw.toLowerCase() === 'rc' ? 'rc' :
-                              documentTypeRaw.toLowerCase()
           const documentNumber = (r.documentnumber || '').trim()
-          const contactPhone = (r.contactphone || '').trim()
-          
-          // Validar campos requeridos
-          if (!email || !firstName || !lastName || !documentType || !documentNumber || !contactPhone) {
-            throw new Error('email, firstName, lastName, documentType, documentNumber y contactPhone son requeridos')
+          const documentType = r.documenttype ? normalizeDocumentType(r.documenttype) : undefined
+          const contactPhone = (r.contactphone || '').trim() || undefined
+          const academicGrade = normalizeAcademicGrade(r.academicgrade)
+
+          if (!email || !firstName || !lastName || !documentNumber) {
+            throw new Error('Correo, nombres, apellidos y documento son obligatorios')
           }
-          
-          // Validar formato de email
           if (!isValidEmail(email)) {
             throw new Error(`El email "${email}" no tiene un formato válido`)
           }
-          
-          // Validar que documentNumber no esté vacío (se usará como contraseña inicial)
-          if (!documentNumber) {
-            throw new Error('documentNumber es requerido (se usará como contraseña inicial)')
+          if (!academicGrade) {
+            throw new Error('El grado es obligatorio (sexto, septimo, octavo, noveno, decimo u once)')
           }
-          
-          // Generar hash de contraseña usando el documento como contraseña inicial
-          const initialPassword = documentNumber
-          const passwordHash = await bcrypt.hash(initialPassword, 12)
-          
-          // Usar schoolId forzado si es school_admin, sino usar el del CSV
-          const finalSchoolId = forcedSchoolId || r.schoolid || undefined
-          
-          await prisma.user.upsert({
+
+          const finalSchoolId = resolveSchoolId(r)
+          const existing = await prisma.user.findUnique({
             where: { email },
-            update: {
-              firstName, lastName, role: 'student',
-              // Información personal
-              dateOfBirth: r.dateofbirth ? new Date(r.dateofbirth) : undefined,
-              gender: r.gender || undefined,
-              documentType: documentType || undefined,
-              documentNumber: documentNumber || undefined,
-              address: r.address || undefined,
-              neighborhood: r.neighborhood || undefined,
-              city: r.city || undefined,
-              contactPhone: contactPhone || undefined,
-              socioeconomicStratum: parseIntOrU(r.socioeconomicstratum) as any,
-              housingType: r.housingtype || undefined,
-              // Educativa
-              schoolId: finalSchoolId,
-              academicGrade: normalizeAcademicGrade(r.academicgrade) || undefined,
-              schoolEntryYear: parseIntOrU(r.schoolentryyear) as any,
-              academicAverage: parseFloatOrU(r.academicaverage) as any,
-              areasOfDifficulty: r.areasofdifficulty || undefined,
-              areasOfStrength: r.areasofstrength || undefined,
-              repetitionHistory: parseBool(r.repetitionhistory),
-              schoolSchedule: r.schoolschedule || undefined,
-              // Condiciones
-              disabilities: r.disabilities || undefined,
-              specialEducationalNeeds: r.specialeducationalneeds || undefined,
-              medicalConditions: r.medicalconditions || undefined,
-              homeTechnologyAccess: parseBool(r.hometechnologyaccess),
-              homeInternetAccess: parseBool(r.homeinternetaccess),
-            },
-            create: {
-              email, 
-              passwordHash, // Hash bcrypt del documento como contraseña inicial
-              role: 'student', 
-              firstName, 
-              lastName,
-              dateOfBirth: r.dateofbirth ? new Date(r.dateofbirth) : undefined,
-              gender: r.gender || undefined,
-              documentType: documentType || undefined,
-              documentNumber: documentNumber || undefined,
-              address: r.address || undefined,
-              neighborhood: r.neighborhood || undefined,
-              city: r.city || undefined,
-              contactPhone: contactPhone || undefined,
-              socioeconomicStratum: parseIntOrU(r.socioeconomicstratum) as any,
-              housingType: r.housingtype || undefined,
-              schoolId: finalSchoolId,
-              academicGrade: normalizeAcademicGrade(r.academicgrade) || undefined,
-              schoolEntryYear: parseIntOrU(r.schoolentryyear) as any,
-              academicAverage: parseFloatOrU(r.academicaverage) as any,
-              areasOfDifficulty: r.areasofdifficulty || undefined,
-              areasOfStrength: r.areasofstrength || undefined,
-              repetitionHistory: parseBool(r.repetitionhistory),
-              schoolSchedule: r.schoolschedule || undefined,
-              disabilities: r.disabilities || undefined,
-              specialEducationalNeeds: r.specialeducationalneeds || undefined,
-              medicalConditions: r.medicalconditions || undefined,
-              homeTechnologyAccess: parseBool(r.hometechnologyaccess),
-              homeInternetAccess: parseBool(r.homeinternetaccess),
-            }
+            select: { id: true, role: true, schoolId: true },
           })
-          created++
+
+          const sharedData = {
+            firstName,
+            lastName,
+            role: 'student' as const,
+            dateOfBirth: r.dateofbirth ? new Date(r.dateofbirth) : undefined,
+            gender: r.gender || undefined,
+            documentType: documentType || undefined,
+            documentNumber,
+            address: r.address || undefined,
+            neighborhood: r.neighborhood || undefined,
+            city: r.city || undefined,
+            contactPhone,
+            socioeconomicStratum: parseIntOrU(r.socioeconomicstratum) as any,
+            housingType: r.housingtype || undefined,
+            schoolId: finalSchoolId,
+            academicGrade,
+            schoolEntryYear: parseIntOrU(r.schoolentryyear) as any,
+            academicAverage: parseFloatOrU(r.academicaverage) as any,
+            areasOfDifficulty: r.areasofdifficulty || undefined,
+            areasOfStrength: r.areasofstrength || undefined,
+            repetitionHistory: parseBool(r.repetitionhistory),
+            schoolSchedule: r.schoolschedule || undefined,
+            disabilities: r.disabilities || undefined,
+            specialEducationalNeeds: r.specialeducationalneeds || undefined,
+            medicalConditions: r.medicalconditions || undefined,
+            homeTechnologyAccess: parseBool(r.hometechnologyaccess),
+            homeInternetAccess: parseBool(r.homeinternetaccess),
+          }
+
+          if (existing) {
+            if (existing.role && existing.role !== 'student') {
+              throw new Error('Ese correo ya está registrado con otro rol')
+            }
+            if (forcedSchoolId && existing.schoolId && existing.schoolId !== forcedSchoolId) {
+              throw new Error('Ese correo ya pertenece a otro colegio')
+            }
+            await prisma.user.update({
+              where: { id: existing.id },
+              data: sharedData,
+            })
+            updated++
+          } else {
+            const passwordHash = await bcrypt.hash(documentNumber, 12)
+            await prisma.user.create({
+              data: {
+                email,
+                passwordHash,
+                ...sharedData,
+              },
+            })
+            created++
+          }
         } catch (e: any) {
           errors.push({ row: i + 2, message: e.message || 'Error' })
         }
@@ -524,7 +542,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Tipo no soportado' }, { status: 400 })
     }
 
-    return NextResponse.json({ created, errors })
+    return NextResponse.json({ created, updated, errors })
   } catch (e) {
     console.error('bulk-import', e)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
